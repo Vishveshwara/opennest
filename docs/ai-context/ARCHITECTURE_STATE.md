@@ -3,6 +3,9 @@
 - Implemented application modules: none. Application tests and deployment: not yet available.
 - Local infrastructure: PostgreSQL 17/PostGIS 3.5 and Redis 7.4, persistent named volumes, loopback ports.
 - Optional sandbox profile: separate PostgreSQL and Redis instances, credentials, ports, and volumes.
+- Planned recruiter isolation: separate backend deployments/configuration, PostgreSQL and Redis instances, database credentials, signing keys, storage prefixes or buckets, and cache namespaces.
+- Untrusted headers cannot select production versus sandbox data; production disables all demo operations.
+- Local Compose separation provisions distinct stores but does not prove application isolation; application-level isolation tests are required in later phases.
 - Maintainer decision: WhatsApp OTP for real sign-in; provider onboarding pending.
 - Maintainer decision: recruiter uses a separate database populated with fabricated listings.
 - Future backend: Java 21, Spring Boot 4.1.1, Modulith; verify exact compatible dependencies in Phase 1.

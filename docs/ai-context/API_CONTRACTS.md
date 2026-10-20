@@ -13,8 +13,12 @@
 - Image completion endpoint to be finalized: validate uploaded object before publication; enforce size/type/ownership.
 - `POST /interactions/listings/{id}/reveal-phone`: authenticated; returns authorized +91 contact and wa.me link; no-store response.
 - Reveals: 10 distinct listings/user/Asia-Kolkata day; same listing/day is idempotent; own listing reveal disallowed.
-- `POST /interactions/listings/{id}/report-brokerage`: authenticated prior revealer; idempotent report and one-star review update.
-- `POST /interactions/listings/{id}/reviews`: authenticated prior revealer; {rating, issueTag, commentText}; no self-review.
+- Review identity: immutable UUID with unique `(reviewer_id, property_id)` per database, regardless of report flag; reviewer comes from authentication and owner from the property, never request-supplied IDs.
+- `POST /interactions/listings/{id}/report-brokerage`: authenticated prior revealer, no self-report; creates the pair's review if absent or converts that same row in place to rating=1, issue_tag=ASKED_BROKERAGE, is_auto_broker_report=true.
+- Conversion preserves review UUID, created_at, and existing comment_text; a newly created report uses the automated allegation text. Display the report notice separately from preserved user text.
+- Repeated brokerage reports return the existing review without changing content or aggregates; never create a second review or modify another reviewer/property pair.
+- All review/report writes serialize on the owner row; review mutation and owner average_rating/review_count/broker_report_count updates commit or roll back in one transaction. A conversion does not increment review_count; retries do not increment any count.
+- `POST /interactions/listings/{id}/reviews`: authenticated prior revealer; {rating, issueTag, commentText}; create-only, no self-review; an existing pair returns 409 without mutation. ASKED_BROKERAGE must use the report endpoint; ordinary reviews cannot clear a report.
 - Public reports are allegations; never automatically hide/suspend listings.
 - Sandbox persona/reset/telemetry APIs exist only on a separately configured sandbox backend, with bounded privileges.
 - `X-Sandbox-Mode` never selects a database or grants authorization; production rejects sandbox requests/tokens.

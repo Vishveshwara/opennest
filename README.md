@@ -34,12 +34,13 @@ docker compose --profile sandbox up -d --wait
 
 Sandbox PostGIS uses `localhost:5433`; sandbox Redis uses `localhost:6380`. Future production and sandbox backends must use their respective connections and signing keys. This Compose file is for local development, not a production deployment.
 
+To stop only the recruiter sandbox services:
+
 ```powershell
-docker compose --profile sandbox stop
-docker compose --profile sandbox down
+docker compose stop sandbox-postgres sandbox-redis
 ```
 
-Both commands preserve named volumes. `down --volumes` permanently deletes local data; do not use it to reset the recruiter demo. Changing passwords in `.env` does not rotate credentials in an existing PostgreSQL volume.
+This preserves named volumes and leaves the primary services running. `down --volumes` permanently deletes local data; do not use it to reset the recruiter demo. Changing passwords in `.env` does not rotate credentials in an existing PostgreSQL volume.
 
 ## Validation and delivery
 

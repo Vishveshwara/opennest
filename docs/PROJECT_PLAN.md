@@ -18,7 +18,7 @@ This plan normalizes the supplied NestDirect constitution under the OpenNest nam
 
 1. **Sandbox security:** an untrusted header cannot select production versus demo data. Use separate backend deployments/configuration, database credentials, Redis, signing keys, storage prefixes or buckets, and cache namespaces. Production disables demo operations entirely. The local Compose profile provisions separate data stores; it is not proof of application isolation.
 2. **Trust rules:** the source contains incompatible formulas. Proposed canonical precedence follows its detailed section 4.2: report + average <3 -> CRITICAL; any report -> BROKERAGE_WARNED; >=2 reviews and average <3 -> LOW_RATINGS_BEWARE; >=3 reviews and average >=4.5 -> TOP_RATED; otherwise STANDARD. No reviews means no numeric rating. Do not label an owner VERIFIED merely because nobody reported them.
-3. **Reports:** require prior contact reveal, forbid self-reporting, deduplicate retries, and avoid two ratings from the same person/listing after converting an existing review. Provide an appeal/correction path. Warnings should say “brokerage reported,” not assert proven misconduct.
+3. **Reports:** require prior contact reveal and forbid self-reporting. Each reviewer/property pair has one unique review with an immutable UUID. The first report creates that review or converts it in place to one star / ASKED_BROKERAGE / report flag, preserving existing text, UUID, and creation time. Show the allegation notice separately from preserved text. Repeated reports are no-ops. Ordinary review creation conflicts on an existing pair and cannot clear a report; ASKED_BROKERAGE uses the report endpoint. Serialize all review/report writers on the owner row and update the review and owner aggregates in one transaction, counting each row and report once. Provide an appeal/correction path. Warnings should say “brokerage reported,” not assert proven misconduct.
 4. **Atomic limits:** serialize owner quota changes and daily contact-ledger writes in PostgreSQL. Redis is an accelerator, not the sole quota ledger. Lost cache entries must never reset the daily allowance.
 5. **Inventory:** derive the total from component counts. Preserve PAUSED status on inventory edits; use optimistic concurrency so two owner clicks cannot overwrite each other.
 6. **Recovery:** persistent volumes and restart policies do not guarantee zero loss or recovery within three seconds. Redis `appendfsync everysec` can lose recent writes after a crash; contact quota correctness must survive that. Set measurable recovery objectives and test off-host backup restores before launch.
@@ -59,7 +59,7 @@ Phase 1 should finalize schema semantics before creating V1. Each later feature 
 
 - Open-source license: choose MIT, Apache-2.0, AGPL-3.0, or another license before inviting reuse.
 - WhatsApp provider/account availability and monthly OTP spend limit; do not place credentials in chat.
-- Confirm the proposed trust precedence and the review-to-report conversion rule before Phase 2/4 implementation.
+- Confirm the proposed trust precedence before Phase 2 implementation; review/report lifecycle is specified in the API and schema indexes.
 - Define whether PG pricing and inventory represent rooms or beds. Current source models rooms; do not silently mix units.
 - Decide a manual moderation/appeal policy and retention/deletion requirements before collecting real personal data.
 

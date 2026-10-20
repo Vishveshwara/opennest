@@ -13,9 +13,12 @@
 - `contact_reveals`: UUID id, tenant_id FK, property_id FK, owner_id FK, revealed_date, created_at; unique tenant/property/date.
 - Quota date explicitly uses Asia/Kolkata; PostgreSQL ledger is authoritative, Redis accelerates checks.
 - `owner_reviews`: UUID id, property_id FK, owner_id FK, reviewer_id FK, rating 1..5, issue_tag, comment_text, is_auto_broker_report, created_at.
+- Unique `(reviewer_id, property_id)` per database, excluding the report flag; UUID is immutable across review-to-report conversion.
 - Issue tag: `GENUINE_OWNER | ASKED_BROKERAGE | MAINTENANCE_ISSUE | FAKE_PHOTOS | OTHER`.
 - Prevent repeated brokerage reports per reviewer/property and self-reviews; enforce owner/property consistency.
-- Before Phase 1 migration, decide how a report replaces/converts a prior review without double-counting.
+- First report inserts or converts only that pair's review to rating=1 / ASKED_BROKERAGE / is_auto_broker_report=true; conversion preserves UUID, created_at, and comment_text. Repeat reports are no-ops.
+- Ordinary review creation conflicts on an existing pair; ASKED_BROKERAGE is reserved for the report flow. A normal review cannot overwrite or clear a report.
+- All review/report writers lock the owner row and atomically update the review and owner aggregates; review_count counts rows, broker_report_count counts flagged rows, average_rating averages each row once. Conversion changes no row count; retries change no aggregates.
 - `otp_challenges` or equivalent expiring store: hashed code, attempt limit, expiry, consumed state, resend controls; never plaintext OTP logs.
 - Trust badge derived, not independently writable: `STANDARD | TOP_RATED | LOW_RATINGS_BEWARE | BROKERAGE_WARNED | CRITICAL_BROKER_AND_LOW_RATING`.
 - Proposed source schema's `is_sandbox` flags are not security boundaries; separate databases replace shared-row routing.
