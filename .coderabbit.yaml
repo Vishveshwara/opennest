@@ -13,6 +13,9 @@ reviews:
         behavior from implemented behavior. Prioritize correctness, secrets,
         authorization, sandbox isolation, and concurrency over style.
         Require matching API/schema context updates for behavioral changes.
+        Enforce OpenNest as the product name, with lowercase opennest for technical
+        identifiers. Require India-wide launch support, nationwide search when
+        city is omitted, and no default city or fixed city allowlist.
     - path: "backend/**"
       instructions: >-
         Check transactional listing/reveal quotas, WhatsApp OTP replay and

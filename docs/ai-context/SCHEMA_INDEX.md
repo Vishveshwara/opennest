@@ -3,6 +3,7 @@
 - `users`: UUID id, full_name, unique phone_number, role, created_at; rating aggregates computed or transactionally maintained.
 - Unreviewed users have no average rating; do not initialize them with a misleading five-star rating.
 - `properties`: UUID id, owner_id FK, title, description, category, status, city, locality, private address, coordinates, geography point, rent/deposit, amenities, room counts, nearby_landmarks JSONB, timestamps.
+- `properties.city`: required, normalized city supplied at creation; no city default or fixed city allowlist; support listings throughout India.
 - Category: `FLAT | PG_HOSTEL`; status: `ACTIVE | FULL_OCCUPIED | PAUSED`.
 - Room counters >= 0; max_sharing_per_room 1..10; total derived from male + female + shared.
 - Inventory transitions apply only to published listings; updating PAUSED inventory must not republish it.

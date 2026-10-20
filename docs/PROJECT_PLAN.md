@@ -1,14 +1,16 @@
 # OpenNest implementation plan
 
-This plan normalizes the supplied NestDirect constitution under the OpenNest name. Work proceeds one phase per prompt and one reviewable PR per phase. Initial work deliberately contains no feature implementation.
+This plan defines OpenNest's India-wide launch. Work proceeds one phase per prompt and one reviewable PR per phase. Initial work deliberately contains no feature implementation.
 
 ## Confirmed product direction
 
-- India-focused flats and PG/hostels, with Chennai featured first and city support extensible.
+- Flats and PG/hostels across India from launch, with no default city or city-specific rollout. Support any Indian city without a predefined city allowlist.
+- Search without a city filter returns paginated nationwide results; city, locality, and nearby-location filters narrow the results when supplied.
+- Use the product name OpenNest consistently in UI, metadata, documentation, and generated examples; lowercase `opennest` is reserved for technical identifiers.
 - Maximum five ACTIVE/FULL_OCCUPIED listings per owner; PAUSED listings do not count.
 - No chat or WebSockets. Authenticated users may reveal ten distinct listing contacts per India calendar day.
 - WhatsApp OTP sign-in, as requested by the maintainer. Provider selection and account onboarding are still pending.
-- `/recruiter-sandbox` uses fabricated listings in a separate database. No public navigation link to it.
+- `/recruiter-sandbox` uses fabricated listings across multiple Indian cities in a separate database. No public navigation link to it.
 - Reports and poor reviews produce warnings, never automatic listing suspension or deletion.
 - R2 presigned PUT uploads; client WebP compression targets <150 KB. Server-side metadata/content validation is still required.
 - FLAT images require ROOM, HALL, BATHROOM, KITCHEN; PG_HOSTEL requires ROOM and BATHROOM.
@@ -34,9 +36,9 @@ This plan normalizes the supplied NestDirect constitution under the OpenNest nam
 | 0: foundation | Instructions, context indexes, local persistent stores, review configuration, CI | Compose parses; both store pairs start; PostGIS works; data survives container replacement |
 | 1: backend | Java 21/Spring bootstrap, Flyway schema, common errors, deployment modes | Migrations on real PostGIS; schema validation; production rejects demo mode; module boundaries |
 | 2: identity | WhatsApp OTP adapter, user profile, JWT/session policy, trust calculator | OTP expiry/replay/throttling tests; production rejects fake provider; trust threshold tests |
-| 3: listings | Owner quota, segmented photos, inventory, search, R2 URLs, Overpass | Concurrent sixth listing rejected; PAUSED preserved; unauthorized edits denied; real geo queries; timeout fallback |
-| 4: interaction/demo | Contact ledger, ratings/reports, demo seeding/reset/personas | Concurrent eleventh reveal rejected; retries free; Kolkata midnight; reports deduplicated; reset cannot touch real data |
-| 5: frontend | Public portal, recruiter UI, semantic theme, maps, image compression | Accessible mobile flows; upload/reveal/report end-to-end; private responses absent from public caches |
+| 3: listings | Owner quota, segmented photos, inventory, nationwide search, R2 URLs, Overpass | Nationwide results without city filter; optional city filters; concurrent sixth listing rejected; PAUSED preserved; unauthorized edits denied; real geo queries; timeout fallback |
+| 4: interaction/demo | Contact ledger, ratings/reports, multi-city demo seeding/reset/personas | Fabricated listings cover multiple Indian cities; concurrent eleventh reveal rejected; retries free; Kolkata midnight; reports deduplicated; reset cannot touch real data |
+| 5: frontend | India-wide public portal, recruiter UI, semantic theme, maps, image compression | Nationwide initial search; accessible mobile flows; upload/reveal/report end-to-end; private responses absent from public caches |
 
 Phase 1 should finalize schema semantics before creating V1. Each later feature updates its module context and API/schema indexes in the same PR.
 
@@ -46,7 +48,7 @@ Phase 1 should finalize schema semantics before creating V1. Each later feature 
 - WhatsApp: choose Meta Cloud API directly or a provider adapter. Use authentication templates; verify account eligibility and template approval before promising a live login date. OTP generation, verification, expiry, single use, and rate limiting belong to OpenNest.
 - Do not send OTP messages or incur provider charges as part of foundation setup. Secrets stay in deployment configuration, not PRs.
 - Authentication architecture must decide secure cookie/session refresh and CSRF behavior before the browser client is implemented.
-- Search uses geography ST_DWithin in metres, bounded radius/page sizes, and deterministic ordering. Normalize cities without assuming every locality fits a fixed catalog.
+- Search uses geography ST_DWithin in metres, bounded radius/page sizes, and deterministic ordering. City is optional for search and explicitly required for listing creation, with no database default or fixed city allowlist. Normalize cities consistently; do not assume every locality fits a fixed catalog. Partition city/locality caches by the requested filters and keep nationwide queries distinct.
 - Overpass lookup uses an HTTP interface, a 2500 ms timeout, circuit breaker, and empty-result fallback for HOSPITAL/SCHOOL/SHOP within 2.5 km. A remote outage must not prevent saving a listing.
 - Public Next.js cache entries must exclude auth/contact data; invalidate trust warnings after reports. Enable cacheComponents/reactCompiler only after compatibility checks.
 - Frontend image compression is a usability feature, not an upload security boundary. Validate uploaded objects before attaching them to a published listing.

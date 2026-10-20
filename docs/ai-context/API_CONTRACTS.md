@@ -3,10 +3,10 @@
 - `POST /auth/otp/request`: {phoneNumber}; generic challenge response; WhatsApp delivery, request/resend throttling.
 - `POST /auth/otp/verify`: {challengeId, code}; single-use verification and authenticated session; no demo bypass in production.
 - `GET /users/me`: authenticated profile; contact data restricted to the account owner.
-- `GET /listings/search`: public; city defaults CHENNAI; locality/category/rent/amenities/sharing/room/gender and geo filters.
+- `GET /listings/search`: public; optional city filter, omitted city returns paginated nationwide results; locality/category/rent/amenities/sharing/room/gender and geo filters; no default city or fixed city allowlist.
 - Geo search requires lat+lng+radiusKm together; validate bounds, maximum radius, page size, and stable pagination.
 - `GET /listings/{id}`: public listing and aggregate trust data; excludes owner phone and precise private address.
-- `POST /listings`: authenticated owner; quota, inventory, geography, and required validated image segments.
+- `POST /listings`: authenticated owner; explicit normalized city required for any Indian city, with no city default; quota, inventory, geography, and required validated image segments.
 - `PATCH /listings/{id}/inventory`: owner only; {maleRoomsAvailable, femaleRoomsAvailable, sharedRoomsAvailable, maxSharingPerRoom, version}.
 - Inventory response includes computed total/status; version conflict -> 409; PAUSED remains PAUSED.
 - `POST /listings/{id}/images/presign`: owner only; bounded segment/type/size request -> short-lived PUT URL and object key.
