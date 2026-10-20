@@ -3,8 +3,11 @@
 - `POST /auth/otp/request`: {phoneNumber}; generic challenge response; WhatsApp delivery, request/resend throttling.
 - `POST /auth/otp/verify`: {challengeId, code}; single-use verification and authenticated session; no demo bypass in production.
 - `GET /users/me`: authenticated profile; contact data restricted to the account owner.
-- `GET /listings/search`: public; optional city filter, omitted city returns paginated nationwide results; locality/category/rent/amenities/sharing/room/gender and geo filters; no default city or fixed city allowlist.
-- Geo search requires lat+lng+radiusKm together; validate bounds, maximum radius, page size, and stable pagination.
+- `GET /listings/search`: public; optional city/locality/category/status, minRent/maxRent, minBedrooms/maxBedrooms, minTotalRooms/maxTotalRooms, hasWifi/hasGym/hasSwimmingPool, maxSharingPerRoom, genderRoomAvailable, and geo filters; omitted city means nationwide. Full contract: `docs/LISTING_SEARCH.md`.
+- Pagination: page=0 by default, size=20 (1..50), page >= 0 and page*size <= 10000; response {items, page, size, totalElements, totalPages, hasNext, hasPrevious, sort}. Out-of-range valid pages return empty items with actual totals.
+- Sort: NEWEST default, RENT_ASC, RENT_DESC, ROOMS_DESC, RATING_DESC (unrated last), DISTANCE_ASC (complete geo query required); every order uses id ASC as final tie-breaker. Reject arbitrary field names/directions.
+- Filters combine with AND; city/locality are normalized exact matches. Bedrooms describe FLAT layout (0 = studio), available rooms describe vacancy; bedroom filters exclude PG_HOSTEL. Default status ACTIVE; explicit FULL_OCCUPIED allowed; PAUSED is never public.
+- Geo search requires lat+lng+radiusKm together, 0 < radiusKm <= 100; validate coordinates and all ranges/types/enums. Invalid/unknown parameters -> 400; no silent truncation. Totals use identical visibility and filter predicates as items.
 - `GET /listings/{id}`: public listing and aggregate trust data; excludes owner phone and precise private address.
 - `POST /listings`: authenticated owner; explicit normalized city required for any Indian city, with no city default; quota, inventory, geography, and required validated image segments.
 - `PATCH /listings/{id}/inventory`: owner only; {maleRoomsAvailable, femaleRoomsAvailable, sharedRoomsAvailable, maxSharingPerRoom, version}.

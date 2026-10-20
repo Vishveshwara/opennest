@@ -4,6 +4,7 @@
 - Read `docs/PROJECT_PLAN.md` for decisions and unresolved questions. Inspect only relevant modules; do not scan every source file.
 - The app's name is OpenNest everywhere: UI, metadata, documentation, generated examples, and review descriptions. Use lowercase `opennest` only for technical identifiers such as packages, database names, and repository paths; future Java root package is `in.opennest`.
 - Plan and implement India-wide listing support from launch. Do not introduce a default city, a city allowlist, or a city-specific rollout. An omitted search city means nationwide results; fabricated sandbox data must cover multiple Indian cities.
+- Listing search includes server-side pagination, allowlisted sorting, and composable filters from its first implementation. Read `docs/LISTING_SEARCH.md` before editing search; distinguish flat bedrooms/BHK from currently available rooms.
 - Distinguish implemented behavior from proposals. Never describe a planned endpoint or migration as live.
 - Update the relevant context indexes in the same change as database, API, or service changes. Keep each index under 80 lines and use bullets.
 - Add a module-local `MODULE_CONTEXT.md` when creating a Java module; keep it under 50 lines.

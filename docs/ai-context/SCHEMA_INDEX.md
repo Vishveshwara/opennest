@@ -4,11 +4,14 @@
 - Unreviewed users have no average rating; do not initialize them with a misleading five-star rating.
 - `properties`: UUID id, owner_id FK, title, description, category, status, city, locality, private address, coordinates, geography point, rent/deposit, amenities, room counts, nearby_landmarks JSONB, timestamps.
 - `properties.city`: required, normalized city supplied at creation; no city default or fixed city allowlist; support listings throughout India.
+- `properties.bedrooms`: integer >= 0 required for FLAT (0 = studio); NULL for PG_HOSTEL. This is layout/BHK, independent of available-room inventory.
 - Category: `FLAT | PG_HOSTEL`; status: `ACTIVE | FULL_OCCUPIED | PAUSED`.
 - Room counters >= 0; max_sharing_per_room 1..10; total derived from male + female + shared.
 - Inventory transitions apply only to published listings; updating PAUSED inventory must not republish it.
 - Coordinates bounded by latitude 6.5..37.5 and longitude 68..97.5; this is a coarse box, not an India boundary.
 - GiST geography index; city/status/category/locality/rent and owner/status indexes.
+- Search indexes planned for public status + created_at/id and status + monthly_rent/id, plus matching city-prefixed variants; use EXPLAIN on representative multi-city data before adding bedroom/room/rating indexes.
+- Pagination/count queries share identical filters; sort tie-breaker is property UUID. Query pagination before image/child hydration to avoid duplicate listings; search semantics in `docs/LISTING_SEARCH.md`.
 - `property_images`: UUID id, property_id FK, private object_key, segment, display_order, upload validation state.
 - Segment: `ROOM | HALL | BATHROOM | KITCHEN | EXTERIOR_AMENITY`.
 - `contact_reveals`: UUID id, tenant_id FK, property_id FK, owner_id FK, revealed_date, created_at; unique tenant/property/date.

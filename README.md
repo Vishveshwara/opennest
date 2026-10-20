@@ -2,13 +2,14 @@
 
 OpenNest is a zero-brokerage platform for finding flats and PG/hostel accommodation directly from owners across India. OpenNest is an independent project, not affiliated with NoBroker.
 
-The launch plan supports cities throughout India. Search defaults to nationwide results, with optional city, locality, and nearby-location filters. The recruiter sandbox will use fabricated listings across multiple Indian cities.
+The launch plan supports cities throughout India. Search defaults to nationwide results with pagination and sorting, plus filters for city, locality, rent, bedrooms/BHK, available rooms, amenities, sharing, and nearby location. The recruiter sandbox will use fabricated listings across multiple Indian cities.
 
 **Status:** Phase 0 foundation. There is no application, authentication service, or deployed website yet.
 
 ## Start here
 
 - [Project plan and decisions](docs/PROJECT_PLAN.md)
+- [Pagination, sorting, and listing filters](docs/LISTING_SEARCH.md)
 - [AI development instructions](AGENTS.md)
 - [Current implementation state](docs/ai-context/ARCHITECTURE_STATE.md)
 - [Proposed database](docs/ai-context/SCHEMA_INDEX.md)

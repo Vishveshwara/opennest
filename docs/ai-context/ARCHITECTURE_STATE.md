@@ -1,5 +1,6 @@
 - Project: OpenNest, an independent zero-brokerage flats and PG platform across India from launch; use this product name consistently.
 - Geographic scope: all Indian cities, no city-specific rollout or default city; omitted city filter means paginated nationwide search.
+- Search contract: `docs/LISTING_SEARCH.md`; server-side page/size, deterministic allowlisted sort, composable city/locality/rent/bedroom/available-room/amenity/geo filters from Phase 3.
 - Phase 0: documentation, local infrastructure, CodeRabbit guidance, and infrastructure CI defined.
 - Implemented application modules: none. Application tests and deployment: not yet available.
 - Local infrastructure: PostgreSQL 17/PostGIS 3.5 and Redis 7.4, persistent named volumes, loopback ports.
@@ -15,8 +16,8 @@
 - No backend/frontend skeleton or Flyway migration exists yet; do not infer implementation from indexes.
 - Phase 1 next: backend bootstrap, migrations, common errors, deployment-mode isolation, integration tests.
 - Phase 2: WhatsApp OTP identity, JWT/session policy, profile and dynamic trust badges.
-- Phase 3: listing quotas, room inventory, image segments, nationwide/optional-city PostGIS search, Overpass enrichment.
+- Phase 3: listing quotas, room inventory, image segments, nationwide PostGIS search with pagination/sorting/filters, Overpass enrichment.
 - Phase 4: contact reveals, reviews/reports, fabricated multi-city sandbox seed/reset, restricted demo telemetry.
-- Phase 5: India-wide public and recruiter interfaces, semantic theme, uploads, accessibility and end-to-end checks.
+- Phase 5: India-wide public and recruiter interfaces, URL-backed search filters/sort/pagination, semantic theme, uploads, accessibility and end-to-end checks.
 - Before launch: license, provider onboarding, moderation/appeals, backup restore, memory/load testing.
 - Authoritative decisions and acceptance criteria: `docs/PROJECT_PLAN.md`.
