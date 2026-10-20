@@ -1,0 +1,23 @@
+- Status: proposed only; no endpoints are implemented.
+- All production APIs use `/api/v1`; auth and request/response details finalized with each phase.
+- `POST /auth/otp/request`: {phoneNumber}; generic challenge response; WhatsApp delivery, request/resend throttling.
+- `POST /auth/otp/verify`: {challengeId, code}; single-use verification and authenticated session; no demo bypass in production.
+- `GET /users/me`: authenticated profile; contact data restricted to the account owner.
+- `GET /listings/search`: public; city defaults CHENNAI; locality/category/rent/amenities/sharing/room/gender and geo filters.
+- Geo search requires lat+lng+radiusKm together; validate bounds, maximum radius, page size, and stable pagination.
+- `GET /listings/{id}`: public listing and aggregate trust data; excludes owner phone and precise private address.
+- `POST /listings`: authenticated owner; quota, inventory, geography, and required validated image segments.
+- `PATCH /listings/{id}/inventory`: owner only; {maleRoomsAvailable, femaleRoomsAvailable, sharedRoomsAvailable, maxSharingPerRoom, version}.
+- Inventory response includes computed total/status; version conflict -> 409; PAUSED remains PAUSED.
+- `POST /listings/{id}/images/presign`: owner only; bounded segment/type/size request -> short-lived PUT URL and object key.
+- Image completion endpoint to be finalized: validate uploaded object before publication; enforce size/type/ownership.
+- `POST /interactions/listings/{id}/reveal-phone`: authenticated; returns authorized +91 contact and wa.me link; no-store response.
+- Reveals: 10 distinct listings/user/Asia-Kolkata day; same listing/day is idempotent; own listing reveal disallowed.
+- `POST /interactions/listings/{id}/report-brokerage`: authenticated prior revealer; idempotent report and one-star review update.
+- `POST /interactions/listings/{id}/reviews`: authenticated prior revealer; {rating, issueTag, commentText}; no self-review.
+- Public reports are allegations; never automatically hide/suspend listings.
+- Sandbox persona/reset/telemetry APIs exist only on a separately configured sandbox backend, with bounded privileges.
+- `X-Sandbox-Mode` never selects a database or grants authorization; production rejects sandbox requests/tokens.
+- Sandbox responses and all personalized/contact/auth responses bypass shared caches.
+- Public listing caches must be partitioned by deployment; rating/report updates invalidate affected cached views.
+- Common errors planned as Problem Details; validation 400, unauthenticated 401, forbidden 403, absent 404, conflict 409, quota 429.

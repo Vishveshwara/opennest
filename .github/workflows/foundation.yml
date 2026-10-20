@@ -1,0 +1,51 @@
+name: Foundation
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: foundation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  infrastructure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DB_PASSWORD: ci-only-primary-password
+      SANDBOX_DB_PASSWORD: ci-only-sandbox-password
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Compose and context limits
+        run: |
+          docker compose --profile sandbox config --quiet
+          for file in docs/ai-context/*.md; do
+            test "$(wc -l < "$file")" -lt 80
+          done
+      - name: Start both isolated store pairs
+        run: docker compose --profile sandbox up -d --wait --wait-timeout 180
+      - name: Verify PostGIS and write persistence probes
+        run: |
+          docker compose exec -T postgres psql -U opennest -d opennest -v ON_ERROR_STOP=1 -c "SELECT PostGIS_Version(); CREATE TABLE foundation_probe (value integer); INSERT INTO foundation_probe VALUES (42);"
+          docker compose exec -T sandbox-postgres psql -U opennest_sandbox -d opennest_sandbox -v ON_ERROR_STOP=1 -c "SELECT PostGIS_Version(); CREATE TABLE foundation_probe (value integer); INSERT INTO foundation_probe VALUES (84);"
+          docker compose exec -T redis redis-cli SET foundation:probe primary
+          docker compose exec -T sandbox-redis redis-cli SET foundation:probe sandbox
+      - name: Replace containers and verify persisted isolated values
+        run: |
+          docker compose --profile sandbox down
+          docker compose --profile sandbox up -d --wait --wait-timeout 180
+          test "$(docker compose exec -T postgres psql -U opennest -d opennest -Atc 'SELECT value FROM foundation_probe')" = "42"
+          test "$(docker compose exec -T sandbox-postgres psql -U opennest_sandbox -d opennest_sandbox -Atc 'SELECT value FROM foundation_probe')" = "84"
+          test "$(docker compose exec -T redis redis-cli --raw GET foundation:probe)" = "primary"
+          test "$(docker compose exec -T sandbox-redis redis-cli --raw GET foundation:probe)" = "sandbox"
+      - name: Diagnostic logs
+        if: failure()
+        run: docker compose --profile sandbox logs --tail 100
+      - name: Clean up ephemeral CI data
+        if: always()
+        run: docker compose --profile sandbox down --volumes

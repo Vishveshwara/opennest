@@ -1,0 +1,23 @@
+- Status: proposed only; no migrations or application tables exist.
+- Separate production and sandbox databases use the same migrations and distinct runtime credentials.
+- `users`: UUID id, full_name, unique phone_number, role, created_at; rating aggregates computed or transactionally maintained.
+- Unreviewed users have no average rating; do not initialize them with a misleading five-star rating.
+- `properties`: UUID id, owner_id FK, title, description, category, status, city, locality, private address, coordinates, geography point, rent/deposit, amenities, room counts, nearby_landmarks JSONB, timestamps.
+- Category: `FLAT | PG_HOSTEL`; status: `ACTIVE | FULL_OCCUPIED | PAUSED`.
+- Room counters >= 0; max_sharing_per_room 1..10; total derived from male + female + shared.
+- Inventory transitions apply only to published listings; updating PAUSED inventory must not republish it.
+- Coordinates bounded by latitude 6.5..37.5 and longitude 68..97.5; this is a coarse box, not an India boundary.
+- GiST geography index; city/status/category/locality/rent and owner/status indexes.
+- `property_images`: UUID id, property_id FK, private object_key, segment, display_order, upload validation state.
+- Segment: `ROOM | HALL | BATHROOM | KITCHEN | EXTERIOR_AMENITY`.
+- `contact_reveals`: UUID id, tenant_id FK, property_id FK, owner_id FK, revealed_date, created_at; unique tenant/property/date.
+- Quota date explicitly uses Asia/Kolkata; PostgreSQL ledger is authoritative, Redis accelerates checks.
+- `owner_reviews`: UUID id, property_id FK, owner_id FK, reviewer_id FK, rating 1..5, issue_tag, comment_text, is_auto_broker_report, created_at.
+- Issue tag: `GENUINE_OWNER | ASKED_BROKERAGE | MAINTENANCE_ISSUE | FAKE_PHOTOS | OTHER`.
+- Prevent repeated brokerage reports per reviewer/property and self-reviews; enforce owner/property consistency.
+- Before Phase 1 migration, decide how a report replaces/converts a prior review without double-counting.
+- `otp_challenges` or equivalent expiring store: hashed code, attempt limit, expiry, consumed state, resend controls; never plaintext OTP logs.
+- Trust badge derived, not independently writable: `STANDARD | TOP_RATED | LOW_RATINGS_BEWARE | BROKERAGE_WARNED | CRITICAL_BROKER_AND_LOW_RATING`.
+- Proposed source schema's `is_sandbox` flags are not security boundaries; separate databases replace shared-row routing.
+- Five-listing quota requires owner-level transaction serialization, including reactivation; no count-then-insert race.
+- Quota and review aggregate changes need transaction/concurrency tests in their implementation phases.

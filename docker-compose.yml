@@ -1,0 +1,76 @@
+services:
+  postgres:
+    image: postgis/postgis:17-3.5
+    restart: unless-stopped
+    mem_limit: 350m
+    environment:
+      POSTGRES_DB: ${DB_NAME:-opennest}
+      POSTGRES_USER: ${DB_USER:-opennest}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    mem_limit: 80m
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec", "--maxmemory", "40mb", "--maxmemory-policy", "noeviction"]
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  sandbox-postgres:
+    image: postgis/postgis:17-3.5
+    profiles: ["sandbox"]
+    restart: unless-stopped
+    mem_limit: 350m
+    environment:
+      POSTGRES_DB: ${SANDBOX_DB_NAME:-opennest_sandbox}
+      POSTGRES_USER: ${SANDBOX_DB_USER:-opennest_sandbox}
+      POSTGRES_PASSWORD: ${SANDBOX_DB_PASSWORD:?Set SANDBOX_DB_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:${SANDBOX_DB_PORT:-5433}:5432"
+    volumes:
+      - sandbox_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  sandbox-redis:
+    image: redis:7.4-alpine
+    profiles: ["sandbox"]
+    restart: unless-stopped
+    mem_limit: 80m
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec", "--maxmemory", "40mb", "--maxmemory-policy", "noeviction"]
+    ports:
+      - "127.0.0.1:${SANDBOX_REDIS_PORT:-6380}:6379"
+    volumes:
+      - sandbox_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  pgdata:
+  redisdata:
+  sandbox_pgdata:
+  sandbox_redisdata:

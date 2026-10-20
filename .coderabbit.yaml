@@ -1,0 +1,26 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: en-US
+reviews:
+  profile: assertive
+  request_changes_workflow: false
+  auto_review:
+    enabled: true
+    drafts: true
+  path_instructions:
+    - path: "**/*"
+      instructions: >-
+        Review against AGENTS.md and docs/PROJECT_PLAN.md. Distinguish planned
+        behavior from implemented behavior. Prioritize correctness, secrets,
+        authorization, sandbox isolation, and concurrency over style.
+        Require matching API/schema context updates for behavioral changes.
+    - path: "backend/**"
+      instructions: >-
+        Check transactional listing/reveal quotas, WhatsApp OTP replay and
+        throttling, owner authorization, report idempotency, and production
+        rejection of demo credentials. Sandbox headers cannot select a database.
+        No automatic listing suspension based on reports or ratings.
+    - path: "frontend/**"
+      instructions: >-
+        Preserve TweakCN variables and semantic tokens. Check accessibility,
+        mobile usability, private-data cache leaks, and immediate warning updates.
+        No public navigation to recruiter tools; hidden links are not security.

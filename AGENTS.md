@@ -1,0 +1,21 @@
+# OpenNest agent instructions
+
+- Implement one phase per request. Read `docs/ai-context/ARCHITECTURE_STATE.md`, `SCHEMA_INDEX.md`, and `API_CONTRACTS.md` first.
+- Read `docs/PROJECT_PLAN.md` for decisions and unresolved questions. Inspect only relevant modules; do not scan every source file.
+- Product name is OpenNest. Future Java root package is `in.opennest`.
+- Distinguish implemented behavior from proposals. Never describe a planned endpoint or migration as live.
+- Update the relevant context indexes in the same change as database, API, or service changes. Keep each index under 80 lines and use bullets.
+- Add a module-local `MODULE_CONTEXT.md` when creating a Java module; keep it under 50 lines.
+- Do not add inline comments to Java, TypeScript, TSX, or SQL source. Document architectural reasoning in context files.
+- Preserve the requested Java/Spring and Next.js stack. Verify exact release availability and compatibility before initializing each application; do not silently substitute versions.
+- Use Flyway migrations and Hibernate validation. Never use automatic schema updates.
+- Real authentication uses WhatsApp OTP. Development substitutes must be explicitly enabled and unavailable in production.
+- Recruiter mode uses a separate database/backend configuration and fabricated data. A client header is never authorization or a database selector.
+- Production must reject sandbox credentials and disable persona switching, demo resets, and demo telemetry endpoints.
+- Keep phone numbers, tokens, OTPs, and secrets out of logs, fixtures, public DTOs, and Git. Use environment configuration for contact values.
+- Enforce ownership, quotas, and review idempotency transactionally; write concurrency tests when implementing these behaviors.
+- Never auto-hide listings because of ratings or brokerage allegations. Public warnings must describe reports as allegations.
+- Preserve the specified TweakCN theme variables. Use semantic tokens, not hardcoded palette classes.
+- Do not add messaging/WebSocket infrastructure or proxy image uploads through the backend.
+- Run checks appropriate to the phase and report anything not executed. Do not claim CI passed without checking its result.
+- Keep PRs scoped to reviewable phases. Do not merge or deploy without explicit authorization.

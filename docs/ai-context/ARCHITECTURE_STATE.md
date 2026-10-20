@@ -1,0 +1,18 @@
+- Project: OpenNest, an independent India-focused zero-brokerage flats and PG platform.
+- Phase 0: documentation, local infrastructure, CodeRabbit guidance, and infrastructure CI defined.
+- Implemented application modules: none. Application tests and deployment: not yet available.
+- Local infrastructure: PostgreSQL 17/PostGIS 3.5 and Redis 7.4, persistent named volumes, loopback ports.
+- Optional sandbox profile: separate PostgreSQL and Redis instances, credentials, ports, and volumes.
+- Maintainer decision: WhatsApp OTP for real sign-in; provider onboarding pending.
+- Maintainer decision: recruiter uses a separate database populated with fabricated listings.
+- Future backend: Java 21, Spring Boot 4.1.1, Modulith; verify exact compatible dependencies in Phase 1.
+- Future frontend: requested Next.js 16.4 / React 19.3, TypeScript, semantic TweakCN theme; verify in Phase 5.
+- Future module root: `backend/src/main/java/in/opennest/{common,identity,listing,interaction,sandbox}`.
+- No backend/frontend skeleton or Flyway migration exists yet; do not infer implementation from indexes.
+- Phase 1 next: backend bootstrap, migrations, common errors, deployment-mode isolation, integration tests.
+- Phase 2: WhatsApp OTP identity, JWT/session policy, profile and dynamic trust badges.
+- Phase 3: listing quotas, room inventory, image segments, PostGIS search, Overpass enrichment.
+- Phase 4: contact reveals, reviews/reports, fabricated sandbox seed/reset, restricted demo telemetry.
+- Phase 5: public and recruiter interfaces, semantic theme, uploads, accessibility and end-to-end checks.
+- Before launch: license, provider onboarding, moderation/appeals, backup restore, memory/load testing.
+- Authoritative decisions and acceptance criteria: `docs/PROJECT_PLAN.md`.
