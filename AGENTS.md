@@ -11,7 +11,10 @@
 - Do not add inline comments to Java, TypeScript, TSX, or SQL source. Document architectural reasoning in context files.
 - Preserve the requested Java/Spring and Next.js stack. Verify exact release availability and compatibility before initializing each application; do not silently substitute versions.
 - Use Flyway migrations and Hibernate validation. Never use automatic schema updates.
-- Real authentication uses WhatsApp OTP. Development substitutes must be explicitly enabled and unavailable in production.
+- Implement Google OpenID Connect login first through Spring Security with backend-owned server sessions; follow `docs/AUTHENTICATION.md`. WhatsApp verification is a later, disabled-by-default option requiring a separate security/readiness review. Development substitutes must be explicitly enabled and unavailable in production.
+- Google sign-in does not verify a phone number. Require a separately verified +91 owner contact before publishing; never auto-link identities by email or an unverified phone number.
+- PG_HOSTEL rent is INR per person per month; FLAT rent is INR per whole property per month. Return and display rentBasis with every price; never imply a PG room quote or silently compare different bases.
+- OpenNest is licensed under GNU AGPL version 3 only (`AGPL-3.0-only`); preserve LICENSE and do not add an "or later" grant without maintainer instruction.
 - Recruiter mode uses a separate database/backend configuration and fabricated data. A client header is never authorization or a database selector.
 - Production must reject sandbox credentials and disable persona switching, demo resets, and demo telemetry endpoints.
 - Keep phone numbers, tokens, OTPs, and secrets out of logs, fixtures, public DTOs, and Git. Use environment configuration for contact values.

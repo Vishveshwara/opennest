@@ -10,4 +10,4 @@ Do not commit `.env`, provider credentials, personal contact data, generated bui
 
 For Phase 0, run `docker compose config --quiet` with both database passwords configured, then `docker compose --profile sandbox up -d --wait`. GitHub Actions additionally verifies persistence after replacing containers.
 
-The maintainer still needs to select a license. Deployment, merging, and external provider setup are separate decisions from opening a PR.
+Contributions to OpenNest are under GNU AGPL version 3 only (`AGPL-3.0-only`), as provided in LICENSE. Preserve third-party license notices. Deployment, merging, and external provider setup are separate decisions from opening a PR.

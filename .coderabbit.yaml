@@ -18,8 +18,9 @@ reviews:
         city is omitted, and no default city or fixed city allowlist.
     - path: "backend/**"
       instructions: >-
-        Check transactional listing/reveal quotas, WhatsApp OTP replay and
-        throttling, owner authorization, report idempotency, and production
+        Check transactional listing/reveal quotas, Google OIDC state/nonce/PKCE,
+        session fixation and CSRF defenses, safe identity linking, deferred
+        WhatsApp signature/replay checks, owner authorization, report idempotency, and production
         rejection of demo credentials. Sandbox headers cannot select a database.
         No automatic listing suspension based on reports or ratings.
     - path: "frontend/**"
@@ -27,3 +28,4 @@ reviews:
         Preserve TweakCN variables and semantic tokens. Check accessibility,
         mobile usability, private-data cache leaks, and immediate warning updates.
         No public navigation to recruiter tools; hidden links are not security.
+        Show PG prices per person per month and flat prices per property per month.

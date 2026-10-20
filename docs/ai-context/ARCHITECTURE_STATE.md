@@ -5,19 +5,22 @@
 - Implemented application modules: none. Application tests and deployment: not yet available.
 - Local infrastructure: PostgreSQL 17/PostGIS 3.5 and Redis 7.4, persistent named volumes, loopback ports.
 - Optional sandbox profile: separate PostgreSQL and Redis instances, credentials, ports, and volumes.
-- Planned recruiter isolation: separate backend deployments/configuration, PostgreSQL and Redis instances, database credentials, signing keys, storage prefixes or buckets, and cache namespaces.
+- Planned recruiter isolation: separate backend deployments/configuration, PostgreSQL and Redis instances, database credentials, OAuth clients, session stores/cookies, signing keys if used, storage prefixes or buckets, and cache namespaces.
 - Untrusted headers cannot select production versus sandbox data; production disables all demo operations.
 - Local Compose separation provisions distinct stores but does not prove application isolation; application-level isolation tests are required in later phases.
-- Maintainer decision: WhatsApp OTP for real sign-in; provider onboarding pending.
+- Maintainer decision: Google OIDC through Spring Security first, backend-owned Redis sessions; WhatsApp verification deferred and disabled pending review. See `docs/AUTHENTICATION.md`.
+- Google signup permits no phone initially; a separately verified +91 owner contact is required before publishing. No email-based identity auto-linking.
+- Maintainer decision: PG rent per person per month; FLAT rent per whole property per month; every listing returns rentBasis.
+- Maintainer decision: GNU AGPL v3 only (`AGPL-3.0-only`); full license in LICENSE.
 - Maintainer decision: recruiter uses a separate database populated with fabricated listings across multiple Indian cities.
 - Future backend: Java 21, Spring Boot 4.1.1, Modulith; verify exact compatible dependencies in Phase 1.
 - Future frontend: requested Next.js 16.4 / React 19.3, TypeScript, semantic TweakCN theme; verify in Phase 5.
 - Future module root: `backend/src/main/java/in/opennest/{common,identity,listing,interaction,sandbox}`.
 - No backend/frontend skeleton or Flyway migration exists yet; do not infer implementation from indexes.
 - Phase 1 next: backend bootstrap, migrations, common errors, deployment-mode isolation, integration tests.
-- Phase 2: WhatsApp OTP identity, JWT/session policy, profile and dynamic trust badges.
+- Phase 2: Google OIDC identity, server sessions/CSRF/logout, profile, dynamic trust badges; owner publishing remains gated on separately verified phone contact.
 - Phase 3: listing quotas, room inventory, image segments, nationwide PostGIS search with pagination/sorting/filters, Overpass enrichment.
 - Phase 4: contact reveals, reviews/reports, fabricated multi-city sandbox seed/reset, restricted demo telemetry.
 - Phase 5: India-wide public and recruiter interfaces, URL-backed search filters/sort/pagination, semantic theme, uploads, accessibility and end-to-end checks.
-- Before launch: license, provider onboarding, moderation/appeals, backup restore, memory/load testing.
+- Before launch: OAuth setup, approved owner-contact verification method, moderation/appeals, backup restore, memory/load testing.
 - Authoritative decisions and acceptance criteria: `docs/PROJECT_PLAN.md`.

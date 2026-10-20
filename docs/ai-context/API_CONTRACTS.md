@@ -1,15 +1,17 @@
 - Status: proposed only; no endpoints are implemented.
-- All production APIs use `/api/v1`; auth and request/response details finalized with each phase.
-- `POST /auth/otp/request`: {phoneNumber}; generic challenge response; WhatsApp delivery, request/resend throttling.
-- `POST /auth/otp/verify`: {challengeId, code}; single-use verification and authenticated session; no demo bypass in production.
-- `GET /users/me`: authenticated profile; contact data restricted to the account owner.
+- Application REST APIs use `/api/v1`; Spring Security OIDC redirects use the framework paths listed below. Request/response details finalized with each phase.
+- Initial login: Spring Security `GET /oauth2/authorization/google` and `GET /login/oauth2/code/google` (framework routes outside /api/v1); backend validates OIDC and creates a rotated server session. See `docs/AUTHENTICATION.md`.
+- `GET /auth/csrf`: synchronizer token for the initiating session, no-store; `POST /auth/logout`: CSRF-protected session invalidation and cookie expiry. Session cookies Secure in production, HttpOnly, host-only, SameSite=Lax.
+- Deferred WhatsApp: no OTP, webhook, challenge, or polling routes enabled at initial launch; reject rather than accept client assertions of verification. Google login never marks a phone verified.
+- `GET /users/me`: authenticated profile and phone verification state; contact data restricted to the account owner; no-store.
 - `GET /listings/search`: public; optional city/locality/category/status, minRent/maxRent, minBedrooms/maxBedrooms, minTotalRooms/maxTotalRooms, hasWifi/hasGym/hasSwimmingPool, maxSharingPerRoom, genderRoomAvailable, and geo filters; omitted city means nationwide. Full contract: `docs/LISTING_SEARCH.md`.
 - Pagination: page=0 by default, size=20 (1..50), page >= 0 and page*size <= 10000; response {items, page, size, totalElements, totalPages, hasNext, hasPrevious, sort}. Out-of-range valid pages return empty items with actual totals.
 - Sort: NEWEST default, RENT_ASC, RENT_DESC, ROOMS_DESC, RATING_DESC (unrated last), DISTANCE_ASC (complete geo query required); every order uses id ASC as final tie-breaker. Reject arbitrary field names/directions.
 - Filters combine with AND; city/locality are normalized exact matches. Bedrooms describe FLAT layout (0 = studio), available rooms describe vacancy; bedroom filters exclude PG_HOSTEL. Default status ACTIVE; explicit FULL_OCCUPIED allowed; PAUSED is never public.
 - Geo search requires lat+lng+radiusKm together, 0 < radiusKm <= 100; validate coordinates and all ranges/types/enums. Invalid/unknown parameters -> 400; no silent truncation. Totals use identical visibility and filter predicates as items.
 - `GET /listings/{id}`: public listing and aggregate trust data; excludes owner phone and precise private address.
-- `POST /listings`: authenticated owner; explicit normalized city required for any Indian city, with no city default; quota, inventory, geography, and required validated image segments.
+- `POST /listings`: authenticated owner with separately verified +91 contact; explicit normalized city required for any Indian city, with no city default; quota, inventory, geography, and required validated image segments.
+- ListingResponseDto includes monthlyRent, currency=INR, rentPeriod=MONTH, and rentBasis=PER_PERSON for PG_HOSTEL or PER_PROPERTY for FLAT; deposit uses the same basis. Rent bounds/sorts use quoted values, never silently converted between bases.
 - `PATCH /listings/{id}/inventory`: owner only; {maleRoomsAvailable, femaleRoomsAvailable, sharedRoomsAvailable, maxSharingPerRoom, version}.
 - Inventory response includes computed total/status; version conflict -> 409; PAUSED remains PAUSED.
 - `POST /listings/{id}/images/presign`: owner only; bounded segment/type/size request -> short-lived PUT URL and object key.
@@ -24,7 +26,7 @@
 - `POST /interactions/listings/{id}/reviews`: authenticated prior revealer; {rating, issueTag, commentText}; create-only, no self-review; an existing pair returns 409 without mutation. ASKED_BROKERAGE must use the report endpoint; ordinary reviews cannot clear a report.
 - Public reports are allegations; never automatically hide/suspend listings.
 - Sandbox persona/reset/telemetry APIs exist only on a separately configured sandbox backend, with bounded privileges.
-- `X-Sandbox-Mode` never selects a database or grants authorization; production rejects sandbox requests/tokens.
+- `X-Sandbox-Mode` never selects a database or grants authorization; production rejects sandbox sessions/tokens and cannot read the sandbox session store.
 - Sandbox responses and all personalized/contact/auth responses bypass shared caches.
 - Public listing caches must be partitioned by deployment; rating/report updates invalidate affected cached views.
 - Common errors planned as Problem Details; validation 400, unauthenticated 401, forbidden 403, absent 404, conflict 409, quota 429.

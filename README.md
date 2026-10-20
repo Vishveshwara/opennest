@@ -6,10 +6,13 @@ The launch plan supports cities throughout India. Search defaults to nationwide 
 
 **Status:** Phase 0 foundation. There is no application, authentication service, or deployed website yet.
 
+Google sign-in through Spring Security is planned first; WhatsApp verification is a later option. Google account creation does not verify an owner's contact number. PG prices will be displayed in INR per person per month; flat prices are per whole property per month.
+
 ## Start here
 
 - [Project plan and decisions](docs/PROJECT_PLAN.md)
 - [Pagination, sorting, and listing filters](docs/LISTING_SEARCH.md)
+- [Authentication decisions and WhatsApp review](docs/AUTHENTICATION.md)
 - [AI development instructions](AGENTS.md)
 - [Current implementation state](docs/ai-context/ARCHITECTURE_STATE.md)
 - [Proposed database](docs/ai-context/SCHEMA_INDEX.md)
@@ -35,7 +38,7 @@ The optional recruiter infrastructure uses a separate PostgreSQL instance, crede
 docker compose --profile sandbox up -d --wait
 ```
 
-Sandbox PostGIS uses `localhost:5433`; sandbox Redis uses `localhost:6380`. Future production and sandbox backends must use their respective connections and signing keys. This Compose file is for local development, not a production deployment.
+Sandbox PostGIS uses `localhost:5433`; sandbox Redis uses `localhost:6380`. Future production and sandbox backends must use their respective connections, OAuth clients, session stores, and cookies. This Compose file is for local development, not a production deployment.
 
 To stop only the recruiter sandbox services:
 
@@ -53,4 +56,4 @@ Named volumes and Redis AOF support recovery but are not backups or guarantees o
 
 ## License
 
-The project is intended to be open source. A license must be selected by the maintainer before inviting reuse; no license grant is implied yet.
+OpenNest is licensed under the [GNU Affero General Public License, version 3 only](LICENSE) (`AGPL-3.0-only`). The full, unmodified license text is included in LICENSE. Third-party components retain their respective licenses.

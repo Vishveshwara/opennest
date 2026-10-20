@@ -1,9 +1,13 @@
 - Status: proposed only; no migrations or application tables exist.
 - Separate production and sandbox databases use the same migrations and distinct runtime credentials.
-- `users`: UUID id, full_name, unique phone_number, role, created_at; rating aggregates computed or transactionally maintained.
+- `users`: UUID id, full_name, nullable unique phone_number, phone_verified_at, role, created_at; Google signup needs no phone; owner publication requires verified +91 contact. Rating aggregates computed or transactionally maintained.
+- `auth_identities`: UUID id, user_id FK, issuer, subject, email, email_verified, created_at; unique (issuer, subject). Email is not an identity key; linking requires reauthentication and proof of both identities.
+- Auth state: Spring Session Redis in each deployment's separate Redis instance/namespace, bounded idle/absolute lifetime; losing a session requires login again. Provider tokens are not listing API credentials.
 - Unreviewed users have no average rating; do not initialize them with a misleading five-star rating.
 - `properties`: UUID id, owner_id FK, title, description, category, status, city, locality, private address, coordinates, geography point, rent/deposit, amenities, room counts, nearby_landmarks JSONB, timestamps.
 - `properties.city`: required, normalized city supplied at creation; no city default or fixed city allowlist; support listings throughout India.
+- `properties.monthly_rent`: positive integer INR; PG_HOSTEL = per person/month, FLAT = per whole property/month. rentBasis is category-derived (`PER_PERSON | PER_PROPERTY`), never an independently conflicting value.
+- `properties.security_deposit`: nonnegative integer INR, same per-person/per-property basis as rent, clearly labeled; inventory remains room counts, not persons/beds.
 - `properties.bedrooms`: integer >= 0 required for FLAT (0 = studio); NULL for PG_HOSTEL. This is layout/BHK, independent of available-room inventory.
 - Category: `FLAT | PG_HOSTEL`; status: `ACTIVE | FULL_OCCUPIED | PAUSED`.
 - Room counters >= 0; max_sharing_per_room 1..10; total derived from male + female + shared.
@@ -23,7 +27,7 @@
 - First report inserts or converts only that pair's review to rating=1 / ASKED_BROKERAGE / is_auto_broker_report=true; conversion preserves UUID, created_at, and comment_text. Repeat reports are no-ops.
 - Ordinary review creation conflicts on an existing pair; ASKED_BROKERAGE is reserved for the report flow. A normal review cannot overwrite or clear a report.
 - All review/report writers lock the owner row and atomically update the review and owner aggregates; review_count counts rows, broker_report_count counts flagged rows, average_rating averages each row once. Conversion changes no row count; retries change no aggregates.
-- `otp_challenges` or equivalent expiring store: hashed code, attempt limit, expiry, consumed state, resend controls; never plaintext OTP logs.
+- Deferred WhatsApp challenges: Redis, <= 5 minute TTL, hashed high-entropy token, expected phone, initiating session/action, deduped provider message IDs, atomic one-time completion; no public six-digit bearer login. Final flow requires review before enabling.
 - Trust badge derived, not independently writable: `STANDARD | TOP_RATED | LOW_RATINGS_BEWARE | BROKERAGE_WARNED | CRITICAL_BROKER_AND_LOW_RATING`.
 - Proposed source schema's `is_sandbox` flags are not security boundaries; separate databases replace shared-row routing.
 - Five-listing quota requires owner-level transaction serialization, including reactivation; no count-then-insert race.
