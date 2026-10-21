@@ -29,6 +29,8 @@ This intentionally revises the supplied stateless-JWT browser-auth target. One b
 
 These are planned routes, not currently available endpoints. Keep successful and failed callback redirects on a configured OpenNest origin. Never let a return URL become an open redirect or carry provider/access/session tokens. Every protected application mutation, including draft/image/listing actions, will require the same session and CSRF checks as logout.
 
+The proposed frontend/API domain arrangement, preview restrictions, and host-only cookie implications for server rendering are documented in the [deployment plan](DEPLOYMENT_STACK.md#network-and-browser-session-topology). No production domain or routing has been configured yet.
+
 ## Review of user-sent WhatsApp verification
 
 The proposed wa.me link/QR and incoming webhook can associate an incoming sender with a challenge, but that alone is not a reviewed browser-login protocol. A forwarded link can trick a phone owner into approving a challenge opened in somebody else's browser. A signed webhook confirms the sender/provider event; it does not prove the sender intended to authorize that browser. This is the reason to begin with standard Google OIDC.

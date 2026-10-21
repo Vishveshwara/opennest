@@ -13,6 +13,7 @@ Google sign-in through Spring Security is planned first; WhatsApp verification i
 - [Project plan and decisions](docs/PROJECT_PLAN.md)
 - [Pagination, sorting, and listing filters](docs/LISTING_SEARCH.md)
 - [Authentication decisions and WhatsApp review](docs/AUTHENTICATION.md)
+- [Deployment plan, verified constraints, and cost assumptions](docs/DEPLOYMENT_STACK.md)
 - [AI development instructions](AGENTS.md)
 - [Current implementation state](docs/ai-context/ARCHITECTURE_STATE.md)
 - [Proposed database](docs/ai-context/SCHEMA_INDEX.md)

@@ -4,6 +4,7 @@
 - Phase 0: documentation, local infrastructure, CodeRabbit guidance, and infrastructure CI defined.
 - Documentation convention: full /api/v1 prefixes for application REST paths; /oauth2/authorization/google and /login/oauth2/code/google remain framework routes. Auth/schema indexes describe planned behavior only.
 - Implemented application modules: none. Application tests and deployment: not yet available.
+- Deployment proposal: `docs/DEPLOYMENT_STACK.md`; personal/non-commercial, minimize initial cost, no AWS account/credits or domain yet. Vercel Hobby conditional; x86-64 EC2 proposed because upstream PostGIS lists amd64 only; ARM, capacity, and budget unconfirmed.
 - Local infrastructure: PostgreSQL 17/PostGIS 3.5 and Redis 7.4, persistent named volumes, loopback ports.
 - Optional sandbox profile: separate PostgreSQL and Redis instances, credentials, ports, and volumes.
 - Planned recruiter isolation: separate backend deployments/configuration, PostgreSQL and Redis instances, database credentials, session stores/cookies, storage prefixes or buckets, cache namespaces, and separate OAuth clients/signing keys where used.
@@ -25,4 +26,5 @@
 - Phase 4: contact reveals, reviews/reports, fabricated multi-city sandbox seed/reset, restricted demo telemetry.
 - Phase 5: India-wide public and recruiter interfaces, URL-backed search filters/sort/pagination, semantic theme, uploads, accessibility and end-to-end checks.
 - Before launch: OAuth setup, approved owner-contact verification method, moderation/appeals, backup restore, memory/load testing.
+- Hosting readiness: same-site session domains/routing, isolated recruiter resources, Redis version/license review, map/Overpass provider approval, immutable images and approved promotions; no production artifacts implemented.
 - Authoritative decisions and acceptance criteria: `docs/PROJECT_PLAN.md`.

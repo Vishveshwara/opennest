@@ -6,6 +6,7 @@
 - Plan and implement India-wide listing support from launch. Do not introduce a default city, a city allowlist, or a city-specific rollout. An omitted search city means nationwide results; fabricated sandbox data must cover multiple Indian cities.
 - Listing search includes server-side pagination, allowlisted sorting, and composable filters from its first implementation. Read `docs/LISTING_SEARCH.md` before editing search; distinguish flat bedrooms/BHK from currently available rooms.
 - Distinguish implemented behavior from proposals. Never describe a planned endpoint or migration as live.
+- Read `docs/DEPLOYMENT_STACK.md` before changing hosting, image architecture, production configuration, or delivery workflows; keep provider assumptions and deployment status explicit.
 - Use full `/api/v1/...` paths for application REST routes in every document; the Google OIDC framework routes are the explicit exception. Keep API/schema indexes aligned with the detailed authentication and search plans.
 - Update the relevant context indexes in the same change as database, API, or service changes. Keep each index under 80 lines and use bullets.
 - Add a module-local `MODULE_CONTEXT.md` when creating a Java module; keep it under 50 lines.

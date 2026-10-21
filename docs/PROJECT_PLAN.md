@@ -1,6 +1,6 @@
 # OpenNest implementation plan
 
-This plan defines OpenNest's proposed India-wide launch. Phase 0 currently provides documentation, local infrastructure, review guidance, and infrastructure CI only; no application modules or endpoints exist. Work proceeds one phase per prompt and one reviewable PR per phase. The AI indexes summarize this plan, while AUTHENTICATION.md and LISTING_SEARCH.md specify their detailed planned contracts.
+This plan defines OpenNest's proposed India-wide launch. Phase 0 currently provides documentation, local infrastructure, review guidance, and infrastructure CI only; no application modules or endpoints exist. Work proceeds one phase per prompt and one reviewable PR per phase. The AI indexes summarize this plan, while AUTHENTICATION.md and LISTING_SEARCH.md specify their detailed planned contracts. [DEPLOYMENT_STACK.md](DEPLOYMENT_STACK.md) records the proposed hosting, verified provider constraints, and deployment readiness requirements.
 
 ## Confirmed product direction
 
@@ -56,7 +56,7 @@ Phase 1 should finalize schema semantics before creating V1. Each later feature 
 - WhatsApp is deferred: the proposed user-sent code flow needs signed webhook validation, session/phone binding, high-entropy single-use challenges, replay/rate limits, and an explicit defense against forwarded-link approval of another browser. No claim of free-forever pricing, universal test-number access, or zero onboarding is established.
 - Provider-delivered WhatsApp authentication templates remain an alternative to evaluate for phone verification. Check official policy/eligibility/current rates before implementing either option. Do not send messages, enroll accounts, or incur provider charges during foundation setup; secrets stay in deployment configuration.
 - Search follows `docs/LISTING_SEARCH.md`: database-side filters/order/pagination, bounded page sizes/offsets, matching counts, and deterministic ties. City is optional for search and explicitly required for listing creation, with no database default or fixed city allowlist. Normalize cities consistently; do not assume every locality fits a fixed catalog. Cache keys include every normalized filter, sort, page, size, and deployment; nationwide queries remain distinct.
-- Overpass lookup uses an HTTP interface, a 2500 ms timeout, circuit breaker, and empty-result fallback for HOSPITAL/SCHOOL/SHOP within 2.5 km. A remote outage must not prevent saving a listing.
+- Overpass lookup uses an HTTP interface, a 2500 ms timeout, circuit breaker, and empty-result fallback for HOSPITAL/SCHOOL/SHOP within 2.5 km. A remote outage must not prevent saving a listing. Public deployment needs an operator-approved provider or separately budgeted self-hosted service; otherwise enrichment stays disabled. Map tiles/styles and geocoding are separate provider decisions; see the [deployment plan](DEPLOYMENT_STACK.md).
 - Only unauthenticated production listing responses may enter shared Next.js caches; all sandbox, authenticated, contact, and auth responses use no-store. Invalidate affected public searches/details after listing/status/inventory/review writes. A report must update trust data and invalidate affected views as part of the completed write flow. Enable cacheComponents/reactCompiler only after compatibility checks.
 - Frontend image compression is a usability feature, not an upload security boundary. Validate uploaded objects before attaching them to a published listing.
 - Six-hour demo resets must serialize with writes, be idempotent, and use sandbox-only credentials. Fabricated contact actions should be disabled; never seed callable real-looking phone numbers.
@@ -67,6 +67,7 @@ Phase 1 should finalize schema semantics before creating V1. Each later feature 
 
 ## Open decisions and setup dependencies
 
+- Hosting starts personal/non-commercial with minimal cost; no AWS account, credits, or domain exist yet. Confirm budget, image architecture, same-site session routing, map providers, and Redis version/license before public deployment; see [deployment decisions](DEPLOYMENT_STACK.md#decisions-before-public-deployment).
 - Set up the production Google OAuth client/redirect URI. If Google is also enabled in the sandbox, use a separate client and redirect origin; demo personas do not require Google accounts. Use deployment secrets, never chat or Git, for credentials.
 - Choose an approved owner-phone verification method before publishing becomes available; WhatsApp production eligibility, flow approval, provider selection, and any spend limit remain pending.
 - Confirm the proposed trust precedence before Phase 2 implementation; review/report lifecycle is specified in the API and schema indexes.
