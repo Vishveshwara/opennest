@@ -1,18 +1,19 @@
 # OpenNest authentication decisions
 
-Status: Phase 0 design only. No login, provider integration, session service, or webhook is implemented. The maintainer requested Google and WhatsApp as options and asked to start with the safer option. Initial implementation uses Google OpenID Connect through Spring Security; WhatsApp is deferred and disabled by default.
+Status: Phase 0 design only. No login, provider integration, session service, or webhook is implemented. The planned initial implementation will use Google OpenID Connect through Spring Security. WhatsApp is a deferred option and will remain disabled unless separately implemented and approved for use.
 
 ## Initial Google login
 
 - Spring Boot is the authentication authority. Use Spring Security's Google OIDC client and Authorization Code flow with PKCE S256, state, and nonce bound to the initiating browser. Use maintained framework support; do not hand-write token validation or a parallel NextAuth login system.
 - Request only openid/email/profile. Configure exact allowlisted redirect URIs and use HTTPS in production. Validate issuer, audience, signature, expiry, nonce, and authorization response state. Missing or mismatched checks fail closed.
 - Identify the account by the verified issuer and subject (`iss`, `sub`), not email. Store the provider identity separately from the user. Google email and a typed phone number must never trigger automatic account merging. Linking requires an already authenticated, recently reauthenticated account and proof of the new identity.
-- Google signup may create a user without a phone number. It proves control of a Google account, not ownership of an Indian mobile number or property. Return verification state explicitly; never mark a phone verified from a Google profile.
-- Require separately verified +91 contact before an owner publishes a listing or exposes a contact number. Until an approved contact-verification method is implemented, publication stays blocked with a clear next-step response. Browsing/account creation must not pretend this dependency is solved.
+- Google signup will allow account creation without a phone number. A successful Google login will establish control of a Google account, not ownership of an Indian mobile number or property. Return verification state explicitly; never mark a phone verified from a Google profile or reserve a unique user phone from an unverified text input.
+- Require separately verified +91 contact before an owner publishes a listing or exposes a contact number. Until an approved contact-verification method is implemented, publication will return 403 with a clear next step. Authenticated users may create PAUSED drafts and upload photos without a verified phone. Browsing/account creation do not depend on contact verification.
 - Use backend-owned opaque sessions through Spring Session Redis. Rotate the session ID after login and privilege changes. Initial target: 30-minute inactivity timeout and 24-hour absolute lifetime; enforce both on the server. Logout invalidates the session and expires its cookie.
-- Session cookies are HttpOnly, Secure in production, SameSite=Lax, host-only, with distinct production/sandbox names. Route browser/API requests through the same site and scope CORS to configured origins. No credentials in URL query strings or browser localStorage.
-- Keep transient OAuth authorization state in the initiating server session; add CSRF protection to state-changing application requests and logout. Expose a no-store synchronizer-token endpoint for the frontend. Session loss or Redis failure requires reauthentication or an explicit unavailable response, never a demo bypass.
-- Production and recruiter backends use separate OAuth registrations, redirect origins, Redis/session stores, cookie names/hosts, and identities. Demo personas must not be exchangeable for a real session.
+- Planned session cookies: HttpOnly, Secure in production, SameSite=Lax, host-only, with distinct production/sandbox names. Route browser/API requests through the same site and scope CORS to configured origins. Never put session IDs, provider access/ID/refresh tokens, or client secrets in URLs or browser localStorage. OAuth state/nonce/PKCE challenge parameters may travel in the framework's authorization URLs; accept the short-lived authorization code only on the configured callback. Never log callback query values or forward them to a frontend URL.
+- Keep transient OAuth authorization state in the initiating server session; add CSRF protection to state-changing application requests and logout. Expose a no-store synchronizer-token endpoint for the frontend. An expired/missing session means reauthentication (401 for protected REST endpoints); unavailable Redis means 503, never a demo bypass.
+- Production and recruiter backends will use separate redirect origins, Redis/session stores, cookie names/hosts, and identities. If Google login is enabled in the recruiter deployment, it must use its own OAuth registration; canned demo personas do not need live Google accounts. A demo session must never be exchangeable for a real session.
+- Trusted sandbox seeding may create fabricated published listings without a real verified phone; this is a sandbox-only fixture exception, not an HTTP publication bypass. Disable sandbox contact actions and use no callable phone numbers. Keep quota/inventory/review fixtures testable without sending real messages.
 
 This intentionally revises the supplied stateless-JWT browser-auth target. One backend-owned session system reduces duplicate login/account-linking logic. Revisit API bearer tokens only for a concrete client requirement.
 
@@ -22,11 +23,11 @@ This intentionally revises the supplied stateless-JWT browser-auth target. One b
 | --- | --- |
 | `GET /oauth2/authorization/google` | Spring Security login entry; redirect to Google with browser-bound authorization state. |
 | `GET /login/oauth2/code/google` | Spring Security callback; validate/exchange the code and rotate the session. |
-| `GET /api/v1/auth/csrf` | Return the initiating session's CSRF token; no-store; does not authenticate the caller. |
+| `GET /api/v1/auth/csrf` | Return the initiating session's CSRF token; no-store; may create a pre-login session but does not authenticate the caller. |
 | `POST /api/v1/auth/logout` | CSRF-protected session invalidation; expire cookie; return 204. |
 | `GET /api/v1/users/me` | Authenticated account and verification state; no-store; 401 when unauthenticated. |
 
-Keep successful and failed callback redirects on a configured OpenNest origin. Never let a return URL become an open redirect or carry provider/access/session tokens.
+These are planned routes, not currently available endpoints. Keep successful and failed callback redirects on a configured OpenNest origin. Never let a return URL become an open redirect or carry provider/access/session tokens. Every protected application mutation, including draft/image/listing actions, will require the same session and CSRF checks as logout.
 
 ## Review of user-sent WhatsApp verification
 
@@ -58,5 +59,5 @@ Checked 20 October 2026. Meta's public pricing overview describes charging for d
 - Google success, denial, expired/reused code, invalid state/nonce/issuer/audience/signature, unsafe redirect, and PKCE mismatch.
 - Session rotation, idle/absolute expiry, logout, CSRF rejection, unavailable Redis, and production rejection of demo sessions.
 - Separate users for unrelated subjects even if emails collide; account linking requires proof of both identities. Never fabricate a verified phone for Google users.
-- Publication blocked without a verified owner contact; authenticated browsing remains available. Contact verification has its own tests when a method is selected.
+- Publication blocked without a verified owner contact; authenticated drafts/uploads and public browsing remain available. Sandbox fixture seeding cannot activate a production bypass. Contact verification has its own tests when a method is selected.
 - Every deferred WhatsApp challenge/webhook/status path remains unavailable until explicitly implemented and enabled after review. Later tests must cover spoofed events, duplicates, mismatched phones/recipients, expiration, racing completions, session relay, and bounded polling.

@@ -6,6 +6,7 @@
 - Plan and implement India-wide listing support from launch. Do not introduce a default city, a city allowlist, or a city-specific rollout. An omitted search city means nationwide results; fabricated sandbox data must cover multiple Indian cities.
 - Listing search includes server-side pagination, allowlisted sorting, and composable filters from its first implementation. Read `docs/LISTING_SEARCH.md` before editing search; distinguish flat bedrooms/BHK from currently available rooms.
 - Distinguish implemented behavior from proposals. Never describe a planned endpoint or migration as live.
+- Use full `/api/v1/...` paths for application REST routes in every document; the Google OIDC framework routes are the explicit exception. Keep API/schema indexes aligned with the detailed authentication and search plans.
 - Update the relevant context indexes in the same change as database, API, or service changes. Keep each index under 80 lines and use bullets.
 - Add a module-local `MODULE_CONTEXT.md` when creating a Java module; keep it under 50 lines.
 - Do not add inline comments to Java, TypeScript, TSX, or SQL source. Document architectural reasoning in context files.
@@ -17,9 +18,10 @@
 - OpenNest is licensed under GNU AGPL version 3 only (`AGPL-3.0-only`); preserve LICENSE and do not add an "or later" grant without maintainer instruction.
 - Recruiter mode uses a separate database/backend configuration and fabricated data. A client header is never authorization or a database selector.
 - Production must reject sandbox credentials and disable persona switching, demo resets, and demo telemetry endpoints.
-- Keep phone numbers, tokens, OTPs, and secrets out of logs, fixtures, public DTOs, and Git. Use environment configuration for contact values.
+- Keep real phone numbers, credentials, session tokens, and OTPs out of logs, fixtures, unauthenticated DTOs, and Git. Private account/contact responses may expose only the caller's own or explicitly authorized contact data. Store user contacts in the private database after verification; configure service/bot contacts and provider secrets through the environment.
 - Enforce ownership, quotas, and review idempotency transactionally; write concurrency tests when implementing these behaviors.
 - Never auto-hide listings because of ratings or brokerage allegations. Public warnings must describe reports as allegations.
+- Plan listing creation as a PAUSED draft, followed by validated image uploads and explicit publication. Only publication/reactivation requires the verified owner contact, required images, and transactional five-listing quota; draft creation and inventory updates must not bypass that publication boundary.
 - Preserve the specified TweakCN theme variables. Use semantic tokens, not hardcoded palette classes.
 - Do not add messaging/WebSocket infrastructure or proxy image uploads through the backend.
 - Run checks appropriate to the phase and report anything not executed. Do not claim CI passed without checking its result.

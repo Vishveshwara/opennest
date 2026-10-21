@@ -1,6 +1,6 @@
 ## Change
 
-Describe the problem and resulting behavior. Identify the implementation phase.
+Describe the problem and resulting behavior. Identify the implementation phase and distinguish planned contracts from currently implemented functionality.
 
 ## Validation
 

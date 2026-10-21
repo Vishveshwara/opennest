@@ -1,16 +1,16 @@
 # OpenNest listing search plan
 
-Status: proposed contract for the first listing-search implementation in Phase 3 and the frontend in Phase 5. No search endpoint exists yet. Pagination, sorting, and filters will be implemented together, with identical behavior in the public portal and recruiter sandbox on their respective backends.
+Status: proposed contract for the first listing-search implementation in Phase 3 and the frontend in Phase 5. No search endpoint exists yet. Pagination, sorting, and filters will be implemented together, with the same search semantics in the public portal and recruiter sandbox on their separate backends. Sandbox responses will bypass shared/public caches.
 
 ## Request and filters
 
-`GET /api/v1/listings/search` returns nationwide results when `city` is omitted. Supplied filters combine with AND and run in the database before pagination. Do not fetch all listings for browser-side filtering or sorting.
+The planned `GET /api/v1/listings/search` will return nationwide results when `city` is omitted. Supplied filters combine with AND and run in the database before pagination. Do not fetch all listings for browser-side filtering or sorting.
 
 | Parameter | Planned behavior |
 | --- | --- |
-| `city`, `locality` | Optional exact matches after shared Unicode normalization, trimming, whitespace collapsing, and case normalization on writes and queries. No city default or fixed city allowlist. Locality may be used without city and then matches nationwide. |
+| `city`, `locality` | Optional exact matches after shared Unicode NFKC normalization, trimming, whitespace collapsing, and locale-independent uppercase on writes and queries. No city default or fixed city allowlist. Locality may be used without city and then matches nationwide; alternate spellings/transliterations are not silently treated as aliases. |
 | `category` | Optional `FLAT` or `PG_HOSTEL`. |
-| `status` | `ACTIVE` by default; explicit `FULL_OCCUPIED` also supported. `PAUSED` is never searchable publicly. Fully occupied listings remain accessible by public detail URL. |
+| `status` | `ACTIVE` by default; explicit `FULL_OCCUPIED` also supported. `PAUSED` drafts are never included in public search, even for their owner. Published ACTIVE/FULL_OCCUPIED listings remain accessible by public detail URL; a PAUSED detail is owner-only. Reports/ratings cannot change publication status. |
 | `minRent`, `maxRent` | Inclusive integer monthly quoted rent bounds in INR; PG_HOSTEL is per person, FLAT is per whole property. Each >= 0 and minimum <= maximum. No implicit conversion between bases. |
 | `minBedrooms`, `maxBedrooms` | Inclusive integer FLAT bedroom/BHK bounds, each >= 0; 0 means studio. Excludes PG_HOSTEL; explicit PG_HOSTEL combined with bedroom filters is invalid. Set both to the same value for an exact bedroom count. |
 | `minTotalRooms`, `maxTotalRooms` | Inclusive nonnegative integer bounds on currently available rooms: male + female + shared. Set both to the same value for an exact count. These are rooms, not beds or BHK. |
@@ -41,6 +41,8 @@ Every item includes `currency=INR`, `rentPeriod=MONTH`, and category-derived `re
 
 Items and count queries must use identical filters and visibility rules. Obtain the page and totals from a consistent database snapshot for that request. Paginate distinct property IDs before hydrating image collections; joins must not duplicate cards or inflate counts. Use projections/batched relations to avoid a query per card. Inspect query plans for nationwide and city-filtered cases before tuning indexes.
 
+Image reservations and pending uploads must never appear as validated listing photos. Public cards use only VALIDATED image records. Exact stored coordinates may support geo queries; public map/address precision is an open response-design decision recorded in PROJECT_PLAN.md, not permission to expose private addresses or raw coordinates.
+
 Offset pagination is the initial design because numbered pages and exact totals are useful at launch. It does not freeze results between requests: new listings and rent, inventory, or rating changes may move items across pages. Do not promise snapshot-stable browsing under concurrent writes. Evaluate cursor pagination when observed traffic or deep browsing requires it, retaining bounded queries throughout.
 
 ## Browser behavior
@@ -52,7 +54,7 @@ Offset pagination is the initial design because numbered pages and exact totals 
 - Provide accessible Previous/Next controls, numbered pages, matching count, and page-size selection. Display page numbers as one-based while translating to the zero-based API. Enable nearest sorting only with a valid geo query.
 - Keep exact totals even when they exceed the offset cap; only offer pages whose offset is <= 10000. At the browsing limit, disable further navigation and prompt for narrower filters even if hasNext indicates more matches.
 - Show loading, empty, error, and out-of-range page states. Offer return to the first page when changes leave the requested page beyond the result set. Cancel or ignore stale responses after a query change.
-- Cache keys include the complete normalized query (all filters, sort, page, size) and deployment. Invalidate affected public search pages on listing/inventory/review changes; never share personalized or sandbox data through public caches.
+- Only unauthenticated production listing responses may enter shared caches. Their keys include the complete normalized query (all filters, sort, page, size) and deployment. All sandbox and authenticated responses use no-store, even when search semantics match; never cache them publicly. Invalidate affected public searches/details on listing/status/inventory/review changes.
 
 ## Examples
 
@@ -75,5 +77,6 @@ Two-bedroom flats in Bengaluru with Wi-Fi, at least one available room, rent up 
 - Verify first/middle/last/empty/out-of-range pages, totals and flags, invalid page/size/offset, and request snapshot consistency.
 - Verify each sort, ties across page boundaries on unchanged data, unrated owners last, and nearest ordering in metres; reject distance sort without geo inputs and all unknown sort values.
 - Verify paused/private records and other-deployment data cannot affect results or counts. Multiple images must not duplicate a listing or inflate totals.
+- Verify PAUSED drafts/pending images stay out of search until explicit publication, pausing removes a listing from public results, and inventory/report writes cannot republish a draft. Verify sandbox/authenticated responses use no-store and public caches are invalidated after relevant writes.
 - Verify invalid and incompatible inputs return 400, while valid contradictory filters return an empty result. Record query plans for representative nationwide and multi-filter searches.
 - End-to-end checks cover URL sharing, Back/Forward, filter/sort/size page reset, empty results, stale requests, and mobile/keyboard search controls.

@@ -2,11 +2,11 @@
 
 OpenNest is a zero-brokerage platform for finding flats and PG/hostel accommodation directly from owners across India. OpenNest is an independent project, not affiliated with NoBroker.
 
-The launch plan supports cities throughout India. Search defaults to nationwide results with pagination and sorting, plus filters for city, locality, rent, bedrooms/BHK, available rooms, amenities, sharing, and nearby location. The recruiter sandbox will use fabricated listings across multiple Indian cities.
-
 **Status:** Phase 0 foundation. There is no application, authentication service, or deployed website yet.
 
-Google sign-in through Spring Security is planned first; WhatsApp verification is a later option. Google account creation does not verify an owner's contact number. PG prices will be displayed in INR per person per month; flat prices are per whole property per month.
+The launch plan supports cities throughout India. Planned search will default to nationwide results with pagination and sorting, plus filters for city, locality, rent, bedrooms/BHK, available rooms, amenities, sharing, and nearby location. The recruiter sandbox will use fabricated listings across multiple Indian cities, with callable contact actions disabled.
+
+Google sign-in through Spring Security is planned first; WhatsApp verification is a later option. Google account creation will not verify an owner's contact number. An authenticated owner will be able to create a PAUSED draft, upload and validate its photos, and explicitly publish it after separate contact verification and quota checks. PG prices will be displayed in INR per person per month; flat prices will be per whole property per month.
 
 ## Start here
 
@@ -21,7 +21,7 @@ Google sign-in through Spring Security is planned first; WhatsApp verification i
 
 ## Local infrastructure
 
-Install Docker with Compose v2. Copy `.env.example` to `.env`, then replace both database password placeholders with different local passwords.
+Install Docker with Compose v2. Copy `.env.example` to `.env`, then fill both blank database password fields with different local passwords. Compose requires both values even when the sandbox profile is not enabled. Application-provider variables are reserved for later phases and are not used by the current datastore-only Compose setup.
 
 ```powershell
 Copy-Item .env.example .env
@@ -30,7 +30,7 @@ docker compose up -d --wait
 docker compose ps
 ```
 
-PostGIS is available at `localhost:5432`, and Redis at `localhost:6379`. Ports bind only to the local machine. The database has no application tables until Phase 1.
+With the default port settings and healthy containers, PostGIS will be available at `localhost:5432` and Redis at `localhost:6379`. Ports bind only to the local machine. The database has no application tables until Phase 1.
 
 The optional recruiter infrastructure uses a separate PostgreSQL instance, credentials, volume, and Redis instance:
 
@@ -38,7 +38,7 @@ The optional recruiter infrastructure uses a separate PostgreSQL instance, crede
 docker compose --profile sandbox up -d --wait
 ```
 
-Sandbox PostGIS uses `localhost:5433`; sandbox Redis uses `localhost:6380`. Future production and sandbox backends must use their respective connections, OAuth clients, session stores, and cookies. This Compose file is for local development, not a production deployment.
+With default port settings, sandbox PostGIS uses `localhost:5433` and sandbox Redis uses `localhost:6380`. The command starts both primary and sandbox store pairs. Future production and sandbox backends must use separate connections, session stores, and cookies, plus separate OAuth clients if Google login is enabled in both. This Compose separation does not prove application isolation; the file is for local development, not production deployment.
 
 To stop only the recruiter sandbox services:
 
