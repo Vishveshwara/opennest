@@ -15,7 +15,8 @@
 - Use Flyway migrations and Hibernate validation. Never use automatic schema updates.
 - Implement Google OpenID Connect login first through Spring Security with backend-owned server sessions; follow `docs/AUTHENTICATION.md`. WhatsApp verification is a later, disabled-by-default option requiring a separate security/readiness review. Development substitutes must be explicitly enabled and unavailable in production.
 - Google sign-in does not verify a phone number. Require a separately verified +91 owner contact before publishing; never auto-link identities by email or an unverified phone number.
-- PG_HOSTEL rent is INR per person per month; FLAT rent is INR per whole property per month. Return and display rentBasis with every price; never imply a PG room quote or silently compare different bases.
+- Follow `docs/LISTING_MODEL.md`: PG_HOSTEL rent is INR per person/month; FLAT ENTIRE_FLAT is per property/month and FLAT ROOM is per room/month. Derive and display rentBasis with every price; keep whole-flat boolean availability separate from room counters.
+- Owners configure occupancy capacity: maxOccupants for an entire flat, maxSharingPerRoom for rooms. Return/display these limits without deriving them from BHK or multiplying rent by the allowed people.
 - OpenNest is licensed under GNU AGPL version 3 only (`AGPL-3.0-only`); preserve LICENSE and do not add an "or later" grant without maintainer instruction.
 - Recruiter mode uses a separate database/backend configuration and fabricated data. A client header is never authorization or a database selector.
 - Production must reject sandbox credentials and disable persona switching, demo resets, and demo telemetry endpoints.

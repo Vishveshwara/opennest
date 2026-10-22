@@ -125,7 +125,7 @@ The public Overpass instance's operator discourages using it as the backend of a
 
 ## Delivery and operational checks
 
-Current foundation CI only validates local Compose, datastore startup, PostGIS/Redis behavior, persistence, and AI-context size. It does not build an application or deploy anything.
+Current foundation CI validates local Compose, datastore startup, distinct network membership/cross-network database reachability, PostGIS/Redis behavior, persistence, and AI-context size. It does not prove application isolation, build an application, or deploy anything.
 
 Planned delivery sequence:
 

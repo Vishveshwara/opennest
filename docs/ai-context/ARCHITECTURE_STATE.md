@@ -6,13 +6,14 @@
 - Implemented application modules: none. Application tests and deployment: not yet available.
 - Deployment proposal: `docs/DEPLOYMENT_STACK.md`; personal/non-commercial, minimize initial cost, no AWS account/credits or domain yet. Vercel Hobby conditional; x86-64 EC2 proposed because upstream PostGIS lists amd64 only; ARM, capacity, and budget unconfirmed.
 - Local infrastructure: PostgreSQL 17/PostGIS 3.5 and Redis 7.4, persistent named volumes, loopback ports.
-- Optional sandbox profile: separate PostgreSQL and Redis instances, credentials, ports, and volumes.
+- Optional sandbox profile: separate PostgreSQL and Redis instances, credentials, ports, volumes, and Docker bridge network; CI checks membership/cross-network database reachability and persistence, not application authorization.
 - Planned recruiter isolation: separate backend deployments/configuration, PostgreSQL and Redis instances, database credentials, session stores/cookies, storage prefixes or buckets, cache namespaces, and separate OAuth clients/signing keys where used.
 - Untrusted headers cannot select production versus sandbox data; production disables all demo operations.
 - Local Compose separation provisions distinct stores but does not prove application isolation; application-level isolation tests are required in later phases.
 - Maintainer decision: Google OIDC through Spring Security first, backend-owned Redis sessions; WhatsApp verification deferred and disabled pending review. See `docs/AUTHENTICATION.md`.
 - Planned Google signup permits no phone initially; a separately verified +91 owner contact is required before publishing, but PAUSED drafts/uploads need no verified phone. No email-based identity auto-linking.
-- Maintainer decision: PG rent per person per month; FLAT rent per whole property per month; every listing returns rentBasis.
+- Maintainer decision: PG rent per person/month; FLAT supports ENTIRE_FLAT per property/month and ROOM per room/month. Proposed mode fields, boolean versus room inventory, retry rules, and constraints: `docs/LISTING_MODEL.md`.
+- Owner-configured capacity: maxOccupants for an entire flat, maxSharingPerRoom for offered rooms; independent of rent and vacancy, returned/displayed with listing data.
 - Maintainer decision: GNU AGPL v3 only (`AGPL-3.0-only`); full license in LICENSE.
 - Maintainer decision: recruiter uses a separate database populated with fabricated listings across multiple Indian cities.
 - Trusted sandbox fixture seeding may bypass real contact verification only in its isolated backend; callable contact actions stay disabled. No sandbox response enters a shared/public response cache.
@@ -22,7 +23,7 @@
 - No backend/frontend skeleton or Flyway migration exists yet; do not infer implementation from indexes.
 - Phase 1 next: backend bootstrap, migrations, common errors, deployment-mode isolation, integration tests.
 - Phase 2: Google OIDC identity, server sessions/CSRF/logout, profile, dynamic trust badges; owner publishing remains gated on separately verified phone contact.
-- Phase 3: PAUSED drafts -> presigned/validated images -> explicit publish/pause, listing quotas, versioned inventory, nationwide search with pagination/sorting/filters, Overpass enrichment.
+- Phase 3: PAUSED drafts -> presigned/validated images -> explicit publish/pause, quotas, versioned mode-aware inventory, nationwide search with pagination/sorting/filters, optional approved Overpass enrichment.
 - Phase 4: contact reveals, reviews/reports, fabricated multi-city sandbox seed/reset, restricted demo telemetry.
 - Phase 5: India-wide public and recruiter interfaces, URL-backed search filters/sort/pagination, semantic theme, uploads, accessibility and end-to-end checks.
 - Before launch: OAuth setup, approved owner-contact verification method, moderation/appeals, backup restore, memory/load testing.

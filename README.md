@@ -6,11 +6,14 @@ OpenNest is a zero-brokerage platform for finding flats and PG/hostel accommodat
 
 The launch plan supports cities throughout India. Planned search will default to nationwide results with pagination and sorting, plus filters for city, locality, rent, bedrooms/BHK, available rooms, amenities, sharing, and nearby location. The recruiter sandbox will use fabricated listings across multiple Indian cities, with callable contact actions disabled.
 
-Google sign-in through Spring Security is planned first; WhatsApp verification is a later option. Google account creation will not verify an owner's contact number. An authenticated owner will be able to create a PAUSED draft, upload and validate its photos, and explicitly publish it after separate contact verification and quota checks. PG prices will be displayed in INR per person per month; flat prices will be per whole property per month.
+Google sign-in through Spring Security is planned first; WhatsApp verification is a later option. Google account creation will not verify an owner's contact number. An authenticated owner will be able to create a PAUSED draft, upload and validate its photos, and explicitly publish it after separate contact verification and quota checks. Monthly prices will be in INR per person for PGs, per property for entire flats, and per room for individual flat rooms.
+
+Owners will set how many people are allowed in the entire flat or each offered room. Listings will show that capacity separately from rent and current availability.
 
 ## Start here
 
 - [Project plan and decisions](docs/PROJECT_PLAN.md)
+- [Whole flats, individual rooms, pricing, and inventory](docs/LISTING_MODEL.md)
 - [Pagination, sorting, and listing filters](docs/LISTING_SEARCH.md)
 - [Authentication decisions and WhatsApp review](docs/AUTHENTICATION.md)
 - [Deployment plan, verified constraints, and cost assumptions](docs/DEPLOYMENT_STACK.md)
@@ -24,6 +27,8 @@ Google sign-in through Spring Security is planned first; WhatsApp verification i
 
 Install Docker with Compose v2. Copy `.env.example` to `.env`, then fill both blank database password fields with different local passwords. Compose requires both values even when the sandbox profile is not enabled. Application-provider variables are reserved for later phases and are not used by the current datastore-only Compose setup.
 
+The current PostGIS image targets x86-64; ARM machines need a separately tested compatible image strategy. See the [deployment compatibility notes](docs/DEPLOYMENT_STACK.md#versions-architecture-and-licenses). Local Redis is unauthenticated and loopback-published for development; do not expose these ports to an untrusted network.
+
 ```powershell
 Copy-Item .env.example .env
 docker compose config --quiet
@@ -33,7 +38,7 @@ docker compose ps
 
 With the default port settings and healthy containers, PostGIS will be available at `localhost:5432` and Redis at `localhost:6379`. Ports bind only to the local machine. The database has no application tables until Phase 1.
 
-The optional recruiter infrastructure uses a separate PostgreSQL instance, credentials, volume, and Redis instance:
+The optional recruiter infrastructure uses a separate PostgreSQL instance, credentials, volume, Redis instance, and Docker bridge network:
 
 ```powershell
 docker compose --profile sandbox up -d --wait
@@ -51,7 +56,7 @@ This preserves named volumes and leaves the primary services running. `down --vo
 
 ## Validation and delivery
 
-Pull requests run Compose validation, infrastructure startup, PostGIS checks, Redis checks, and a persistence smoke test in GitHub Actions. CodeRabbit receives project-specific review instructions. Application tests and GHCR builds will be added when application code exists.
+Pull requests run Compose validation, infrastructure startup, datastore network-separation checks, PostGIS checks, Redis checks, and a persistence smoke test in GitHub Actions. These checks cover local infrastructure, not application authorization or crash recovery. CodeRabbit receives project-specific review instructions. Application tests and GHCR builds will be added when application code exists.
 
 Named volumes and Redis AOF support recovery but are not backups or guarantees of zero data loss. Before public launch, test off-host backups and restoration, and measure actual memory use and recovery time.
 

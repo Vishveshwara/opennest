@@ -6,14 +6,16 @@
 - Auth state: planned Spring Session Redis in each deployment's separate Redis instance/namespace; 30-minute idle/24-hour absolute lifetime. GET /api/v1/auth/csrf may create an unauthenticated session; POST /api/v1/auth/logout invalidates it; GET /api/v1/users/me reads the authenticated user's profile. No route-prefix change requires new tables.
 - Provider tokens are not listing API credentials; expired/lost sessions require login again, and unavailable Redis fails closed with 503.
 - Unreviewed users have no average rating; do not initialize them with a misleading five-star rating.
-- `properties`: UUID id, immutable owner_id FK, title, description, category, status, version, city, locality, private address, coordinates, geography point, rent/deposit, amenities, room counts, nearby_landmarks JSONB, timestamps.
+- `properties`: UUID id, immutable owner_id FK, title, description, category, flat_rental_mode, whole_flat_available, max_occupants, status, version, city, locality, private address, coordinates, geography point, rent/deposit, amenities, nullable room counts, nearby_landmarks JSONB, timestamps.
 - `properties.city`: required, normalized city supplied at creation; no city default or fixed city allowlist; support listings throughout India.
-- `properties.monthly_rent`: positive integer INR; PG_HOSTEL = per person/month, FLAT = per whole property/month. rentBasis is category-derived (`PER_PERSON | PER_PROPERTY`), never an independently conflicting value.
-- `properties.security_deposit`: nonnegative integer INR, same per-person/per-property basis as rent, clearly labeled; inventory remains room counts, not persons/beds.
+- `properties.monthly_rent`: positive integer INR; PG_HOSTEL per person/month, FLAT ENTIRE_FLAT per property/month, FLAT ROOM per room/month. Derive rentBasis (`PER_PERSON | PER_PROPERTY | PER_ROOM`) from category/mode; clients cannot override it.
+- `properties.security_deposit`: nonnegative integer INR with the same person/property/room basis as rent, clearly labeled.
 - `properties.bedrooms`: integer >= 0 required for FLAT (0 = studio); NULL for PG_HOSTEL. This is layout/BHK, independent of available-room inventory.
 - Category: `FLAT | PG_HOSTEL`; status: `ACTIVE | FULL_OCCUPIED | PAUSED`. Creation defaults to PAUSED draft, allowing its ID to exist before photo uploads; explicit publication validates contact/photos/quota.
+- `properties.flat_rental_mode`: required ENTIRE_FLAT or ROOM for FLAT, NULL for PG_HOSTEL; category/mode immutable after creation initially. Enforce mode-appropriate NULL/non-NULL inventory constraints; see `docs/LISTING_MODEL.md`.
+- ENTIRE_FLAT requires boolean whole_flat_available and owner-set integer max_occupants > 0; room counters, total_rooms_available, max_sharing_per_room are NULL. ROOM/PG_HOSTEL require whole_flat_available/max_occupants=NULL and non-NULL valid room counters/sharing; sharing is owner-set per-room capacity.
 - `properties.version`: nonnegative optimistic-lock version returned in owner responses; increment on state/inventory writes, reject stale requested versions. Never accept a client-supplied total or publication status through inventory updates.
-- Room counters >= 0; max_sharing_per_room 1..10; total derived from male + female + shared.
+- ROOM/PG_HOSTEL counters >= 0; max_sharing_per_room 1..10; total derived from male + female + shared. ENTIRE_FLAT status derives from whole_flat_available, not a room count.
 - Inventory transitions apply only to published listings; updating PAUSED inventory must not republish it.
 - Coordinates bounded by latitude 6.5..37.5 and longitude 68..97.5; this is a coarse box, not an India boundary.
 - GiST geography index; city/status/category/locality/rent and owner/status indexes.
@@ -37,5 +39,6 @@
 - Proposed trust precedence: reports >= 1 and average < 3 -> CRITICAL_BROKER_AND_LOW_RATING; else reports >= 1 -> BROKERAGE_WARNED; else reviews >= 2 and average < 3 -> LOW_RATINGS_BEWARE; else reviews >= 3 and average >= 4.5 -> TOP_RATED; else STANDARD. No reviews -> STANDARD with NULL rating; maintainer confirmation pending.
 - Proposed source schema's `is_sandbox` flags are not security boundaries; separate databases replace shared-row routing.
 - Five-listing quota requires owner-level transaction serialization, including reactivation; no count-then-insert race.
-- Only ACTIVE/FULL_OCCUPIED count toward the five-listing quota; PAUSED drafts do not. Inventory changes must keep every published listing counted even when its availability reaches zero.
+- Only ACTIVE/FULL_OCCUPIED count toward the five-listing quota; PAUSED drafts do not. Inventory changes keep published listings counted even when whole_flat_available=false or room availability reaches zero.
+- Trusted sandbox seeds include historical reveal rows for designated personas so normal review/report eligibility works despite disabled callable contact actions.
 - Quota and review aggregate changes need transaction/concurrency tests in their implementation phases.

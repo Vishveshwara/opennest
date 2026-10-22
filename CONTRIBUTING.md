@@ -8,6 +8,6 @@ Update schema/API/module context alongside behavior changes. Write full `/api/v1
 
 Do not commit `.env`, provider credentials, personal contact data, generated build outputs, or real production data. Use fabricated non-contactable demo records. Never paste secrets into an issue or PR.
 
-For Phase 0, run `docker compose config --quiet` with both database passwords configured, then `docker compose --profile sandbox up -d --wait`. GitHub Actions additionally verifies persistence after replacing containers.
+For Phase 0, run `docker compose config --quiet` with both database passwords configured, then `docker compose --profile sandbox up -d --wait`. GitHub Actions additionally verifies network separation and persistence after replacing containers. Network separation is a local infrastructure check, not proof of application authorization.
 
 Contributions to OpenNest are under GNU AGPL version 3 only (`AGPL-3.0-only`), as provided in LICENSE. Preserve third-party license notices. Deployment, merging, and external provider setup are separate decisions from opening a PR.

@@ -16,6 +16,9 @@ reviews:
         Enforce OpenNest as the product name, with lowercase opennest for technical
         identifiers. Require India-wide launch support, nationwide search when
         city is omitted, and no default city or fixed city allowlist.
+        Check rental mode, price basis, inventory, and search consistency against
+        docs/LISTING_SEARCH.md. Keep deployment proposals aligned with
+        docs/DEPLOYMENT_STACK.md; do not treat local Compose as production-ready.
     - path: "backend/**"
       instructions: >-
         Check transactional listing/reveal quotas, Google OIDC state/nonce/PKCE,
@@ -28,4 +31,8 @@ reviews:
         Preserve TweakCN variables and semantic tokens. Check accessibility,
         mobile usability, private-data cache leaks, and immediate warning updates.
         No public navigation to recruiter tools; hidden links are not security.
-        Show PG prices per person per month and flat prices per property per month.
+        Show PG prices per person per month, entire-flat prices per property per
+        month, and individual flat-room prices per room per month. Distinguish
+        bedrooms/BHK, available rooms, and whole-flat availability.
+        Display owner-set people limits per flat or per room without multiplying
+        the quoted rent or treating capacity as current vacancy.

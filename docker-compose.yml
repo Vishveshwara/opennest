@@ -11,6 +11,7 @@ services:
       - "127.0.0.1:${DB_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    networks: [primary]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 5s
@@ -27,8 +28,9 @@ services:
       - "127.0.0.1:${REDIS_PORT:-6379}:6379"
     volumes:
       - redisdata:/data
+    networks: [primary]
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-e", "ping"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -46,6 +48,7 @@ services:
       - "127.0.0.1:${SANDBOX_DB_PORT:-5433}:5432"
     volumes:
       - sandbox_pgdata:/var/lib/postgresql/data
+    networks: [sandbox]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 5s
@@ -63,11 +66,16 @@ services:
       - "127.0.0.1:${SANDBOX_REDIS_PORT:-6380}:6379"
     volumes:
       - sandbox_redisdata:/data
+    networks: [sandbox]
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-e", "ping"]
       interval: 5s
       timeout: 3s
       retries: 20
+
+networks:
+  primary:
+  sandbox:
 
 volumes:
   pgdata:

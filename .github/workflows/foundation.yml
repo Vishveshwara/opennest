@@ -29,20 +29,51 @@ jobs:
           done
       - name: Start both isolated store pairs
         run: docker compose --profile sandbox up -d --wait --wait-timeout 180
+      - name: Verify datastore network separation
+        run: |
+          python3 - <<'PY'
+          import json
+          import subprocess
+
+          def networks(service):
+              container = subprocess.check_output(["docker", "compose", "ps", "-q", service], text=True).strip()
+              assert container, f"Missing container: {service}"
+              details = json.loads(subprocess.check_output(["docker", "inspect", container], text=True))[0]
+              return set(details["NetworkSettings"]["Networks"])
+
+          primary = networks("postgres")
+          sandbox = networks("sandbox-postgres")
+          assert len(primary) == len(sandbox) == 1
+          assert primary == networks("redis")
+          assert sandbox == networks("sandbox-redis")
+          assert primary.isdisjoint(sandbox), "Production and sandbox stores share a network"
+          PY
+          primary_ip=$(docker inspect --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$(docker compose ps -q postgres)")
+          sandbox_ip=$(docker inspect --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$(docker compose ps -q sandbox-postgres)")
+          if docker compose exec -T postgres pg_isready -h "$sandbox_ip" -p 5432 -t 2; then
+            exit 1
+          else
+            test "$?" -eq 2
+          fi
+          if docker compose exec -T sandbox-postgres pg_isready -h "$primary_ip" -p 5432 -t 2; then
+            exit 1
+          else
+            test "$?" -eq 2
+          fi
       - name: Verify PostGIS and write persistence probes
         run: |
           docker compose exec -T postgres psql -U opennest -d opennest -v ON_ERROR_STOP=1 -c "SELECT PostGIS_Version(); CREATE TABLE foundation_probe (value integer); INSERT INTO foundation_probe VALUES (42);"
           docker compose exec -T sandbox-postgres psql -U opennest_sandbox -d opennest_sandbox -v ON_ERROR_STOP=1 -c "SELECT PostGIS_Version(); CREATE TABLE foundation_probe (value integer); INSERT INTO foundation_probe VALUES (84);"
-          docker compose exec -T redis redis-cli SET foundation:probe primary
-          docker compose exec -T sandbox-redis redis-cli SET foundation:probe sandbox
+          docker compose exec -T redis redis-cli -e SET foundation:probe primary
+          docker compose exec -T sandbox-redis redis-cli -e SET foundation:probe sandbox
       - name: Replace containers and verify persisted isolated values
         run: |
           docker compose --profile sandbox down
           docker compose --profile sandbox up -d --wait --wait-timeout 180
           test "$(docker compose exec -T postgres psql -U opennest -d opennest -Atc 'SELECT value FROM foundation_probe')" = "42"
           test "$(docker compose exec -T sandbox-postgres psql -U opennest_sandbox -d opennest_sandbox -Atc 'SELECT value FROM foundation_probe')" = "84"
-          test "$(docker compose exec -T redis redis-cli --raw GET foundation:probe)" = "primary"
-          test "$(docker compose exec -T sandbox-redis redis-cli --raw GET foundation:probe)" = "sandbox"
+          test "$(docker compose exec -T redis redis-cli -e --raw GET foundation:probe)" = "primary"
+          test "$(docker compose exec -T sandbox-redis redis-cli -e --raw GET foundation:probe)" = "sandbox"
       - name: Diagnostic logs
         if: failure()
         run: docker compose --profile sandbox logs --tail 100
