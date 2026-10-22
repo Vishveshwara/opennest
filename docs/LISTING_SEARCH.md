@@ -18,7 +18,7 @@ The planned `GET /api/v1/listings/search` will return nationwide results when `c
 | `genderRoomAvailable` | Optional `MALE`, `FEMALE`, or `SHARED`; requires the corresponding available-room counter > 0 in ROOM/PG_HOSTEL. Excludes ENTIRE_FLAT. |
 | `maxSharingPerRoom` | Integer 1..10; matches ROOM/PG_HOSTEL listings whose maximum occupants per room is at most this value. Excludes ENTIRE_FLAT. |
 | `hasWifi`, `hasGym`, `hasSwimmingPool` | Omitted = unrestricted, true = amenity required, false = amenity absent. |
-| `lat`, `lng`, `radiusKm` | All three required together. Radius > 0 and <= 100 km; validate coordinates against the project's India bounds. Use geography ST_DWithin in metres. |
+| `lat`, `lng`, `radiusKm` | All three required together. Radius > 0 and <= 100 km; validate coordinates against the documented coarse bounds (latitude 6.5..37.5, longitude 68..97.5). These are not a strict India boundary; boundary-polygon validation is an additional requirement only if strict India geofencing is intended. Use geography ST_DWithin in metres. |
 
 Blank text, duplicate scalar parameters, unknown parameters, invalid types/enums, incomplete geo queries, and reversed ranges return 400 Problem Details. Unsupported values must not silently fall back to defaults. Valid filters that happen to match no listings return an empty result, not an error.
 
@@ -46,7 +46,7 @@ Return/display owner-set capacity: maxOccupants for ENTIRE_FLAT, maxSharingPerRo
 
 Items and count queries must use identical filters and visibility rules. Obtain the page and totals from a consistent database snapshot for that request. Paginate distinct property IDs before hydrating image collections; joins must not duplicate cards or inflate counts. Use projections/batched relations to avoid a query per card. Inspect query plans for nationwide and city-filtered cases before tuning indexes.
 
-Image reservations and pending uploads must never appear as validated listing photos. Public cards use only VALIDATED image records. Exact stored coordinates may support geo queries; public map/address precision is an open response-design decision recorded in PROJECT_PLAN.md, not permission to expose private addresses or raw coordinates.
+Image reservations and pending uploads must never appear as validated listing photos. Public cards use only VALIDATED image records. Exact stored coordinates may support geo queries internally. Public search and listing-detail responses omit owner phone, private address, and precise coordinates. A public map location may expose only a coarsened representation under an explicitly documented precision/coarsening policy; until that policy is defined, omit coordinates. Selecting that policy remains an open response-design decision in PROJECT_PLAN.md.
 
 Offset pagination is the initial design because numbered pages and exact totals are useful at launch. It does not freeze results between requests: new listings and rent, inventory, or rating changes may move items across pages. Do not promise snapshot-stable browsing under concurrent writes. Evaluate cursor pagination when observed traffic or deep browsing requires it, retaining bounded queries throughout.
 
@@ -88,6 +88,7 @@ Individual rooms in flats nationwide, at least one vacancy and up to INR 10000 p
 - Verify first/middle/last/empty/out-of-range pages, totals and flags, invalid page/size/offset, and request snapshot consistency.
 - Verify each sort, ties across page boundaries on unchanged data, unrated owners last, and nearest ordering in metres; reject distance sort without geo inputs and all unknown sort values.
 - Verify paused/private records and other-deployment data cannot affect results or counts. Multiple images must not duplicate a listing or inflate totals.
+- Verify public search/detail payloads omit owner phone, private address, and precise coordinates; expose map coordinates only under the documented coarsening policy. Verify coarse coordinate-bound validation does not claim strict India geofencing.
 - Verify PAUSED drafts/pending images stay out of search until explicit publication, pausing removes a listing from public results, and inventory/report writes cannot republish a draft. Verify sandbox/authenticated responses use no-store and public caches are invalidated after relevant writes.
 - Verify invalid and incompatible inputs return 400, while valid contradictory filters return an empty result. Record query plans for representative nationwide and multi-filter searches.
 - End-to-end checks cover URL sharing, Back/Forward, filter/sort/size page reset, empty results, stale requests, and mobile/keyboard search controls.

@@ -18,6 +18,7 @@
 - ROOM/PG_HOSTEL counters >= 0; max_sharing_per_room 1..10; total derived from male + female + shared. ENTIRE_FLAT status derives from whole_flat_available, not a room count.
 - Inventory transitions apply only to published listings; updating PAUSED inventory must not republish it.
 - Coordinates bounded by latitude 6.5..37.5 and longitude 68..97.5; this is a coarse box, not an India boundary.
+- Precise stored coordinates support internal geo queries; public search/detail DTOs omit them unless transformed under an explicitly documented coarsening policy. Public owner phone/private address exclusions remain; no schema migration is required for this response-contract clarification.
 - GiST geography index; city/status/category/locality/rent and owner/status indexes.
 - Search indexes planned for public status + created_at/id and status + monthly_rent/id, plus matching city-prefixed variants; use EXPLAIN on representative multi-city data before adding bedroom/room/rating indexes.
 - Pagination/count queries share identical filters; sort tie-breaker is property UUID. Query pagination before image/child hydration to avoid duplicate listings; search semantics in `docs/LISTING_SEARCH.md`.
