@@ -1,0 +1,45 @@
+- Status: proposed only; no migrations or application tables exist.
+- Separate production and sandbox databases use the same migrations and distinct runtime credentials.
+- `users`: UUID id, full_name, nullable unique phone_number, phone_verified_at, role, created_at; Google signup needs no phone. Persist a phone only after verification, with matching phone_verified_at; owner publication requires verified +91 contact.
+- Owner aggregates: nullable average_rating (NULL with zero reviews), review_count=0 and broker_report_count=0 initially; all review writers maintain them transactionally from owner_reviews, never independently writable by clients.
+- `auth_identities`: UUID id, user_id FK, issuer, subject, email, email_verified, created_at; unique (issuer, subject). Email is not an identity key; linking requires reauthentication and proof of both identities.
+- Auth state: planned Spring Session Redis in each deployment's separate Redis instance/namespace; 30-minute idle/24-hour absolute lifetime. GET /api/v1/auth/csrf may create an unauthenticated session; POST /api/v1/auth/logout invalidates it; GET /api/v1/users/me reads the authenticated user's profile. No route-prefix change requires new tables.
+- Provider tokens are not listing API credentials; expired/lost sessions require login again, and unavailable Redis fails closed with 503.
+- Unreviewed users have no average rating; do not initialize them with a misleading five-star rating.
+- `properties`: UUID id, immutable owner_id FK, title, description, category, flat_rental_mode, whole_flat_available, max_occupants, status, version, city, locality, private address, coordinates, geography point, rent/deposit, amenities, nullable room counts, nearby_landmarks JSONB, timestamps.
+- `properties.city`: required, normalized city supplied at creation; no city default or fixed city allowlist; support listings throughout India.
+- `properties.monthly_rent`: positive integer INR; PG_HOSTEL per person/month, FLAT ENTIRE_FLAT per property/month, FLAT ROOM per room/month. Derive rentBasis (`PER_PERSON | PER_PROPERTY | PER_ROOM`) from category/mode; clients cannot override it.
+- `properties.security_deposit`: nonnegative integer INR with the same person/property/room basis as rent, clearly labeled.
+- `properties.bedrooms`: integer >= 0 required for FLAT (0 = studio); NULL for PG_HOSTEL. This is layout/BHK, independent of available-room inventory.
+- Category: `FLAT | PG_HOSTEL`; status: `ACTIVE | FULL_OCCUPIED | PAUSED`. Creation defaults to PAUSED draft, allowing its ID to exist before photo uploads; explicit publication validates contact/photos/quota.
+- `properties.flat_rental_mode`: required ENTIRE_FLAT or ROOM for FLAT, NULL for PG_HOSTEL; category/mode immutable after creation initially. Enforce mode-appropriate NULL/non-NULL inventory constraints; see `docs/LISTING_MODEL.md`.
+- ENTIRE_FLAT requires boolean whole_flat_available and owner-set integer max_occupants > 0; room counters, total_rooms_available, max_sharing_per_room are NULL. ROOM/PG_HOSTEL require whole_flat_available/max_occupants=NULL and non-NULL valid room counters/sharing; sharing is owner-set per-room capacity.
+- `properties.version`: nonnegative optimistic-lock version returned in owner responses; increment on state/inventory writes, reject stale requested versions. Never accept a client-supplied total or publication status through inventory updates.
+- ROOM/PG_HOSTEL counters >= 0; max_sharing_per_room 1..10; total derived from male + female + shared. ENTIRE_FLAT status derives from whole_flat_available, not a room count.
+- Inventory transitions apply only to published listings; updating PAUSED inventory must not republish it.
+- Coordinates bounded by latitude 6.5..37.5 and longitude 68..97.5; this is a coarse box, not an India boundary.
+- Precise stored coordinates support internal geo queries; public search/detail DTOs omit them unless transformed under an explicitly documented coarsening policy. Public owner phone/private address exclusions remain; no schema migration is required for this response-contract clarification.
+- GiST geography index; city/status/category/locality/rent and owner/status indexes.
+- Search indexes planned for public status + created_at/id and status + monthly_rent/id, plus matching city-prefixed variants; use EXPLAIN on representative multi-city data before adding bedroom/room/rating indexes.
+- Pagination/count queries share identical filters; sort tie-breaker is property UUID. Query pagination before image/child hydration to avoid duplicate listings; search semantics in `docs/LISTING_SEARCH.md`.
+- `property_images`: UUID id, property_id FK, staging upload_object_key, nullable final object_key, segment, display_order, upload_expires_at, validation_state (`PENDING | VALIDATED | REJECTED`). Presign reserves the row; completion verifies ownership/content/size and final-object immutability before VALIDATED.
+- Only VALIDATED images satisfy publication segments; staging URLs cannot mutate a validated published object. Repeated completion of the same validated row returns its existing metadata, not another image.
+- Segment: `ROOM | HALL | BATHROOM | KITCHEN | EXTERIOR_AMENITY`.
+- `contact_reveals`: UUID id, tenant_id FK, property_id FK, owner_id FK, revealed_date, created_at; unique tenant/property/date.
+- Review/report eligibility uses a historical reveal for the same tenant/property/owner on any date, not only today; no owner reassignment may transfer review history to another user.
+- Quota date explicitly uses Asia/Kolkata; PostgreSQL ledger is authoritative, Redis accelerates checks.
+- `owner_reviews`: UUID id, property_id FK, owner_id FK, reviewer_id FK, rating 1..5, issue_tag, comment_text, is_auto_broker_report, created_at.
+- Unique `(reviewer_id, property_id)` per database, excluding the report flag; UUID is immutable across review-to-report conversion.
+- Issue tag: `GENUINE_OWNER | ASKED_BROKERAGE | MAINTENANCE_ISSUE | FAKE_PHOTOS | OTHER`.
+- Prevent repeated brokerage reports per reviewer/property and self-reviews; enforce owner/property consistency.
+- First report inserts or converts only that pair's review to rating=1 / ASKED_BROKERAGE / is_auto_broker_report=true; conversion preserves UUID, created_at, and comment_text. Repeat reports are no-ops.
+- Ordinary review creation conflicts on an existing pair; ASKED_BROKERAGE is reserved for the report flow. A normal review cannot overwrite or clear a report.
+- All review/report writers lock the owner row and atomically update the review and owner aggregates; review_count counts rows, broker_report_count counts flagged rows, average_rating averages each row once. Conversion changes no row count; retries change no aggregates.
+- Deferred WhatsApp challenges: Redis, <= 5 minute TTL, hashed high-entropy token, expected phone, initiating session/action, deduped provider message IDs, atomic one-time completion; no public six-digit bearer login. Final flow requires review before enabling.
+- Trust badge derived, not independently writable: `STANDARD | TOP_RATED | LOW_RATINGS_BEWARE | BROKERAGE_WARNED | CRITICAL_BROKER_AND_LOW_RATING`.
+- Proposed trust precedence: reports >= 1 and average < 3 -> CRITICAL_BROKER_AND_LOW_RATING; else reports >= 1 -> BROKERAGE_WARNED; else reviews >= 2 and average < 3 -> LOW_RATINGS_BEWARE; else reviews >= 3 and average >= 4.5 -> TOP_RATED; else STANDARD. No reviews -> STANDARD with NULL rating; maintainer confirmation pending.
+- Proposed source schema's `is_sandbox` flags are not security boundaries; separate databases replace shared-row routing.
+- Five-listing quota requires owner-level transaction serialization, including reactivation; no count-then-insert race.
+- Only ACTIVE/FULL_OCCUPIED count toward the five-listing quota; PAUSED drafts do not. Inventory changes keep published listings counted even when whole_flat_available=false or room availability reaches zero.
+- Trusted sandbox seeds include historical reveal rows for designated personas so normal review/report eligibility works despite disabled callable contact actions.
+- Quota and review aggregate changes need transaction/concurrency tests in their implementation phases.
