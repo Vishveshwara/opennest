@@ -1,0 +1,39 @@
+{
+  "date": "2026-10-23",
+  "phase": "1.9",
+  "status": "implementation-present-verification-pending",
+  "javaTarget": 25,
+  "mavenWrapper": "3.3.4",
+  "maven": "3.10.0",
+  "freshWrapperChecksumVerification": "passed",
+  "expectedTests": {
+    "default": 114,
+    "schemaPersistence": 49,
+    "isolation": 23
+  },
+  "localDockerAvailable": false,
+  "localDefaultTests": {
+    "tests": 114,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "workflowLint": {
+    "tool": "actionlint",
+    "version": "1.7.12",
+    "workflows": [
+      "backend.yml",
+      "foundation.yml"
+    ],
+    "result": "passed"
+  },
+  "ci": null,
+  "pullRequest": null,
+  "mergeExecuted": false,
+  "deploymentExecuted": false,
+  "reportGateTests": {
+    "tests": 6,
+    "result": "passed"
+  },
+  "localContainerGate": "failed setup: no Docker engine; both profiles compiled, no integration assertions executed"
+}

@@ -1,0 +1,40 @@
+spring:
+  application:
+    name: OpenNest
+  threads:
+    virtual:
+      enabled: true
+
+opennest:
+  deployment:
+    environment: ${OPENNEST_ENVIRONMENT:DEVELOPMENT}
+    data-mode: ${OPENNEST_DATA_MODE:PRIMARY}
+    features:
+      development-auth: ${OPENNEST_DEVELOPMENT_AUTH:false}
+      persona-switching: ${OPENNEST_PERSONA_SWITCHING:false}
+      demo-reset: ${OPENNEST_DEMO_RESET:false}
+      demo-telemetry: ${OPENNEST_DEMO_TELEMETRY:false}
+    primary:
+      database:
+        host: ${DB_HOST:127.0.0.1}
+        port: ${DB_PORT:5432}
+        name: ${DB_NAME:opennest}
+        username: ${DB_USER:opennest}
+        password: ${DB_PASSWORD:}
+      redis:
+        host: ${REDIS_HOST:127.0.0.1}
+        port: ${REDIS_PORT:6379}
+        username: ${REDIS_USER:}
+        password: ${REDIS_PASSWORD:}
+    sandbox:
+      database:
+        host: ${SANDBOX_DB_HOST:127.0.0.1}
+        port: ${SANDBOX_DB_PORT:5433}
+        name: ${SANDBOX_DB_NAME:opennest_sandbox}
+        username: ${SANDBOX_DB_USER:opennest_sandbox}
+        password: ${SANDBOX_DB_PASSWORD:}
+      redis:
+        host: ${SANDBOX_REDIS_HOST:127.0.0.1}
+        port: ${SANDBOX_REDIS_PORT:6380}
+        username: ${SANDBOX_REDIS_USER:}
+        password: ${SANDBOX_REDIS_PASSWORD:}

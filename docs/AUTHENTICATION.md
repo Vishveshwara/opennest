@@ -2,6 +2,8 @@
 
 Status: Phase 0 design only. No login, provider integration, session service, or webhook is implemented. The planned initial implementation will use Google OpenID Connect through Spring Security. WhatsApp is a deferred option and will remain disabled unless separately implemented and approved for use.
 
+Phase 1.7 implements only [restrictive security and safe HTTP errors](BACKEND_HTTP_ERRORS.md). It denies normal requests, disables form/Basic/logout handling, and has no password user or demo login. The Google and session routes below remain planned; framework CSRF protection does not authenticate an account.
+
 ## Initial Google login
 
 - Spring Boot is the authentication authority. Use Spring Security's Google OIDC client and Authorization Code flow with PKCE S256, state, and nonce bound to the initiating browser. Use maintained framework support; do not hand-write token validation or a parallel NextAuth login system.
@@ -29,7 +31,7 @@ This intentionally revises the supplied stateless-JWT browser-auth target. One b
 
 These are planned routes, not currently available endpoints. Keep successful and failed callback redirects on a configured OpenNest origin. Never let a return URL become an open redirect or carry provider/access/session tokens. Every protected application mutation, including draft/image/listing actions, will require the same session and CSRF checks as logout.
 
-The proposed frontend/API domain arrangement, preview restrictions, and host-only cookie implications for server rendering are documented in the [deployment plan](DEPLOYMENT_STACK.md#network-and-browser-session-topology). No production domain or routing has been configured yet.
+The planned public website is `https://opennest.co.in`. The proposed frontend/API domain arrangement, preview restrictions, and host-only cookie implications for server rendering are documented in the [deployment plan](DEPLOYMENT_STACK.md#network-and-browser-session-topology). API and sandbox origins, domain control, DNS/TLS, routing, and Google OAuth registrations remain unverified or undecided; the website choice alone does not configure authentication.
 
 ## Review of user-sent WhatsApp verification
 

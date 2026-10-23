@@ -1,0 +1,17 @@
+{
+  "date": "2026-10-22",
+  "phase": "1.8",
+  "status": "implementation-present-container-proof-pending",
+  "java": "25.0.4.1+1",
+  "springBoot": "4.1.1",
+  "testcontainers": "2.0.5",
+  "profile": "isolation-integration",
+  "containerImages": ["postgis/postgis:17-3.5", "redis:7.4-alpine"],
+  "expectedIsolationInvocations": 23,
+  "defaultTests": {"tests": 114, "failures": 0, "errors": 0, "skipped": 0},
+  "isolationSetup": "failed: Docker engine unavailable",
+  "isolationInvocationsExecuted": 0,
+  "packagedTestControllers": false,
+  "ciExecuted": false,
+  "deploymentExecuted": false
+}

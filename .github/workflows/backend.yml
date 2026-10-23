@@ -1,0 +1,64 @@
+name: Backend
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Java 25 and real-store verification
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+          cache-dependency-path: |
+            backend/pom.xml
+            backend/.mvn/wrapper/maven-wrapper.properties
+            docs/verification/backend-dependencies/settings.xml
+      - name: Verify wrapper, Java target, and context limits
+        run: |
+          python3 -m unittest discover --start-directory .github/scripts --pattern '*_test.py'
+          python3 .github/scripts/verify_backend.py
+          java --version
+          bash backend/mvnw --version
+      - name: Require Linux Docker on amd64
+        run: |
+          test "$(docker info --format '{{.OSType}}')" = linux
+          test "$(uname -m)" = x86_64
+      - name: Run module, error, migration, persistence, and isolation tests
+        run: >-
+          bash backend/mvnw --batch-mode --no-transfer-progress
+          --settings docs/verification/backend-dependencies/settings.xml
+          --global-settings docs/verification/backend-dependencies/settings.xml
+          --file backend/pom.xml
+          -Pschema-integration,isolation-integration clean verify
+      - name: Verify test discovery, results, and packaged boundaries
+        if: always() && !cancelled()
+        run: python3 .github/scripts/verify_backend.py --reports
+      - name: Upload verification reports
+        if: always() && !cancelled()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: backend-verification
+          path: |
+            backend/target/surefire-reports/TEST-*.xml
+            backend/target/failsafe-reports/TEST-*.xml
+            backend/target/backend-verification.json
+          retention-days: 7
+          if-no-files-found: warn

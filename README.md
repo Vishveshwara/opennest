@@ -2,7 +2,9 @@
 
 OpenNest is a zero-brokerage platform for finding flats and PG/hostel accommodation directly from owners across India. OpenNest is an independent project, not affiliated with NoBroker.
 
-**Status:** Phase 0 foundation. There is no application, authentication service, or deployed website yet.
+**Status:** Phase 0 infrastructure and Phase 1.1–1.7 backend foundation: Java 25, Spring Boot 4.1.1, five closed modules, guarded clients, Flyway/internal persistence, Hibernate validation, and HTTP errors with restrictive security. Business APIs, login, repositories, and public deployment are not implemented.
+
+**Planned website:** [opennest.co.in](https://opennest.co.in). The backend target is Java 25 with Spring Boot 4.1.1; DNS, TLS, and hosting readiness remain unverified.
 
 The launch plan supports cities throughout India. Planned search will default to nationwide results with pagination and sorting, plus filters for city, locality, rent, bedrooms/BHK, available rooms, amenities, sharing, and nearby location. The recruiter sandbox will use fabricated listings across multiple Indian cities, with callable contact actions disabled.
 
@@ -13,15 +15,41 @@ Owners will set how many people are allowed in the entire flat or each offered r
 ## Start here
 
 - [Project plan and decisions](docs/PROJECT_PLAN.md)
+- [Backend dependency versions and verification status](docs/BACKEND_DEPENDENCIES.md)
+- [Backend deployment modes, environment inputs, and guards](docs/BACKEND_CONFIGURATION.md)
+- [Phase 1.4 database schema contract and enforcement boundaries](docs/SCHEMA_CONTRACT.md)
+- [Flyway migration sequence, execution, and integration checks](docs/BACKEND_MIGRATIONS.md)
+- [Persistence ownership, validation, generated values, and optimistic locking](docs/BACKEND_PERSISTENCE.md)
+- [HTTP Problem Details, safe logging, and security defaults](docs/BACKEND_HTTP_ERRORS.md)
+- [Backend store isolation and required container verification](docs/BACKEND_ISOLATION.md)
+- [Phase 1 handoff, Java 25 CI, local startup, and complete verification](docs/BACKEND_HANDOFF.md)
+- [Backend modules and local build](backend/MODULE_CONTEXT.md)
 - [Whole flats, individual rooms, pricing, and inventory](docs/LISTING_MODEL.md)
 - [Pagination, sorting, and listing filters](docs/LISTING_SEARCH.md)
 - [Authentication decisions and WhatsApp review](docs/AUTHENTICATION.md)
 - [Deployment plan, verified constraints, and cost assumptions](docs/DEPLOYMENT_STACK.md)
 - [AI development instructions](AGENTS.md)
 - [Current implementation state](docs/ai-context/ARCHITECTURE_STATE.md)
-- [Proposed database](docs/ai-context/SCHEMA_INDEX.md)
+- [Database schema and planned service invariants](docs/ai-context/SCHEMA_INDEX.md)
 - [Proposed API](docs/ai-context/API_CONTRACTS.md)
 - [Contributing](CONTRIBUTING.md)
+
+## Backend bootstrap
+
+Select a Java 25 JDK before using the supplied Maven Wrapper. From the repository root:
+
+```powershell
+$env:JAVA_HOME = 'C:\path\to\jdk-25'
+$env:Path = "$env:JAVA_HOME\bin;$env:Path"
+.\backend\mvnw.cmd -version
+.\backend\mvnw.cmd -f backend/pom.xml clean verify
+```
+
+The default build runs 114 tests for deployment policy, client/schema guards, safe HTTP errors/security, virtual threads, startup, and module boundaries. It produces `backend/target/opennest-backend-0.0.1-SNAPSHOT.jar` with entry point `in.opennest.OpenNestApplication`. No-connection unit contexts explicitly exclude Flyway and Hibernate. Add `-Pschema-integration` for 49 real PostgreSQL/PostGIS migration/persistence checks on two separate targets; see the [migration guide](docs/BACKEND_MIGRATIONS.md) for Docker or dedicated external test databases.
+
+Phase 1.8 adds `-Pisolation-integration` for independently configured primary/sandbox contexts, real PostGIS/Redis reads and writes, credential rejection, header handling, and migration/dependency failures. It requires Docker and has no external-store fallback. The suite compiles and the 114 default tests pass; its container gate currently fails setup because Docker is unavailable. Phase 1.8 remains incomplete until that gate passes. See [isolation verification](docs/BACKEND_ISOLATION.md).
+
+The bootstrap now runs an HTTP server after Flyway/Hibernate validation. Every normal request is denied with safe Problem Details; login, default-password access, and business routes remain unavailable. Backend logging emits only fixed HTTP status/error-ID events, with raw startup/framework diagnostics suppressed. Running it requires selected PostgreSQL/PostGIS credentials and migration privileges; production also requires a Redis password. Datastore selection is fixed at startup. Supply variables through the launching process or IDE; Spring Boot does not read the Compose `.env` file automatically. Read [configuration](docs/BACKEND_CONFIGURATION.md) and [HTTP/security defaults](docs/BACKEND_HTTP_ERRORS.md) before launching.
 
 ## Local infrastructure
 
@@ -36,7 +64,7 @@ docker compose up -d --wait
 docker compose ps
 ```
 
-With the default port settings and healthy containers, PostGIS will be available at `localhost:5432` and Redis at `localhost:6379`. Ports bind only to the local machine. The database has no application tables until Phase 1.
+With the default port settings and healthy containers, PostGIS will be available at `localhost:5432` and Redis at `localhost:6379`. Ports bind only to the local machine. Compose alone does not create application tables; backend startup applies Flyway migrations to its selected database.
 
 The optional recruiter infrastructure uses a separate PostgreSQL instance, credentials, volume, Redis instance, and Docker bridge network:
 
@@ -56,7 +84,7 @@ This preserves named volumes and leaves the primary services running. `down --vo
 
 ## Validation and delivery
 
-Pull requests run Compose validation, infrastructure startup, datastore network-separation checks, PostGIS checks, Redis checks, and a persistence smoke test in GitHub Actions. These checks cover local infrastructure, not application authorization or crash recovery. CodeRabbit receives project-specific review instructions. Application tests and GHCR builds will be added when application code exists.
+Pull requests run Compose validation, infrastructure startup, datastore network-separation checks, PostGIS checks, Redis checks, and a persistence smoke test in GitHub Actions. These checks cover local infrastructure, not application authorization or crash recovery. CodeRabbit receives project-specific review instructions. The backend's local Java 25 build passes 46 configuration/context/module tests; backend CI and GHCR builds are not implemented. See the [dependency verification record](docs/BACKEND_DEPENDENCIES.md) for checks completed and pending.
 
 Named volumes and Redis AOF support recovery but are not backups or guarantees of zero data loss. Before public launch, test off-host backups and restoration, and measure actual memory use and recovery time.
 

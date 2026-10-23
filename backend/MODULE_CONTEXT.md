@@ -1,0 +1,21 @@
+# OpenNest backend context
+
+- Status: Phase 1.7 MVC errors/security baseline, internal mappings/Hibernate validation, Flyway schema/indexes, and guarded clients; Java 25, Spring Boot 4.1.1, Spring Modulith 2.1.1.
+- Entry point: `in.opennest.OpenNestApplication`; product and application name: OpenNest.
+- Five closed logical modules: common, identity, listing, interaction, sandbox; one Maven application.
+- Each module currently declares no cross-module dependencies. Add a specific allowed dependency only alongside the public contract that needs it.
+- Module root packages hold explicit public contracts when implemented; nested packages hold internals. Keep types package-private where possible; never expose persistence entities as cross-module contracts.
+- Shared V1/V2 and six package-private entities implement storage. Common exposes RequestFailure/Kind and internal HTTP/security adapters; no repositories, feature services, business REST endpoints, login flow, or sandbox operations exist.
+- Modulith core/test starters support metadata and boundary checks; no JDBC/JPA event registry, messaging, or observability starter is enabled.
+- `ModuleStructureTests` checks all five modules are discovered and invokes Modulith verification for cycles, internal access, and declared dependency violations.
+- Build: from `backend/`, select a Java 25 JDK and run `./mvnw clean verify` or `./mvnw.cmd clean verify`.
+- HTTP server runs after Flyway/Hibernate validate on selected PostgreSQL; production also requires a Redis password. All normal requests denied, no Basic/form/generated-password/demo access, CSRF enabled. Redis client construction does not prove connectivity.
+- Common's internal deployment post-processor validates mode/policy and supplies JDBC/Hikari and Lettuce settings before clients are created. Runtime environment and data mode are separate; production permits PRIMARY only, with demo/development flags false and no sandbox secrets.
+- Hikari maximum/minimum idle are 5/1; virtual threads default true; SQL script initialization and Redis repositories are disabled. No undocumented lazy-connection setting is used.
+- Datastore routing is fixed at startup; no request header selects a database. Phase 1.8 container-only isolation tests exist but have not run beyond the missing-Docker gate. Session authorization remains later work.
+- Configuration: `../docs/BACKEND_CONFIGURATION.md`; storage semantics: `../docs/SCHEMA_CONTRACT.md`; migration sequence/proof: `../docs/BACKEND_MIGRATIONS.md`. Flyway inherits the selected datasource; direct spring.flyway inputs are rejected.
+- `-Pschema-integration clean verify` runs 114 unit/context/HTTP and 49 real PostGIS tests across two targets. `-Pisolation-integration clean verify` adds required container-only PostGIS/Redis isolation/failure checks; `../docs/BACKEND_ISOLATION.md`. Test handlers/fixtures are not packaged. Phase 1.8 verification is pending Docker availability; Phase 1.9 CI is separate.
+- Error/security contract: `../docs/BACKEND_HTTP_ERRORS.md`; fixed safe Problem Details and status/error-ID-only logs. Raw framework/SQL/request/exception logs suppressed; error/logging overrides rejected. Only trusted ERROR dispatch reaches /error; no diagnostic business route.
+- Persistence contract: `../docs/BACKEND_PERSISTENCE.md`; scalar UUID references, no entity associations/cascades or cross-module Java edges. Generated columns read-only; flush then refresh/reload listing geography/totals after updates. ORM @Version does not implement caller-version checks or feature quotas.
+- Version evidence and temporary verification toolchain: `../docs/BACKEND_DEPENDENCIES.md`.
+- Phase 1.9 Java 25 backend workflow and wrapper/report verifier added; Foundation workflow unchanged. Complete local/CI commands and current verification status: `../docs/BACKEND_HANDOFF.md`. CI results must be inspected; no merge/deploy authorized.
