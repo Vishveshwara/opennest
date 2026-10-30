@@ -76,8 +76,10 @@ One requested subtask is implemented at a time within the scoped Phase 1 change.
 | 1.5: Flyway schema | Complete | V1/PostGIS and V2 contract indexes; 25 real database checks across two modes, matching checksums/schema and no fixtures; Docker/hosted execution not claimed |
 | 1.6: persistence mappings | Complete | Six internal mappings with read-only generated values/@Version; forced Hibernate validate; 57 unit/module and 49 database checks, including stale writes and schema drift |
 | 1.7: HTTP/errors/security baseline | Complete | Safe Problem Details/logs, known versus unexpected classification, deny-all security without login/password access; 114 unit/HTTP and 49 database checks; Google login remains Phase 2 |
-| 1.8: datastore isolation | Implemented; verification pending | Container-only PostGIS/Redis suite added; Java 25 compilation and 114 default tests pass. Docker engine absent, so the required container gate fails setup; no isolation pass claimed. See [isolation proof](BACKEND_ISOLATION.md) |
-| 1.9: CI/handoff | Implemented; verification pending | Java 25 backend CI runs both real-store profiles and verifies wrapper/reports/artifact boundaries; Foundation unchanged. [Handoff commands and results](BACKEND_HANDOFF.md); no merge/deploy |
+| 1.8: datastore isolation | Complete locally | Combined Java 25/Linux amd64 Docker build passed 114 default, 49 schema/persistence, and 23 isolation tests on 30 October 2026, with no failures/errors/skips. See [isolation proof](BACKEND_ISOLATION.md) |
+| 1.9: CI/handoff | Implemented; inspect PR checks | Java 25 backend CI runs both real-store profiles and verifies wrapper/reports/artifact boundaries; local 186-test/report/artifact gate passed and Foundation is unchanged. [Handoff commands and results](BACKEND_HANDOFF.md); draft PR tracks the open P2 classification finding; no merge/deploy |
+
+The 30 October verification closes the local Docker gate. Phase 1 still has an open P2 review finding: return-value ConstraintViolationException is classified as 400 instead of 500. Existing tests do not cover that case. The [handoff](BACKEND_HANDOFF.md) records the limitation; inspect completed PR CI separately before declaring the phase complete.
 
 ## Technical implementation notes for later phases
 

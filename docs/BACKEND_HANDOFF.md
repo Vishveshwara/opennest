@@ -1,6 +1,6 @@
 # OpenNest Phase 1 handoff
 
-Status on 23 October 2026: Phase 1.9 implementation is being verified. Java 25 remains the required target. Phase 1.8 container proof and the new backend CI result must pass before Phase 1 is marked complete. No merge, deployment, release image, or public hosting is part of this handoff.
+Status on 30 October 2026: local Java 25 verification passed all 186 existing tests, including the real Docker/PostGIS/Redis suites. The wrapper/context/report/artifact gate passed. Phase 1.8 is verified locally. Phase 1 remains under review because of the P2 classification finding below; inspect the PR's completed CI checks separately. No merge, deployment, release image, or public hosting is part of this handoff.
 
 ## CI contract
 
@@ -79,4 +79,8 @@ Phase 1 provides five closed modules, guarded deployment configuration, shared F
 
 Phase 2 implements Google OIDC, Redis sessions, CSRF/logout, private profiles, and trust calculation after threshold approval. Phase 3 implements draft/upload/publication, verified-contact and quota gates, inventory/version checks, and paginated nationwide search. Phase 4 implements reveals/reviews/reports and isolated fabricated multi-city demo operations. Phase 5 implements the frontend. Phone verification/provider approval, public map coarsening, restricted production database roles, backups, capacity, and hosting remain explicit prerequisites. No feature endpoint or transactional business invariant is claimed by the foundation.
 
-Actual local and GitHub results, the verified revision, and the review link are recorded in [the Phase 1.9 verification record](verification/backend-handoff/result.json). CI success is claimed only after inspecting its completed run. A draft PR does not authorize merge or deployment.
+## Open review finding
+
+P2: `FailureClassifier.status` maps every Jakarta `ConstraintViolationException` to HTTP 400. A real executable-validation probe with a null `@NotNull` method return produced a return-value violation and was classified as 400, contrary to the required generic 500. The existing invalid-return MVC test exercises a different exception type. Distinguish return/internal validation from request input and add regression coverage before treating Phase 1 as complete. No product code was changed by this verification request.
+
+The [Phase 1.9 verification record](verification/backend-handoff/result.json) captures the local verification checkpoint before PR creation, including the verified code revision and the open finding. Completed GitHub check results belong to the PR and are not implied by that local checkpoint. CI success is claimed only after inspecting its completed run. A draft PR does not authorize merge or deployment.

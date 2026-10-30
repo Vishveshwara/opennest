@@ -1,7 +1,9 @@
 {
-  "date": "2026-10-23",
+  "date": "2026-10-30",
   "phase": "1.9",
-  "status": "implementation-present-verification-pending",
+  "status": "local-verification-passed-review-finding-open",
+  "checkpoint": "before-pr-creation",
+  "verifiedCodeRevision": "f0fc829727ded85100d768ae6e96b12cc324ad89",
   "javaTarget": 25,
   "mavenWrapper": "3.3.4",
   "maven": "3.10.0",
@@ -11,13 +13,24 @@
     "schemaPersistence": 49,
     "isolation": 23
   },
-  "localDockerAvailable": false,
+  "localDockerAvailable": true,
   "localDefaultTests": {
     "tests": 114,
     "failures": 0,
     "errors": 0,
     "skipped": 0
   },
+  "localSchemaPersistenceTests": {"tests": 49, "failures": 0, "errors": 0, "skipped": 0},
+  "localIsolationTests": {"tests": 23, "failures": 0, "errors": 0, "skipped": 0},
+  "localTotalTests": 186,
+  "packagedTestFixtures": false,
+  "openReviewFindings": [{
+    "severity": "P2",
+    "file": "backend/src/main/java/in/opennest/common/internal/web/FailureClassifier.java",
+    "line": 56,
+    "problem": "Return-value ConstraintViolationException is classified as HTTP 400 instead of 500",
+    "regressionCovered": false
+  }],
   "workflowLint": {
     "tool": "actionlint",
     "version": "1.7.12",
@@ -25,7 +38,7 @@
       "backend.yml",
       "foundation.yml"
     ],
-    "result": "passed"
+    "result": "passed-on-2026-10-23"
   },
   "ci": null,
   "pullRequest": null,
@@ -35,5 +48,5 @@
     "tests": 6,
     "result": "passed"
   },
-  "localContainerGate": "failed setup: no Docker engine; both profiles compiled, no integration assertions executed"
+  "localContainerGate": "passed: both profiles executed on Linux amd64 Docker; 186 tests, no failures, errors, or skips"
 }

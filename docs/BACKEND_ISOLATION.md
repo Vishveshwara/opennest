@@ -1,6 +1,6 @@
 # OpenNest backend isolation verification
 
-Phase 1.8 implementation is present. Its completion gate is **pending container execution**. On 22 October 2026 the Java 25 build compiled the new suite, passed all 114 existing tests, and packaged the application without test controllers. The integration gate failed during setup because this machine has no Docker engine. No PostGIS/Redis container assertion has passed yet. CI and hosted deployment were not run.
+Phase 1.8 passed its local container gate on 30 October 2026. The combined Java 25 build passed all 114 default tests, 49 migration/persistence tests, and 23 isolation tests on Linux amd64 Docker, with no failures, errors, or skips. Report verification confirmed packaged test fixtures are absent. The earlier 22 October attempt failed setup because Docker was unavailable. CI results are separate PR checks; hosted deployment was not run.
 
 ## Run the required proof
 
@@ -42,4 +42,4 @@ The suite checks application store selection, real server authentication, and ap
 
 PostgreSQL migration/schema failures prevent startup. Redis remains a lazy dependency: valid configuration can boot while Redis is unavailable or its password is wrong; the first Redis operation fails closed. These tests exercise that operation through the existing common error handler. Test-only timeouts bound failures without changing production client settings.
 
-The 22 October attempt recorded 114 passing default tests and one failed integration setup, with no skipped tests. It did not execute the 23 isolation invocations. The build log is ignored at `target/phase-1.8/verify.log`; the [verification record](verification/backend-isolation/result.json) preserves the result without machine credentials. Enable Docker and rerun the command above before marking Phase 1.8 complete. Phase 1.9 CI wiring remains separate.
+The 30 October run used Docker Desktop 4.97.0, Docker Engine 29.9.2, and Temurin 25.0.4.1+1. All 23 isolation invocations executed successfully, and the full 186-test report/artifact gate passed. Docker had no running test containers after completion. The [verification record](verification/backend-isolation/result.json) preserves local evidence without credentials. This verifies Phase 1.8 locally; inspect the PR's completed checks for separate CI evidence. The Phase 1.7 classification finding remains open in the [handoff](BACKEND_HANDOFF.md).
