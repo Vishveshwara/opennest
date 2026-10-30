@@ -1,6 +1,6 @@
 # OpenNest backend context
 
-- Status: Phase 1.7 MVC errors/security baseline, internal mappings/Hibernate validation, Flyway schema/indexes, and guarded clients; Java 25, Spring Boot 4.1.1, Spring Modulith 2.1.1.
+- Status: Phase 1 backend foundation with completed Phase 1.8 container verification and the Phase 1.9 workflow/handoff; Java 25, Spring Boot 4.1.1, Spring Modulith 2.1.1. Review corrections cover HTTP errors, redacted startup diagnostics, and timestamp safety.
 - Entry point: `in.opennest.OpenNestApplication`; product and application name: OpenNest.
 - Five closed logical modules: common, identity, listing, interaction, sandbox; one Maven application.
 - Each module currently declares no cross-module dependencies. Add a specific allowed dependency only alongside the public contract that needs it.
@@ -14,9 +14,9 @@
 - Hikari maximum/minimum idle are 5/1; virtual threads default true; SQL script initialization and Redis repositories are disabled. No undocumented lazy-connection setting is used.
 - Datastore routing is fixed at startup; no request header selects a database. All 23 Phase 1.8 PostGIS/Redis container tests passed on 30 October 2026. Session authorization remains later work.
 - Configuration: `../docs/BACKEND_CONFIGURATION.md`; storage semantics: `../docs/SCHEMA_CONTRACT.md`; migration sequence/proof: `../docs/BACKEND_MIGRATIONS.md`. Flyway inherits the selected datasource; direct spring.flyway inputs are rejected.
-- Both `schema-integration,isolation-integration` profiles passed together under Java 25/Linux amd64 Docker: 114 default, 49 schema/persistence, and 23 isolation tests, no failures/errors/skips. `../docs/BACKEND_ISOLATION.md`. Test handlers/fixtures are not packaged; inspect PR checks for separate CI evidence.
-- Error/security contract: `../docs/BACKEND_HTTP_ERRORS.md`; fixed safe Problem Details and status/error-ID-only logs. Raw framework/SQL/request/exception logs suppressed; error/logging overrides rejected. Only trusted ERROR dispatch reaches /error; no diagnostic business route.
+- Both `schema-integration,isolation-integration` profiles cover default, schema/persistence, and isolation tests under Java 25/Linux amd64 Docker; `../docs/BACKEND_ISOLATION.md`. Review regressions add return-validation, Security delegation, client statuses, log levels/redaction, and timestamp clamping. Test handlers/fixtures are not packaged; inspect PR checks for CI evidence.
+- Error/security contract: `../docs/BACKEND_HTTP_ERRORS.md`; fixed safe Problem Details, INFO 4xx/ERROR 5xx correlation logs, and redacted framework ERROR events. Raw framework/SQL/request/exception data is suppressed; policy overrides rejected. Only trusted ERROR dispatch reaches /error; no diagnostic business route.
 - Persistence contract: `../docs/BACKEND_PERSISTENCE.md`; scalar UUID references, no entity associations/cascades or cross-module Java edges. Generated columns read-only; flush then refresh/reload listing geography/totals after updates. ORM @Version does not implement caller-version checks or feature quotas.
 - Version evidence and temporary verification toolchain: `../docs/BACKEND_DEPENDENCIES.md`.
 - Phase 1.9 Java 25 backend workflow and wrapper/report verifier added; Foundation workflow unchanged. Complete local/CI commands and current verification status: `../docs/BACKEND_HANDOFF.md`. CI results must be inspected; no merge/deploy authorized.
-- Open P2 review finding: ConstraintViolationException return-value failures currently map to 400 rather than 500; existing tests miss this case. See `../docs/BACKEND_HANDOFF.md` before treating Phase 1 as complete.
+- Return-value ConstraintViolationException maps to 500 with regression coverage; empty/non-return violation sets remain 400. Shared safeStatus preserves recognized client statuses; controller Security exceptions propagate to Spring Security unchanged.

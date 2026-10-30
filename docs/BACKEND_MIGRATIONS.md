@@ -45,7 +45,7 @@ PostGIS must be installed on the PostgreSQL server and available in public. The 
 
 ## Repeatable integration checks
 
-Normal `clean verify` now runs 114 unit/context/HTTP tests. No-connection test contexts explicitly exclude Flyway and Hibernate auto-configuration. Runtime startup excludes neither. The database profile adds 49 migration/persistence checks, starting each application's HTTP server on a random port.
+Normal `clean verify` now runs 130 unit/context/HTTP tests. No-connection test contexts explicitly exclude Flyway and Hibernate auto-configuration. Runtime startup excludes neither. The database profile adds 51 migration/persistence checks, starting each application's HTTP server on a random port. This includes timestamp clamping for future-created listings in both deployment modes.
 
 Run real database checks with Docker available:
 

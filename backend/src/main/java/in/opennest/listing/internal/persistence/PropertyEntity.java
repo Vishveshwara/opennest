@@ -127,7 +127,8 @@ class PropertyEntity {
 
     @PreUpdate
     void updateTimestamp() {
-        updatedAt = Instant.now();
+        var now = Instant.now();
+        updatedAt = now.isBefore(createdAt) ? createdAt : now;
     }
 
     enum Category { FLAT, PG_HOSTEL }

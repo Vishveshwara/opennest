@@ -1,6 +1,6 @@
 # OpenNest Phase 1 handoff
 
-Status on 30 October 2026: local Java 25 verification passed all 186 existing tests, including the real Docker/PostGIS/Redis suites. The wrapper/context/report/artifact gate passed. Phase 1.8 is verified locally. Phase 1 remains under review because of the P2 classification finding below; inspect the PR's completed CI checks separately. No merge, deployment, release image, or public hosting is part of this handoff.
+Status on 30 October 2026: the review-fix Java 25 build passed all 204 tests, including real Docker/PostGIS/Redis suites and the previously missing return-validation regression. Phase 1.8 is verified locally and the Phase 1.9 workflow/handoff is implemented. Review corrections are described below. Inspect [PR #2](https://github.com/Vishveshwara/opennest/pull/2) for completed checks on the current revision. No merge, deployment, release image, or public hosting is part of this handoff.
 
 ## CI contract
 
@@ -17,7 +17,7 @@ The backend workflow checks these gates:
 - Inspect the executable JAR for V1/V2 and the absence of test-only controllers and persistence fixtures.
 - Retain JUnit XML and the verification JSON for seven days. No deployment credential is supplied; workflow permissions are read-only. Actions use verified commit revisions.
 
-The current suite inventory is 114 default tests, 49 migration/persistence tests, and 23 isolation tests, for 186 expected invocations. Counts are an inventory, not a claim that an uninspected run passed. The [verification helper](../.github/scripts/verify_backend.py) checks actual reports and records their counts.
+The current suite inventory is 130 default tests, 51 migration/persistence tests, and 23 isolation tests, for 204 expected invocations. Counts are an inventory, not a claim that an uninspected run passed. The [verification helper](../.github/scripts/verify_backend.py) checks actual reports and records their counts.
 
 ## Local verification
 
@@ -79,8 +79,10 @@ Phase 1 provides five closed modules, guarded deployment configuration, shared F
 
 Phase 2 implements Google OIDC, Redis sessions, CSRF/logout, private profiles, and trust calculation after threshold approval. Phase 3 implements draft/upload/publication, verified-contact and quota gates, inventory/version checks, and paginated nationwide search. Phase 4 implements reveals/reviews/reports and isolated fabricated multi-city demo operations. Phase 5 implements the frontend. Phone verification/provider approval, public map coarsening, restricted production database roles, backups, capacity, and hosting remain explicit prerequisites. No feature endpoint or transactional business invariant is claimed by the foundation.
 
-## Open review finding
+## Review corrections
 
-P2: `FailureClassifier.status` maps every Jakarta `ConstraintViolationException` to HTTP 400. A real executable-validation probe with a null `@NotNull` method return produced a return-value violation and was classified as 400, contrary to the required generic 500. The existing invalid-return MVC test exercises a different exception type. Distinguish return/internal validation from request input and add regression coverage before treating Phase 1 as complete. No product code was changed by this verification request.
+The return-value classification finding is fixed: any Jakarta violation path containing RETURN_VALUE becomes 500, while empty/non-return sets remain 400. Advice rethrows Security exceptions unchanged. A shared status normalizer preserves recognized client errors, including 408/410/422, and 503; other statuses become 500 with fixed safe details. The current Boot EnvironmentPostProcessor interface and registration key replace the deprecated SPI.
 
-The [Phase 1.9 verification record](verification/backend-handoff/result.json) captures the local verification checkpoint before PR creation, including the verified code revision and the open finding. Completed GitHub check results belong to the PR and are not implied by that local checkpoint. CI success is claimed only after inspecting its completed run. A draft PR does not authorize merge or deployment.
+HTTP 4xx events use INFO and 5xx events use ERROR. Root ERROR diagnostics use a literal redacted pattern without raw analysis messages, logger/thread names, MDC, arguments, or stack traces. Tests exercise Boot failure analysis and a real startup failure after logging initialization. Listing JVM update timestamps are clamped to createdAt; both deployment modes cover a future-created row without changing generated-value mappings or migrations.
+
+The clean combined build passed 130 default tests, 51 database tests, and 23 isolation tests with zero failures/errors/skips. The [Phase 1.9 verification record](verification/backend-handoff/result.json) captures this local review-fix checkpoint. Completed GitHub check results belong to the PR and are not implied by that local checkpoint. CI success is claimed only after inspecting its completed run. A draft PR does not authorize merge or deployment.

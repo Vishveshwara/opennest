@@ -12,6 +12,8 @@ import jakarta.servlet.Filter;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
+import jakarta.validation.Validator;
+import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -29,9 +31,12 @@ import org.springframework.dao.QueryTimeoutException;
 import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.RedisSystemException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.jdbc.CannotGetJdbcConnectionException;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.transaction.CannotCreateTransactionException;
@@ -86,6 +91,12 @@ class HttpContractFixtures {
     @TestComponent
     static class ContractController {
 
+        private final Validator validator;
+
+        ContractController(Validator validator) {
+            this.validator = validator;
+        }
+
         @GetMapping("/api/v1/test-contract/failure/{scenario}")
         void failure(@PathVariable String scenario, HttpServletResponse response) throws Exception {
             response.setHeader("X-Private-Data", CANARY);
@@ -123,6 +134,11 @@ class HttpContractFixtures {
                 case "response-bug" -> new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, CANARY);
                 case "custom-problem" -> customProblem();
                 case "constraint-input" -> new jakarta.validation.ConstraintViolationException(CANARY, Set.of());
+                case "constraint-return" -> new ConstraintViolationException(CANARY,
+                        validator.forExecutables().validateReturnValue(this,
+                                ContractController.class.getDeclaredMethod("invalidReturn"), null));
+                case "security-denied" -> new AccessDeniedException(CANARY);
+                case "security-authentication" -> new BadCredentialsException(CANARY);
                 default -> new IllegalStateException(CANARY);
             };
         }
@@ -132,6 +148,11 @@ class HttpContractFixtures {
             body.setTitle(CANARY);
             body.setProperty("token", CANARY);
             return new ErrorResponseException(HttpStatus.CONFLICT, body, new RuntimeException(CANARY));
+        }
+
+        @GetMapping("/api/v1/test-contract/status/{status}")
+        void status(@PathVariable int status) {
+            throw new ResponseStatusException(HttpStatusCode.valueOf(status), CANARY);
         }
 
         @PostMapping(path = "/api/v1/test-contract/body", consumes = "application/json")

@@ -12,12 +12,17 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.WebApplicationType;
+import org.springframework.boot.diagnostics.FailureAnalysis;
+import org.springframework.boot.diagnostics.LoggingFailureAnalysisReporter;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Bean;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -27,6 +32,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 
 import static in.opennest.common.internal.web.HttpContractFixtures.CANARY;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -65,7 +72,7 @@ class HttpErrorContractTests {
             "not-null-bug,500", "schema-bug,500", "database-outage,503", "resource-outage,503", "timeout,503", "query-timeout,503",
             "connection-state,503", "redis-outage,503", "redis-bug,500", "transaction-outage,503", "transaction-bug,500",
             "wrapped-bug,500", "argument-bug,500", "response-conflict,409", "response-bug,500", "custom-problem,409", "constraint-input,400",
-            "unexpected,500"
+            "constraint-return,500", "security-denied,401", "security-authentication,401", "unexpected,500"
     })
     void classifiesOnlyKnownFailuresAndKeepsTheContract(String scenario, int status) throws Exception {
         var result = mvc.perform(get("/api/v1/test-contract/failure/" + scenario)
@@ -125,11 +132,69 @@ class HttpErrorContractTests {
                 .isInstanceOf(BadCredentialsException.class).hasMessage("Authentication is not configured");
     }
 
+    @ParameterizedTest
+    @CsvSource({"invalid,400,INFO", "unexpected,500,ERROR", "unavailable,503,ERROR"})
+    void correlatesTheResponseWithASanitizedLogEvent(String scenario, int status, String level, CapturedOutput output) throws Exception {
+        var result = mvc.perform(get("/api/v1/test-contract/failure/" + scenario)).andReturn();
+        assertProblem(result, status);
+        assertThat(output).contains(level + " OpenNest HTTP error status=" + status + " errorId="
+                + result.getResponse().getHeader("X-Error-Id"));
+    }
+
     @Test
-    void correlatesTheResponseWithASanitizedLogEvent(CapturedOutput output) throws Exception {
-        var result = mvc.perform(get("/api/v1/test-contract/failure/unexpected")).andReturn();
-        assertProblem(result, 500);
-        assertThat(output).contains("OpenNest HTTP error status=500 errorId=" + result.getResponse().getHeader("X-Error-Id"));
+    void delegatesControllerSecurityFailuresToSpringSecurity() throws Exception {
+        assertProblem(mvc.perform(get("/api/v1/test-contract/failure/security-denied")
+                .with(user(CANARY))).andReturn(), 403);
+        assertProblem(mvc.perform(get("/api/v1/test-contract/failure/security-authentication")
+                .with(user(CANARY))).andReturn(), 401);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {408, 410, 418, 422})
+    void preservesClientStatusesFromFrameworkAndServletErrors(int status) throws Exception {
+        assertProblem(mvc.perform(get("/api/v1/test-contract/status/" + status)).andReturn(), status);
+        assertProblem(mvc.perform(get("/error").with(request -> { request.setDispatcherType(DispatcherType.ERROR); return request; })
+                .requestAttr(RequestDispatcher.ERROR_STATUS_CODE, status)
+                .requestAttr(RequestDispatcher.ERROR_MESSAGE, CANARY)).andReturn(), status);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {200, 302, 499, 502})
+    void normalizesUnrecognizedOrUnexpectedStatuses(int status) throws Exception {
+        assertProblem(mvc.perform(get("/api/v1/test-contract/status/" + status)).andReturn(), 500);
+        assertProblem(mvc.perform(get("/error").with(request -> { request.setDispatcherType(DispatcherType.ERROR); return request; })
+                .requestAttr(RequestDispatcher.ERROR_STATUS_CODE, status)).andReturn(), 500);
+    }
+
+    @Test
+    void redactsFrameworkFailureAnalysisAndArbitraryDiagnosticMetadata(CapturedOutput output) {
+        new LoggingFailureAnalysisReporter().report(new FailureAnalysis(CANARY, CANARY, new IllegalStateException(CANARY)));
+        var failure = new IllegalStateException(CANARY, new RuntimeException(CANARY));
+        failure.addSuppressed(new IllegalArgumentException(CANARY));
+        try (var ignored = MDC.putCloseable("token", CANARY)) {
+            LoggerFactory.getLogger(CANARY).atError().setCause(failure).addKeyValue("secret", CANARY).log("{}", CANARY);
+        }
+        assertThat(output).contains("ERROR OpenNest framework failure; diagnostic details redacted")
+                .doesNotContain(CANARY, "IllegalStateException", "IllegalArgumentException");
+    }
+
+    @Test
+    void redactsRealStartupFailureAfterLoggingInitialization(CapturedOutput output) {
+        var application = new SpringApplication(StartupFailure.class);
+        application.setWebApplicationType(WebApplicationType.NONE);
+        application.setRegisterShutdownHook(false);
+        assertThatThrownBy(() -> application.run("--DB_PASSWORD=fabricated-startup-secret", "--spring.main.banner-mode=off"))
+                .hasStackTraceContaining(CANARY);
+        assertThat(output).contains("ERROR OpenNest framework failure; diagnostic details redacted")
+                .doesNotContain(CANARY, "fabricated-startup-secret");
+    }
+
+    static class StartupFailure {
+
+        @Bean
+        String failingBean() {
+            throw new IllegalStateException(CANARY);
+        }
     }
 
     @Test
@@ -160,6 +225,8 @@ class HttpErrorContractTests {
                 Map.entry(400, "The request is invalid."), Map.entry(401, "Authentication is required."),
                 Map.entry(403, "Access is denied."), Map.entry(404, "The requested resource was not found."),
                 Map.entry(405, "The request method is not allowed."), Map.entry(409, "The request conflicts with the current state."),
+                Map.entry(408, "The request timed out."), Map.entry(410, "The requested resource is no longer available."),
+                Map.entry(418, "The request could not be completed."), Map.entry(422, "The request could not be processed."),
                 Map.entry(415, "The request media type is not supported."), Map.entry(429, "The request limit has been reached."),
                 Map.entry(500, "An unexpected error occurred."), Map.entry(503, "The service is temporarily unavailable.")).get(status));
         var errorId = UUID.fromString(response.getHeader("X-Error-Id"));

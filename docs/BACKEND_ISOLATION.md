@@ -1,6 +1,6 @@
 # OpenNest backend isolation verification
 
-Phase 1.8 passed its local container gate on 30 October 2026. The combined Java 25 build passed all 114 default tests, 49 migration/persistence tests, and 23 isolation tests on Linux amd64 Docker, with no failures, errors, or skips. Report verification confirmed packaged test fixtures are absent. The earlier 22 October attempt failed setup because Docker was unavailable. CI results are separate PR checks; hosted deployment was not run.
+Phase 1.8 passed its local container gate on 30 October 2026. After review corrections, the combined Java 25 build passed all 130 default tests, 51 migration/persistence tests, and 23 isolation tests on Linux amd64 Docker, with no failures, errors, or skips. Report verification confirmed packaged test fixtures are absent. The earlier 22 October attempt failed setup because Docker was unavailable. CI results are separate PR checks; hosted deployment was not run.
 
 ## Run the required proof
 
@@ -42,4 +42,4 @@ The suite checks application store selection, real server authentication, and ap
 
 PostgreSQL migration/schema failures prevent startup. Redis remains a lazy dependency: valid configuration can boot while Redis is unavailable or its password is wrong; the first Redis operation fails closed. These tests exercise that operation through the existing common error handler. Test-only timeouts bound failures without changing production client settings.
 
-The 30 October run used Docker Desktop 4.97.0, Docker Engine 29.9.2, and Temurin 25.0.4.1+1. All 23 isolation invocations executed successfully, and the full 186-test report/artifact gate passed. Docker had no running test containers after completion. The [verification record](verification/backend-isolation/result.json) preserves local evidence without credentials. This verifies Phase 1.8 locally; inspect the PR's completed checks for separate CI evidence. The Phase 1.7 classification finding remains open in the [handoff](BACKEND_HANDOFF.md).
+The 30 October run used Docker Desktop 4.97.0, Docker Engine 29.9.2, and Temurin 25.0.4.1+1. All 23 isolation invocations executed successfully; the review-fix build totals 204 passing tests. Docker test containers are removed after completion. The [verification record](verification/backend-isolation/result.json) preserves local evidence without credentials. This verifies Phase 1.8 locally; inspect the PR's completed checks for separate CI evidence. The [handoff](BACKEND_HANDOFF.md) records the resolved classification finding and review regressions.

@@ -13,6 +13,7 @@ import jakarta.persistence.OptimisticLockException;
 import jakarta.servlet.ServletException;
 import jakarta.persistence.PersistenceException;
 import jakarta.validation.ConstraintViolationException;
+import jakarta.validation.ElementKind;
 import org.hibernate.JDBCException;
 import org.springframework.beans.ConversionNotSupportedException;
 import org.springframework.beans.TypeMismatchException;
@@ -23,6 +24,7 @@ import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.dao.TransientDataAccessResourceException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.firewall.RequestRejectedException;
@@ -52,14 +54,18 @@ final class FailureClassifier {
         if (failure instanceof AuthenticationException) return 401;
         if (failure instanceof RequestRejectedException) return 400;
         if (failure instanceof ConversionNotSupportedException) return 500;
+        if (failure instanceof ConstraintViolationException validation) {
+            for (var violation : validation.getConstraintViolations()) {
+                for (var node : violation.getPropertyPath()) {
+                    if (node.getKind() == ElementKind.RETURN_VALUE) return 500;
+                }
+            }
+            return 400;
+        }
         if (failure instanceof HttpMessageNotReadableException || failure instanceof TypeMismatchException
-                || failure instanceof BindException || failure instanceof ConstraintViolationException) return 400;
+                || failure instanceof BindException) return 400;
         if (failure instanceof ErrorResponse response) {
-            int status = response.getStatusCode().value();
-            return switch (status) {
-                case 400, 401, 403, 404, 405, 406, 409, 413, 415, 429, 503 -> status;
-                default -> 500;
-            };
+            return safeStatus(response.getStatusCode().value());
         }
         var visited = Collections.newSetFromMap(new IdentityHashMap<Throwable, Boolean>());
         Throwable current = failure;
@@ -84,5 +90,11 @@ final class FailureClassifier {
             }
         }
         return 500;
+    }
+
+    static int safeStatus(int status) {
+        if (status == 503) return 503;
+        var resolved = HttpStatus.resolve(status);
+        return resolved != null && resolved.is4xxClientError() ? status : 500;
     }
 }

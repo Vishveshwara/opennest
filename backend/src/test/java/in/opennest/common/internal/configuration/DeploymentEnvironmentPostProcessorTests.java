@@ -43,6 +43,9 @@ class DeploymentEnvironmentPostProcessorTests {
         assertThat(environment.getProperty("spring.jpa.hibernate.ddl-auto")).isEqualTo("validate");
         assertThat(environment.getProperty("spring.jpa.open-in-view")).isEqualTo("false");
         assertThat(environment.getProperty("spring.threads.virtual.enabled")).isEqualTo("true");
+        assertThat(environment.getProperty("logging.level.root")).isEqualTo("ERROR");
+        assertThat(environment.getProperty("logging.level.in.opennest.common.internal.web.ProblemResponses"))
+                .isEqualTo("INFO");
     }
 
     @Test

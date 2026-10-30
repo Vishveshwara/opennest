@@ -31,7 +31,11 @@ public final class ProblemResponses {
 
     void write(HttpServletResponse response, int status, Set<HttpMethod> allowedMethods) throws IOException {
         UUID errorId = UUID.randomUUID();
-        LOG.warn("OpenNest HTTP error status={} errorId={}", status, errorId);
+        if (status >= 500) {
+            LOG.error("OpenNest HTTP error status={} errorId={}", status, errorId);
+        } else {
+            LOG.info("OpenNest HTTP error status={} errorId={}", status, errorId);
+        }
         if (response.isCommitted()) return;
         response.reset();
         response.setStatus(status);
@@ -59,12 +63,16 @@ public final class ProblemResponses {
             case 404 -> "The requested resource was not found.";
             case 405 -> "The request method is not allowed.";
             case 406 -> "The requested response format is not available.";
+            case 408 -> "The request timed out.";
             case 409 -> "The request conflicts with the current state.";
+            case 410 -> "The requested resource is no longer available.";
             case 413 -> "The request is too large.";
             case 415 -> "The request media type is not supported.";
+            case 422 -> "The request could not be processed.";
             case 429 -> "The request limit has been reached.";
             case 503 -> "The service is temporarily unavailable.";
-            default -> "An unexpected error occurred.";
+            default -> status >= 400 && status < 500
+                    ? "The request could not be completed." : "An unexpected error occurred.";
         };
     }
 }

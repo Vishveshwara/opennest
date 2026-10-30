@@ -4,13 +4,13 @@ import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 
+import org.springframework.boot.EnvironmentPostProcessor;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.context.config.ConfigDataEnvironmentPostProcessor;
 import org.springframework.boot.context.properties.bind.BindHandler;
 import org.springframework.boot.context.properties.bind.Bindable;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.context.properties.bind.handler.NoUnboundElementsBindHandler;
-import org.springframework.boot.env.EnvironmentPostProcessor;
 import org.springframework.core.Ordered;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.EnumerablePropertySource;
@@ -48,8 +48,8 @@ public class DeploymentEnvironmentPostProcessor implements EnvironmentPostProces
         selected.put("spring.mvc.log-request-details", false);
         selected.put("spring.mvc.problemdetails.enabled", false);
         selected.put("logging.config", "classpath:logback-spring.xml");
-        selected.put("logging.level.root", "OFF");
-        selected.put("logging.level.in.opennest.common.internal.web.ProblemResponses", "WARN");
+        selected.put("logging.level.root", "ERROR");
+        selected.put("logging.level.in.opennest.common.internal.web.ProblemResponses", "INFO");
         selected.put("debug", false);
         selected.put("trace", false);
         selected.put("spring.flyway.enabled", true);

@@ -101,6 +101,26 @@ public final class ListingPersistenceScenarios {
                     .setParameter("id", property.id).getSingleResult()).isEqualTo("array");
             assertThat(loaded.status).isEqualTo(PropertyEntity.Status.PAUSED);
         })));
+        tests.add(dynamicTest("updates tolerate a database creation time ahead of the application clock", () -> transaction(factory, manager -> {
+            var property = property(user(manager), "ROOM");
+            manager.persist(property);
+            manager.flush();
+            var futureCreated = Instant.now().plusSeconds(3600).truncatedTo(java.time.temporal.ChronoUnit.MICROS);
+            manager.createNativeQuery("UPDATE public.properties SET created_at=:created,updated_at=:created WHERE id=:id")
+                    .setParameter("created", futureCreated).setParameter("id", property.id).executeUpdate();
+            manager.clear();
+            var loaded = manager.find(PropertyEntity.class, property.id);
+            assertThat(loaded.createdAt).isEqualTo(futureCreated).isAfter(Instant.now());
+            loaded.maleRoomsAvailable = 7;
+            manager.flush();
+            manager.clear();
+            var updated = manager.find(PropertyEntity.class, property.id);
+            assertThat(updated.createdAt).isEqualTo(futureCreated);
+            assertThat(updated.updatedAt).isEqualTo(futureCreated);
+            assertThat(updated.maleRoomsAvailable).isEqualTo(7);
+            assertThat(updated.totalRoomsAvailable).isEqualTo(9L);
+            assertThat(updated.version).isEqualTo(1L);
+        })));
         tests.add(dynamicTest("owner/category/mode cannot be reassigned through entity updates", () -> transaction(factory, manager -> {
             var property = property(user(manager), "ROOM");
             var otherOwner = user(manager);

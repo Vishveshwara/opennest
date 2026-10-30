@@ -1,35 +1,37 @@
 {
   "date": "2026-10-30",
   "phase": "1.9",
-  "status": "local-verification-passed-review-finding-open",
-  "checkpoint": "before-pr-creation",
-  "verifiedCodeRevision": "f0fc829727ded85100d768ae6e96b12cc324ad89",
+  "status": "review-fixes-local-verification-passed",
+  "checkpoint": "before-review-fix-push",
+  "baseRevision": "f45c23c8eb1c584a60e4418afd92a82c4ba057e6",
+  "verificationScope": "working tree with Phase 1 review corrections",
   "javaTarget": 25,
   "mavenWrapper": "3.3.4",
   "maven": "3.10.0",
   "freshWrapperChecksumVerification": "passed",
   "expectedTests": {
-    "default": 114,
-    "schemaPersistence": 49,
+    "default": 130,
+    "schemaPersistence": 51,
     "isolation": 23
   },
   "localDockerAvailable": true,
   "localDefaultTests": {
-    "tests": 114,
+    "tests": 130,
     "failures": 0,
     "errors": 0,
     "skipped": 0
   },
-  "localSchemaPersistenceTests": {"tests": 49, "failures": 0, "errors": 0, "skipped": 0},
+  "localSchemaPersistenceTests": {"tests": 51, "failures": 0, "errors": 0, "skipped": 0},
   "localIsolationTests": {"tests": 23, "failures": 0, "errors": 0, "skipped": 0},
-  "localTotalTests": 186,
+  "localTotalTests": 204,
   "packagedTestFixtures": false,
-  "openReviewFindings": [{
+  "openReviewFindings": [],
+  "resolvedReviewFindings": [{
     "severity": "P2",
     "file": "backend/src/main/java/in/opennest/common/internal/web/FailureClassifier.java",
-    "line": 56,
-    "problem": "Return-value ConstraintViolationException is classified as HTTP 400 instead of 500",
-    "regressionCovered": false
+    "problem": "Return-value ConstraintViolationException was classified as HTTP 400 instead of 500",
+    "resolution": "RETURN_VALUE path nodes produce 500; empty/non-return sets remain 400",
+    "regressionCovered": true
   }],
   "workflowLint": {
     "tool": "actionlint",
@@ -40,13 +42,13 @@
     ],
     "result": "passed-on-2026-10-23"
   },
-  "ci": null,
-  "pullRequest": null,
+  "ci": {"checksUrl": "https://github.com/Vishveshwara/opennest/pull/2/checks", "scope": "inspect current PR revision separately"},
+  "pullRequest": "https://github.com/Vishveshwara/opennest/pull/2",
   "mergeExecuted": false,
   "deploymentExecuted": false,
   "reportGateTests": {
     "tests": 6,
     "result": "passed"
   },
-  "localContainerGate": "passed: both profiles executed on Linux amd64 Docker; 186 tests, no failures, errors, or skips"
+  "localContainerGate": "passed: both profiles executed on Linux amd64 Docker; 204 tests, no failures, errors, or skips"
 }
