@@ -5,6 +5,7 @@ node_modules/
 .next/
 out/
 target/
+/build/generated-spring-modulith/
 coverage/
 *.log
 .idea/

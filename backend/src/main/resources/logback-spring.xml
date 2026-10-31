@@ -1,0 +1,18 @@
+<configuration>
+    <appender name="SAFE_HTTP_ERRORS" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX,UTC} %level %msg%n%nopex</pattern>
+        </encoder>
+    </appender>
+    <appender name="REDACTED_DIAGNOSTICS" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX,UTC} %level OpenNest framework failure; diagnostic details redacted%n%nopex</pattern>
+        </encoder>
+    </appender>
+    <logger name="in.opennest.common.internal.web.ProblemResponses" level="INFO" additivity="false">
+        <appender-ref ref="SAFE_HTTP_ERRORS"/>
+    </logger>
+    <root level="ERROR">
+        <appender-ref ref="REDACTED_DIAGNOSTICS"/>
+    </root>
+</configuration>

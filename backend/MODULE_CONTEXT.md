@@ -1,0 +1,22 @@
+# OpenNest backend context
+
+- Status: Phase 1 backend foundation with completed Phase 1.8 container verification and the Phase 1.9 workflow/handoff; Java 25, Spring Boot 4.1.1, Spring Modulith 2.1.1. Review corrections cover HTTP errors, redacted startup diagnostics, and timestamp safety.
+- Entry point: `in.opennest.OpenNestApplication`; product and application name: OpenNest.
+- Five closed logical modules: common, identity, listing, interaction, sandbox; one Maven application.
+- Each module currently declares no cross-module dependencies. Add a specific allowed dependency only alongside the public contract that needs it.
+- Module root packages hold explicit public contracts when implemented; nested packages hold internals. Keep types package-private where possible; never expose persistence entities as cross-module contracts.
+- Shared V1/V2 and six package-private entities implement storage. Common exposes RequestFailure/Kind and internal HTTP/security adapters; no repositories, feature services, business REST endpoints, login flow, or sandbox operations exist.
+- Modulith core/test starters support metadata and boundary checks; no JDBC/JPA event registry, messaging, or observability starter is enabled.
+- `ModuleStructureTests` checks all five modules are discovered and invokes Modulith verification for cycles, internal access, and declared dependency violations.
+- Build: from `backend/`, select a Java 25 JDK and run `./mvnw clean verify` or `./mvnw.cmd clean verify`.
+- HTTP server runs after Flyway/Hibernate validate on selected PostgreSQL; production also requires a Redis password. All normal requests denied, no Basic/form/generated-password/demo access, CSRF enabled. Redis client construction does not prove connectivity.
+- Common's internal deployment post-processor validates mode/policy and supplies JDBC/Hikari and Lettuce settings before clients are created. Runtime environment and data mode are separate; production permits PRIMARY only, with demo/development flags false and no sandbox secrets.
+- Hikari maximum/minimum idle are 5/1; virtual threads default true; SQL script initialization and Redis repositories are disabled. No undocumented lazy-connection setting is used.
+- Datastore routing is fixed at startup; no request header selects a database. All 23 Phase 1.8 PostGIS/Redis container tests passed on 30 October 2026. Session authorization remains later work.
+- Configuration: `../docs/BACKEND_CONFIGURATION.md`; storage semantics: `../docs/SCHEMA_CONTRACT.md`; migration sequence/proof: `../docs/BACKEND_MIGRATIONS.md`. Flyway inherits the selected datasource; direct spring.flyway inputs are rejected.
+- Both `schema-integration,isolation-integration` profiles cover default, schema/persistence, and isolation tests under Java 25/Linux amd64 Docker; `../docs/BACKEND_ISOLATION.md`. Review regressions add return-validation, Security delegation, client statuses, log levels/redaction, and timestamp clamping. Test handlers/fixtures are not packaged; inspect PR checks for CI evidence.
+- Error/security contract: `../docs/BACKEND_HTTP_ERRORS.md`; fixed safe Problem Details, INFO 4xx/ERROR 5xx correlation logs, and redacted framework ERROR events. Raw framework/SQL/request/exception data is suppressed; policy overrides rejected. Only trusted ERROR dispatch reaches /error; no diagnostic business route.
+- Persistence contract: `../docs/BACKEND_PERSISTENCE.md`; scalar UUID references, no entity associations/cascades or cross-module Java edges. Generated columns read-only; flush then refresh/reload listing geography/totals after updates. ORM @Version does not implement caller-version checks or feature quotas.
+- Version evidence and temporary verification toolchain: `../docs/BACKEND_DEPENDENCIES.md`.
+- Phase 1.9 Java 25 backend workflow and wrapper/report verifier added; Foundation workflow unchanged. Complete local/CI commands and current verification status: `../docs/BACKEND_HANDOFF.md`. CI results must be inspected; no merge/deploy authorized.
+- Return-value ConstraintViolationException maps to 500 with regression coverage; empty/non-return violation sets remain 400. Shared safeStatus preserves recognized client statuses; controller Security exceptions propagate to Spring Security unchanged.

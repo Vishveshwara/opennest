@@ -1,6 +1,6 @@
 # OpenNest listing modes and pricing
 
-Status: proposed implementation contract. On 22 October 2026, the maintainer confirmed individual vacant rooms in flats priced per room per month, plus owner-configured numbers of people allowed. PG accommodation remains per person per month. No application tables or endpoints exist yet.
+Status: proposed feature implementation contract. On 22 October 2026, the maintainer confirmed individual vacant rooms in flats priced per room per month, plus owner-configured numbers of people allowed. PG accommodation remains per person per month. Phase 1.5/1.6 implements the schema and internal mappings; listing services/endpoints remain unimplemented. See [persistence scope](BACKEND_PERSISTENCE.md).
 
 ## Modes
 

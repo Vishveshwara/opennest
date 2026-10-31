@@ -1,0 +1,2 @@
+org.springframework.boot.EnvironmentPostProcessor=\
+in.opennest.common.internal.configuration.DeploymentEnvironmentPostProcessor

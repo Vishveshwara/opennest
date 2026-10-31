@@ -2,7 +2,8 @@
 
 - Implement one phase per request. Read `docs/ai-context/ARCHITECTURE_STATE.md`, `SCHEMA_INDEX.md`, and `API_CONTRACTS.md` first.
 - Read `docs/PROJECT_PLAN.md` for decisions and unresolved questions. Inspect only relevant modules; do not scan every source file.
-- The app's name is OpenNest everywhere: UI, metadata, documentation, generated examples, and review descriptions. Use lowercase `opennest` only for technical identifiers such as packages, database names, and repository paths; future Java root package is `in.opennest`.
+- The app's name is OpenNest everywhere: UI, metadata, documentation, generated examples, and review descriptions. Use lowercase `opennest` only for technical identifiers such as packages, database names, and repository paths; Java root package is `in.opennest`.
+- The planned public website is `https://opennest.co.in`. Domain selection does not establish live hosting, DNS, TLS, or API/sandbox subdomain readiness.
 - Plan and implement India-wide listing support from launch. Do not introduce a default city, a city allowlist, or a city-specific rollout. An omitted search city means nationwide results; fabricated sandbox data must cover multiple Indian cities.
 - Listing search includes server-side pagination, allowlisted sorting, and composable filters from its first implementation. Read `docs/LISTING_SEARCH.md` before editing search; distinguish flat bedrooms/BHK from currently available rooms.
 - Distinguish implemented behavior from proposals. Never describe a planned endpoint or migration as live.
@@ -11,7 +12,7 @@
 - Update the relevant context indexes in the same change as database, API, or service changes. Keep each index under 80 lines and use bullets.
 - Add a module-local `MODULE_CONTEXT.md` when creating a Java module; keep it under 50 lines.
 - Do not add inline comments to Java, TypeScript, TSX, or SQL source. Document architectural reasoning in context files.
-- Preserve the requested Java/Spring and Next.js stack. Verify exact release availability and compatibility before initializing each application; do not silently substitute versions.
+- Preserve the requested Java 25/Spring and Next.js stack. Java 25 replaces the earlier Java target by maintainer decision on 22 October 2026. Verify exact release availability and compatibility before initializing each application; do not silently substitute versions.
 - Use Flyway migrations and Hibernate validation. Never use automatic schema updates.
 - Implement Google OpenID Connect login first through Spring Security with backend-owned server sessions; follow `docs/AUTHENTICATION.md`. WhatsApp verification is a later, disabled-by-default option requiring a separate security/readiness review. Development substitutes must be explicitly enabled and unavailable in production.
 - Google sign-in does not verify a phone number. Require a separately verified +91 owner contact before publishing; never auto-link identities by email or an unverified phone number.
