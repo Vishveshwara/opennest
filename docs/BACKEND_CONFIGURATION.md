@@ -1,6 +1,6 @@
 # OpenNest backend configuration
 
-Phase 1.3 configures deployment guards/clients; Phase 1.5 adds Flyway migrations, Phase 1.6 adds mappings/validation, and Phase 1.7 adds HTTP errors with restrictive security. The server denies every normal request. No login, demo operations, repositories, business REST routes, or diagnostic endpoint is implemented.
+Phase 1 supplies guarded stores, Flyway, Hibernate validation, and safe HTTP errors. Phase 2 adds opt-in identity configuration and authentication through the [identity handoff](IDENTITY_HANDOFF.md). Google-disabled mode retains deny-all security. Demo operations, listing/interaction routes, and diagnostic endpoints remain unavailable.
 
 ## Deployment selection
 

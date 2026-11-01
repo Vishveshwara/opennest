@@ -1,15 +1,15 @@
 # OpenNest backend context
 
-- Status: Phase 1 backend foundation with completed Phase 1.8 container verification and the Phase 1.9 workflow/handoff; Java 25, Spring Boot 4.1.1, Spring Modulith 2.1.1. Review corrections cover HTTP errors, redacted startup diagnostics, and timestamp safety.
+- Status: Phase 1 foundation plus opt-in Phase 2 identity; Java 25, Spring Boot 4.1.1, Spring Modulith 2.1.1. Authentication setup and verification: ../docs/IDENTITY_HANDOFF.md.
 - Entry point: `in.opennest.OpenNestApplication`; product and application name: OpenNest.
 - Five closed logical modules: common, identity, listing, interaction, sandbox; one Maven application.
-- Each module currently declares no cross-module dependencies. Add a specific allowed dependency only alongside the public contract that needs it.
+- Identity declares common as its only dependency through public RequestFailure/HttpFailureResponse. Other module dependencies remain empty; common never depends on feature internals.
 - Module root packages hold explicit public contracts when implemented; nested packages hold internals. Keep types package-private where possible; never expose persistence entities as cross-module contracts.
-- Shared V1/V2 and six package-private entities implement storage. Common exposes RequestFailure/Kind and internal HTTP/security adapters; no repositories, feature services, business REST endpoints, login flow, or sandbox operations exist.
+- Shared V1/V2 and six package-private entities implement storage unchanged. Identity adds account persistence, Google OIDC, Redis sessions, profile/CSRF/logout, IdentityAccounts, and TrustBadge. Listing/interaction/demo services remain unimplemented.
 - Modulith core/test starters support metadata and boundary checks; no JDBC/JPA event registry, messaging, or observability starter is enabled.
 - `ModuleStructureTests` checks all five modules are discovered and invokes Modulith verification for cycles, internal access, and declared dependency violations.
 - Build: from `backend/`, select a Java 25 JDK and run `./mvnw clean verify` or `./mvnw.cmd clean verify`.
-- HTTP server runs after Flyway/Hibernate validate on selected PostgreSQL; production also requires a Redis password. All normal requests denied, no Basic/form/generated-password/demo access, CSRF enabled. Redis client construction does not prove connectivity.
+- HTTP server runs after Flyway/Hibernate validate on selected PostgreSQL; production requires a Redis password. Google-disabled mode denies normal requests; enabled mode exposes only identity routes. No Basic/form/generated-password/demo access. Redis fails closed on use.
 - Common's internal deployment post-processor validates mode/policy and supplies JDBC/Hikari and Lettuce settings before clients are created. Runtime environment and data mode are separate; production permits PRIMARY only, with demo/development flags false and no sandbox secrets.
 - Hikari maximum/minimum idle are 5/1; virtual threads default true; SQL script initialization and Redis repositories are disabled. No undocumented lazy-connection setting is used.
 - Datastore routing is fixed at startup; no request header selects a database. All 23 Phase 1.8 PostGIS/Redis container tests passed on 30 October 2026. Session authorization remains later work.

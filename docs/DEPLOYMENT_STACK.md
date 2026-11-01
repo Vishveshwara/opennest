@@ -1,5 +1,7 @@
 # OpenNest deployment and infrastructure plan
 
+Phase 2 adds local identity/session implementation and controlled-provider isolation tests; see [identity setup and verification](IDENTITY_HANDOFF.md). Live Google registrations, browser routing, and hosted deployment remain unverified. This change provisions no infrastructure.
+
 Status: deployment proposal, reviewed against provider documentation on 21 October 2026; website and Java target updated by maintainer decision on 22 October 2026. Local datastore Compose, foundation CI, and the Phase 1 backend foundation exist. Dependency resolution, Java 25 tests, startup guards, and real PostGIS/Redis container isolation are verified locally as of 30 October 2026; the [handoff](BACKEND_HANDOFF.md) records review corrections and regression results. Feature, browser-session isolation, and hosted deployment integration remain unverified. Production Compose, Dockerfiles, Caddy configuration, cloud resources, and deployment workflows are not implemented.
 
 This replaces the supplied deployment draft where it conflicts with the [project plan](PROJECT_PLAN.md), [authentication decisions](AUTHENTICATION.md), or existing infrastructure. OpenNest remains India-wide and licensed under [AGPL-3.0-only](../LICENSE). Hosting in Mumbai does not limit listing coverage to that region.

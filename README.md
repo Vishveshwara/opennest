@@ -2,13 +2,15 @@
 
 OpenNest is a zero-brokerage platform for finding flats and PG/hostel accommodation directly from owners across India. OpenNest is an independent project, not affiliated with NoBroker.
 
-**Status:** Phase 0 infrastructure and Phase 1 backend foundation: Java 25, Spring Boot 4.1.1, five closed modules, guarded clients, Flyway/internal persistence, Hibernate validation, and HTTP errors with restrictive security. All 204 tests passed locally with Docker on 30 October 2026, including the review regressions recorded in the [handoff](docs/BACKEND_HANDOFF.md). Business APIs, login, repositories, and public deployment are not implemented.
+**Status:** Phase 1 foundation plus Phase 2 identity: Java 25, Spring Boot 4.1.1, five closed modules, guarded stores, Flyway/Hibernate validation, safe HTTP errors, opt-in Google OIDC, Redis sessions, CSRF/logout, private profiles, and approved trust badges. The [Phase 2 handoff](docs/IDENTITY_HANDOFF.md) records setup and verification. Listing/interaction APIs, live Google smoke testing, and public deployment remain outstanding.
+
+The complete Java 25/Docker gate passed 298 backend tests on 1 November 2026 with no failures, errors, or skips. Six Python verification tests and packaged-fixture checks also passed. Inspect PR checks separately for CI results.
 
 **Planned website:** [opennest.co.in](https://opennest.co.in). The backend target is Java 25 with Spring Boot 4.1.1; DNS, TLS, and hosting readiness remain unverified.
 
 The launch plan supports cities throughout India. Planned search will default to nationwide results with pagination and sorting, plus filters for city, locality, rent, bedrooms/BHK, available rooms, amenities, sharing, and nearby location. The recruiter sandbox will use fabricated listings across multiple Indian cities, with callable contact actions disabled.
 
-Google sign-in through Spring Security is planned first; WhatsApp verification is a later option. Google account creation will not verify an owner's contact number. An authenticated owner will be able to create a PAUSED draft, upload and validate its photos, and explicitly publish it after separate contact verification and quota checks. Monthly prices will be in INR per person for PGs, per property for entire flats, and per room for individual flat rooms.
+Google sign-in through Spring Security is implemented behind explicit configuration; WhatsApp verification remains deferred. Google signup does not verify an owner's contact number. Phase 3 will let authenticated owners create PAUSED drafts, validate photos, and explicitly publish after separate contact verification and quota checks. Monthly prices will be in INR per person for PGs, per property for entire flats, and per room for individual flat rooms.
 
 Owners will set how many people are allowed in the entire flat or each offered room. Listings will show that capacity separately from rent and current availability.
 
@@ -23,6 +25,7 @@ Owners will set how many people are allowed in the entire flat or each offered r
 - [HTTP Problem Details, safe logging, and security defaults](docs/BACKEND_HTTP_ERRORS.md)
 - [Backend store isolation and required container verification](docs/BACKEND_ISOLATION.md)
 - [Phase 1 handoff, Java 25 CI, local startup, and complete verification](docs/BACKEND_HANDOFF.md)
+- [Phase 2 identity setup, session contract, and verification](docs/IDENTITY_HANDOFF.md)
 - [Backend modules and local build](backend/MODULE_CONTEXT.md)
 - [Whole flats, individual rooms, pricing, and inventory](docs/LISTING_MODEL.md)
 - [Pagination, sorting, and listing filters](docs/LISTING_SEARCH.md)
@@ -31,7 +34,7 @@ Owners will set how many people are allowed in the entire flat or each offered r
 - [AI development instructions](AGENTS.md)
 - [Current implementation state](docs/ai-context/ARCHITECTURE_STATE.md)
 - [Database schema and planned service invariants](docs/ai-context/SCHEMA_INDEX.md)
-- [Proposed API](docs/ai-context/API_CONTRACTS.md)
+- [Implemented identity and proposed listing/interaction APIs](docs/ai-context/API_CONTRACTS.md)
 - [Contributing](CONTRIBUTING.md)
 
 ## Backend bootstrap
@@ -45,11 +48,11 @@ $env:Path = "$env:JAVA_HOME\bin;$env:Path"
 .\backend\mvnw.cmd -f backend/pom.xml clean verify
 ```
 
-The default build runs 130 tests for deployment policy, client/schema guards, safe HTTP errors/security, virtual threads, startup, and module boundaries. It produces `backend/target/opennest-backend-0.0.1-SNAPSHOT.jar` with entry point `in.opennest.OpenNestApplication`. No-connection unit contexts explicitly exclude Flyway and Hibernate. Add `-Pschema-integration` for 51 real PostgreSQL/PostGIS migration/persistence checks on two separate targets; see the [migration guide](docs/BACKEND_MIGRATIONS.md) for Docker or dedicated external test databases.
+The default build tests deployment policy, identity configuration/trust thresholds, client/schema guards, HTTP errors/security, virtual threads, startup, and module boundaries. It produces `backend/target/opennest-backend-0.0.1-SNAPSHOT.jar` with entry point `in.opennest.OpenNestApplication`. No-connection unit contexts explicitly exclude Flyway and Hibernate. Add `-Pschema-integration` for 51 real PostgreSQL/PostGIS migration/persistence checks on two separate targets; see the [migration guide](docs/BACKEND_MIGRATIONS.md).
 
 Phase 1.8 adds `-Pisolation-integration` for independently configured primary/sandbox contexts, real PostGIS/Redis reads and writes, credential rejection, header handling, and migration/dependency failures. It requires Docker and has no external-store fallback. On 30 October 2026, the review-fix Java 25 build passed 130 default, 51 migration/persistence, and 23 isolation tests with no failures, errors, or skips on Linux amd64 Docker. See [isolation verification](docs/BACKEND_ISOLATION.md).
 
-The bootstrap now runs an HTTP server after Flyway/Hibernate validation. Every normal request is denied with safe Problem Details; login, default-password access, and business routes remain unavailable. Backend logging emits fixed HTTP status/error-ID events at INFO for 4xx and ERROR for 5xx, plus literal redacted framework ERROR diagnostics. Raw startup/framework data remains suppressed. Running it requires selected PostgreSQL/PostGIS credentials and migration privileges; production also requires a Redis password. Datastore selection is fixed at startup. Supply variables through the launching process or IDE; Spring Boot does not read the Compose `.env` file automatically. Read [configuration](docs/BACKEND_CONFIGURATION.md) and [HTTP/security defaults](docs/BACKEND_HTTP_ERRORS.md) before launching.
+The server starts after Flyway/Hibernate validation. Google-disabled mode denies normal requests. Enable identity with `OPENNEST_GOOGLE_ENABLED=true`, selected OAuth credentials, and exact frontend/API origins as described in the [Phase 2 handoff](docs/IDENTITY_HANDOFF.md). Logging retains fixed HTTP events and redacted framework diagnostics. Startup requires selected PostgreSQL/PostGIS credentials and migration privileges; production also requires a Redis password. Datastore selection is fixed at startup. Supply variables through the process or IDE; Spring Boot does not load Compose's `.env` file.
 
 ## Local infrastructure
 

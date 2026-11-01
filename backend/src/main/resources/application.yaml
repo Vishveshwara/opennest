@@ -6,6 +6,18 @@ spring:
       enabled: true
 
 opennest:
+  identity:
+    google-enabled: ${OPENNEST_GOOGLE_ENABLED:false}
+    primary:
+      client-id: ${GOOGLE_CLIENT_ID:}
+      client-secret: ${GOOGLE_CLIENT_SECRET:}
+      backend-origin: ${OPENNEST_BACKEND_ORIGIN:http://localhost:8080}
+      frontend-origin: ${OPENNEST_FRONTEND_ORIGIN:http://localhost:3000}
+    sandbox:
+      client-id: ${SANDBOX_GOOGLE_CLIENT_ID:}
+      client-secret: ${SANDBOX_GOOGLE_CLIENT_SECRET:}
+      backend-origin: ${SANDBOX_BACKEND_ORIGIN:http://localhost:8081}
+      frontend-origin: ${SANDBOX_FRONTEND_ORIGIN:http://localhost:3001}
   deployment:
     environment: ${OPENNEST_ENVIRONMENT:DEVELOPMENT}
     data-mode: ${OPENNEST_DATA_MODE:PRIMARY}

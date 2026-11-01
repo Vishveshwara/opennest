@@ -41,7 +41,7 @@ jobs:
         run: |
           test "$(docker info --format '{{.OSType}}')" = linux
           test "$(uname -m)" = x86_64
-      - name: Run module, error, migration, persistence, and isolation tests
+      - name: Run module, authentication, error, migration, persistence, and isolation tests
         run: >-
           bash backend/mvnw --batch-mode --no-transfer-progress
           --settings docs/verification/backend-dependencies/settings.xml

@@ -1,5 +1,7 @@
 # OpenNest Phase 1 handoff
 
+This is the Phase 1 verification record. Phase 2 now adds opt-in Google OIDC, Redis sessions, private profiles, and approved trust rules. Current identity setup and verification are in the [Phase 2 handoff](IDENTITY_HANDOFF.md). Statements below describing deny-all behavior apply to Google-disabled mode.
+
 Status on 30 October 2026: the review-fix Java 25 build passed all 204 tests, including real Docker/PostGIS/Redis suites and the previously missing return-validation regression. Phase 1.8 is verified locally and the Phase 1.9 workflow/handoff is implemented. Review corrections are described below. Inspect [PR #2](https://github.com/Vishveshwara/opennest/pull/2) for completed checks on the current revision. No merge, deployment, release image, or public hosting is part of this handoff.
 
 ## CI contract

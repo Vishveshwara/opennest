@@ -1,25 +1,25 @@
 # OpenNest authentication decisions
 
-Status: Phase 0 design only. No login, provider integration, session service, or webhook is implemented. The planned initial implementation will use Google OpenID Connect through Spring Security. WhatsApp is a deferred option and will remain disabled unless separately implemented and approved for use.
+Status: Phase 2 implements Google OpenID Connect, Redis sessions, CSRF/logout, private profiles, and derived trust badges. Google login is disabled by default until the selected deployment receives credentials and exact origins. Live Google registration, browser smoke testing, and hosted deployment remain unverified. WhatsApp and phone verification remain deferred and unavailable.
 
-Phase 1.7 implements only [restrictive security and safe HTTP errors](BACKEND_HTTP_ERRORS.md). It denies normal requests, disables form/Basic/logout handling, and has no password user or demo login. The Google and session routes below remain planned; framework CSRF protection does not authenticate an account.
+With Google disabled, the [restrictive security baseline](BACKEND_HTTP_ERRORS.md) denies normal requests and exposes no identity routes. Enabling Google replaces that baseline with identity-owned security. Neither mode provides Basic authentication, a generated password, a framework login page, or demo authentication. Configuration and verification commands are in the [Phase 2 handoff](IDENTITY_HANDOFF.md).
 
 ## Initial Google login
 
 - Spring Boot is the authentication authority. Use Spring Security's Google OIDC client and Authorization Code flow with PKCE S256, state, and nonce bound to the initiating browser. Use maintained framework support; do not hand-write token validation or a parallel NextAuth login system.
 - Request only openid/email/profile. Configure exact allowlisted redirect URIs and use HTTPS in production. Validate issuer, audience, signature, expiry, nonce, and authorization response state. Missing or mismatched checks fail closed.
 - Identify the account by the verified issuer and subject (`iss`, `sub`), not email. Store the provider identity separately from the user. Google email and a typed phone number must never trigger automatic account merging. Linking requires an already authenticated, recently reauthenticated account and proof of the new identity.
-- Google signup will allow account creation without a phone number. A successful Google login will establish control of a Google account, not ownership of an Indian mobile number or property. Return verification state explicitly; never mark a phone verified from a Google profile or reserve a unique user phone from an unverified text input.
+- Google signup allows account creation without a phone number. A successful Google login establishes control of a Google account. Indian mobile number and property ownership remain unverified. Return verification state explicitly; never mark a phone verified from a Google profile or reserve a unique user phone from unverified input.
 - Require separately verified +91 contact before an owner publishes a listing or exposes a contact number. Until an approved contact-verification method is implemented, publication will return 403 with a clear next step. Authenticated users may create PAUSED drafts and upload photos without a verified phone. Browsing/account creation do not depend on contact verification.
 - Use backend-owned opaque sessions through Spring Session Redis. Rotate the session ID after login and privilege changes. Initial target: 30-minute inactivity timeout and 24-hour absolute lifetime; enforce both on the server. Logout invalidates the session and expires its cookie.
-- Planned session cookies: HttpOnly, Secure in production, SameSite=Lax, host-only, with distinct production/sandbox names. Route browser/API requests through the same site and scope CORS to configured origins. Never put session IDs, provider access/ID/refresh tokens, or client secrets in URLs or browser localStorage. OAuth state/nonce/PKCE challenge parameters may travel in the framework's authorization URLs; accept the short-lived authorization code only on the configured callback. Never log callback query values or forward them to a frontend URL.
+- Session cookies are HttpOnly, Secure in production, SameSite=Lax, and host-only, with distinct production/sandbox names. Route browser/API requests through the same site and scope CORS to configured origins. Never put session IDs, provider access/ID/refresh tokens, or client secrets in URLs or browser localStorage. OAuth state/nonce/PKCE challenge parameters may travel in framework authorization URLs; accept the short-lived code only on the configured callback. Never log callback query values or forward them to a frontend URL.
 - Keep transient OAuth authorization state in the initiating server session; add CSRF protection to state-changing application requests and logout. Expose a no-store synchronizer-token endpoint for the frontend. An expired/missing session means reauthentication (401 for protected REST endpoints); unavailable Redis means 503, never a demo bypass.
 - Production and recruiter backends will use separate redirect origins, Redis/session stores, cookie names/hosts, and identities. If Google login is enabled in the recruiter deployment, it must use its own OAuth registration; canned demo personas do not need live Google accounts. A demo session must never be exchangeable for a real session.
 - Trusted sandbox seeding may create fabricated published listings without a real verified phone; this is a sandbox-only fixture exception, not an HTTP publication bypass. Disable sandbox contact actions and use no callable phone numbers. Keep quota/inventory/review fixtures testable without sending real messages.
 
 This intentionally revises the supplied stateless-JWT browser-auth target. One backend-owned session system reduces duplicate login/account-linking logic. Revisit API bearer tokens only for a concrete client requirement.
 
-## Planned routes
+## Implemented routes when Google is enabled
 
 | Route | Responsibility |
 | --- | --- |
@@ -29,7 +29,15 @@ This intentionally revises the supplied stateless-JWT browser-auth target. One b
 | `POST /api/v1/auth/logout` | CSRF-protected session invalidation; expire cookie; return 204. |
 | `GET /api/v1/users/me` | Authenticated account and verification state; no-store; 401 when unauthenticated. |
 
-These are planned routes, not currently available endpoints. Keep successful and failed callback redirects on a configured OpenNest origin. Never let a return URL become an open redirect or carry provider/access/session tokens. Every protected application mutation, including draft/image/listing actions, will require the same session and CSRF checks as logout.
+Successful login redirects to the configured frontend origin plus `/`. Failed login redirects to that origin plus `/?login=failed`. Caller-supplied return URLs are ignored. Neither redirect includes provider codes or tokens. Listing, draft, and image routes remain Phase 3 work and must reuse the session and CSRF policy.
+
+An invalid callback or replay does not revoke an existing authenticated session. Logout remains a CSRF-protected POST. If account persistence fails after valid provider authentication, the new authentication state is cleared before returning the safe error.
+
+`GET /api/v1/auth/csrf` returns `{token, headerName}`. Fetch a fresh token after login because authentication replaces the session and clears the pre-login token. Send the token through the returned header name for logout and future mutations. `GET /api/v1/users/me` returns `id`, `fullName`, `role`, `phoneNumber`, `phoneVerified`, `averageRating`, `reviewCount`, `brokerReportCount`, and `trustBadge`. Only the caller's account is selected. Both routes use `Cache-Control: no-store`.
+
+The login transaction creates a user and provider identity together. A uniqueness conflict on issuer/subject rolls back the losing transaction and reads the winning account. Email is metadata and never merges users. No account-linking or contact-edit endpoint exists. After login, Redis stores an OpenNest principal containing the user UUID, deployment realm, and authentication time. Provider tokens and authorized clients are discarded. Session expiry requires a new login.
+
+Trust precedence was approved for Phase 2: reports >= 1 with average < 3 gives `CRITICAL_BROKER_AND_LOW_RATING`; otherwise reports >= 1 gives `BROKERAGE_WARNED`; otherwise reviews >= 2 with average < 3 gives `LOW_RATINGS_BEWARE`; otherwise reviews >= 3 with average >= 4.5 gives `TOP_RATED`; otherwise `STANDARD`. No reviews means `STANDARD` and a NULL average. The calculator does not change listings. Brokerage warnings must describe allegations.
 
 The planned public website is `https://opennest.co.in`. The proposed frontend/API domain arrangement, preview restrictions, and host-only cookie implications for server rendering are documented in the [deployment plan](DEPLOYMENT_STACK.md#network-and-browser-session-topology). API and sandbox origins, domain control, DNS/TLS, routing, and Google OAuth registrations remain unverified or undecided; the website choice alone does not configure authentication.
 

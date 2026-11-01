@@ -1,6 +1,6 @@
 # OpenNest implementation plan
 
-This plan defines OpenNest's proposed India-wide launch. Phase 0 provides documentation, local infrastructure, review guidance, and infrastructure CI. Phase 1.1–1.7 adds verified dependencies, five closed modules, guarded clients, Flyway/internal persistence, Hibernate validation, and MVC errors with restrictive security. Feature services, business endpoints, login, and public deployment remain unimplemented. Work proceeds one phase per prompt and one reviewable PR per phase. The AI indexes summarize this plan, while AUTHENTICATION.md and LISTING_SEARCH.md specify detailed planned contracts. [DEPLOYMENT_STACK.md](DEPLOYMENT_STACK.md) records hosting proposals and readiness requirements.
+This plan defines OpenNest's proposed India-wide launch. Phase 0 provides documentation and local infrastructure. Phase 1 supplies the Java 25/Spring foundation, guarded stores, Flyway/Hibernate validation, safe errors, and real-store verification. Phase 2 adds opt-in Google OIDC, Redis sessions, CSRF/logout, private profiles, and approved trust rules. Listing/interaction services, frontend, live Google smoke testing, and hosted deployment remain outstanding. Work proceeds one phase per prompt and one reviewable PR per phase. The AI indexes summarize implemented behavior and proposals. [DEPLOYMENT_STACK.md](DEPLOYMENT_STACK.md) records hosting assumptions.
 
 ## Confirmed product direction
 
@@ -13,7 +13,7 @@ This plan defines OpenNest's proposed India-wide launch. Phase 0 provides docume
 - Maximum five ACTIVE/FULL_OCCUPIED listings per owner; PAUSED listings do not count.
 - No chat or WebSockets. Authenticated users may reveal ten distinct listing contacts per India calendar day.
 - Authentication: Google sign-in first through Spring Security OIDC, with backend-owned server sessions. WhatsApp verification is a later option, disabled until its flow and production readiness are reviewed. See [Authentication decisions](AUTHENTICATION.md).
-- The planned Google flow will allow account creation without phone verification. Owners must separately verify a +91 contact before publishing; publishing will remain gated until that verification method is ready. PAUSED draft creation and photo uploads need an authenticated account but no verified phone.
+- Google signup allows account creation without phone verification. Owners must separately verify a +91 contact before Phase 3 publication. Publishing remains unavailable until a verification method is ready. Planned PAUSED drafts and photo uploads require authentication but no verified phone.
 - PG_HOSTEL rent is INR per person/month; FLAT supports ENTIRE_FLAT at a per-property quote and ROOM at a per-room quote. Individual flat rooms and per-room pricing were confirmed on 22 October 2026. Whole-flat availability uses a boolean; ROOM/PG inventory counts rooms, not beds or people. See [listing modes and inventory](LISTING_MODEL.md).
 - Owners set the number of people allowed: maxOccupants for an entire flat, maxSharingPerRoom for each offered room. Display capacity alongside price; changing capacity must not multiply a flat-room quote or change vacancy automatically.
 - License: GNU Affero General Public License version 3 only (`AGPL-3.0-only`), included in the root LICENSE file.
@@ -26,7 +26,7 @@ This plan defines OpenNest's proposed India-wide launch. Phase 0 provides docume
 ## Corrections to the original constitution
 
 1. **Sandbox security:** an untrusted header cannot select production versus demo data. Use separate backend deployments/configuration, database credentials, Redis/session stores, cookie names/hosts, storage prefixes or buckets, cache namespaces, and separate OAuth clients/signing keys where used. Production disables demo operations entirely. The local Compose profile provisions separate data stores; it is not proof of application isolation.
-2. **Trust rules:** the source contains incompatible formulas. Proposed canonical precedence: >=1 report and average <3 -> CRITICAL_BROKER_AND_LOW_RATING; else >=1 report -> BROKERAGE_WARNED; else >=2 reviews and average <3 -> LOW_RATINGS_BEWARE; else >=3 reviews and average >=4.5 -> TOP_RATED; otherwise STANDARD. No reviews means STANDARD with a NULL numeric rating. Calculate the same badge for the owner profile and their listing responses. This precedence still needs maintainer confirmation; do not label an owner VERIFIED merely because nobody reported them.
+2. **Trust rules:** Phase 2 approval confirms this canonical precedence: >=1 report and average <3 -> CRITICAL_BROKER_AND_LOW_RATING; else >=1 report -> BROKERAGE_WARNED; else >=2 reviews and average <3 -> LOW_RATINGS_BEWARE; else >=3 reviews and average >=4.5 -> TOP_RATED; otherwise STANDARD. No reviews means STANDARD with a NULL numeric rating. Phase 2 calculates profile badges; Phase 3 must reuse the calculator for listing responses. Do not label an owner VERIFIED merely because nobody reported them.
 3. **Reports:** require prior contact reveal and forbid self-reporting. Each reviewer/property pair has one unique review with an immutable UUID. The first report creates that review or converts it in place to one star / ASKED_BROKERAGE / report flag, preserving existing text, UUID, and creation time. Show the allegation notice separately from preserved text. Repeated reports are no-ops. Ordinary review creation conflicts on an existing pair and cannot clear a report; ASKED_BROKERAGE uses the report endpoint. Serialize all review/report writers on the owner row and update the review and owner aggregates in one transaction, counting each row and report once. Provide an appeal/correction path. Warnings should say “brokerage reported,” not assert proven misconduct.
 4. **Atomic limits:** serialize owner quota changes and daily contact-ledger writes in PostgreSQL. Redis is an accelerator, not the sole quota ledger. Lost cache entries must never reset the daily allowance.
 5. **Inventory:** derive room totals from component counts for ROOM/PG_HOSTEL; ENTIRE_FLAT uses wholeFlatAvailable with no room total. Preserve PAUSED on edits; require an exact nonnegative version match before writes, including repeated publish/pause requests. Stale requests return 409; current-version publish/pause no-ops do not change quota/version. Published status derives from the mode's availability, and both ACTIVE/FULL_OCCUPIED count toward the owner quota. Details: [listing model](LISTING_MODEL.md).
@@ -81,6 +81,24 @@ One requested subtask is implemented at a time within the scoped Phase 1 change.
 
 The 30 October verification closes the local Docker gate. The return-value ConstraintViolationException finding is fixed and covered by a real validation regression. Review corrections also cover Security delegation, HTTP status preservation, redacted diagnostic levels, Boot SPI registration, and timestamp clamping. The [handoff](BACKEND_HANDOFF.md) records the 204-test result; inspect completed PR CI separately before declaring the phase complete.
 
+### Phase 2 task boundaries
+
+Implementation and verification are documented in the [Phase 2 handoff](IDENTITY_HANDOFF.md). Google is disabled until explicitly configured. These tasks do not enable contact verification, account linking, sandbox personas, or listing publication.
+
+| Task | Deliverable and completion gate |
+| --- | --- |
+| 2.1: dependencies/configuration | Boot-managed OAuth2/Session dependencies, exact origins, selected secrets, canonical flags, production guards; Java 25 and unsafe-config tests |
+| 2.2: account persistence | Transactional issuer/subject lookup/signup, unique-race recovery, no email merging or phone reservation; repeated/concurrent signup tests |
+| 2.3: Redis sessions | Login rotation, 30-minute idle/24-hour authenticated absolute expiry, isolated cookies/stores/realms; expiry/replay/outage tests |
+| 2.4: Google OIDC | Framework code flow with PKCE/state/nonce and signed-token validation; controlled-provider success/failure/replay tests |
+| 2.5: CSRF/logout/CORS | Session synchronizer token, protected POST logout, fixed REST errors, exact origins; browser HTTP and CORS tests |
+| 2.6: trust | Approved pure badge calculator; threshold/count/precedence tests, no listing visibility mutation |
+| 2.7: private profile | Caller-only no-store profile, verified-contact boolean contract for Phase 3; anonymous/contact-state tests |
+| 2.8: integrated security | Controlled OIDC server and two real PostGIS/Redis pairs; concurrency, isolation, dependency outages, and leak checks |
+| 2.9: CI/handoff | Required-suite discovery, packaged fixture exclusion, context/doc alignment; full local gate and separately inspected PR checks |
+
+Tasks 2.1 through 2.9 are implemented and locally verified on 1 November 2026. The complete Java 25/Docker gate passed 298 tests: 205 default, 51 schema/persistence, 23 datastore-isolation, and 19 identity integration cases. Six Python report-gate tests, context/wrapper limits, and packaged fixture checks passed. Inspect current PR checks separately for CI results. Live Google smoke testing requires a real OAuth registration and is not claimed.
+
 ## Technical implementation notes for later phases
 
 - Backend module declarations now exist: common, identity, listing, interaction, sandbox under `in.opennest`. Keep nested implementation packages internal and types package-private where possible. Introduce explicit public contracts and allowed dependencies together; no cross-module edges are allowed at bootstrap. Modulith tests verify module discovery and boundaries.
@@ -105,12 +123,12 @@ The 30 October verification closes the local Docker gate. The return-value Const
 - Hosting starts personal/non-commercial with minimal cost; no AWS account or credits exist yet. The planned website is `https://opennest.co.in`; confirm domain control, DNS/TLS, budget, image architecture, same-site session routing, map providers, and Redis version/license before public deployment; see [deployment decisions](DEPLOYMENT_STACK.md#decisions-before-public-deployment).
 - Set up the production Google OAuth client/redirect URI. If Google is also enabled in the sandbox, use a separate client and redirect origin; demo personas do not require Google accounts. Use deployment secrets, never chat or Git, for credentials.
 - Choose an approved owner-phone verification method before publishing becomes available; WhatsApp production eligibility, flow approval, provider selection, and any spend limit remain pending.
-- Confirm the proposed trust precedence before Phase 2 implementation; review/report lifecycle is specified in the API and schema indexes.
+- Trust precedence is approved and implemented in Phase 2. Phase 3 listing responses must reuse it; Phase 4 review/report writers maintain aggregates transactionally.
 - Decide a manual moderation/appeal policy and retention/deletion requirements before collecting real personal data.
 - Decide a documented public map coarsening/precision policy before Phase 3 response DTOs; until then omit coordinates. Public search/detail responses must never expose precise coordinates, private address, or owner phone. Geo queries may use exact stored coordinates internally.
 - Finalize Phase 3 draft/upload limits, cleanup, and any text/price/image edit or deletion routes before exposing those operations; the published-listing quota does not cap draft storage. The proposed rental-mode field and inventory constraints are defined in [LISTING_MODEL.md](LISTING_MODEL.md).
 
-These items remain open deliberately. Do not silently choose a phone provider, enable the deferred WhatsApp flow, claim the trust thresholds are approved, or declare a public launch ready while owner contact verification is unavailable.
+These remaining items stay open deliberately. Do not silently choose a phone provider, enable deferred WhatsApp, or declare a public launch ready while owner contact verification is unavailable. Trust thresholds are approved for Phase 2.
 
 ## Source checks
 

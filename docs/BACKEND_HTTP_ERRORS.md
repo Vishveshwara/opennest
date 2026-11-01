@@ -1,6 +1,6 @@
 # OpenNest HTTP errors and security baseline
 
-Phase 1.7 adds Spring MVC, Jakarta validation, common Problem Details, and restrictive Spring Security defaults. It adds no business controller, login flow, demo authentication, public health endpoint, or diagnostic API. Google OIDC, Redis-backed authentication sessions, and application permissions remain later phases.
+Phase 1.7 added Spring MVC, Jakarta validation, common Problem Details, and restrictive security. Phase 2 reuses this contract for enabled Google OIDC and Redis sessions; see the [identity handoff](IDENTITY_HANDOFF.md). Disabled Google retains the baseline. Demo authentication, public health endpoints, and diagnostic APIs remain unavailable. Error rendering preserves validated CORS response headers for the configured frontend.
 
 ## Response contract
 

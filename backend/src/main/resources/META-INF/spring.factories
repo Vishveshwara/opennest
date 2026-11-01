@@ -1,2 +1,3 @@
 org.springframework.boot.EnvironmentPostProcessor=\
-in.opennest.common.internal.configuration.DeploymentEnvironmentPostProcessor
+in.opennest.common.internal.configuration.DeploymentEnvironmentPostProcessor,\
+in.opennest.identity.internal.configuration.IdentityEnvironmentPostProcessor
