@@ -323,13 +323,19 @@ class IdentityAuthenticationIT {
     private List<String> outageFailureChain() {
         var diagnostics = new ArrayList<String>();
         var visited = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<Throwable, Boolean>());
-        Throwable failure = contexts.getFirst().getBean(OutageFailures.class).failure.get();
-        while (failure != null && visited.add(failure)) {
+        var pending = new java.util.ArrayDeque<Throwable>();
+        Throwable captured = contexts.getFirst().getBean(OutageFailures.class).failure.get();
+        if (captured != null) pending.add(captured);
+        while (!pending.isEmpty()) {
+            Throwable failure = pending.remove();
+            if (!visited.add(failure)) continue;
             diagnostics.add(failure.getClass().getName());
             if (failure instanceof java.sql.SQLException sql && sql.getSQLState() != null && sql.getSQLState().matches("[0-9A-Z]{5}")) {
                 diagnostics.add(sql.getSQLState());
             }
-            failure = failure.getCause();
+            if (failure.getCause() != null) pending.add(failure.getCause());
+            if (failure instanceof org.springframework.transaction.TransactionSystemException transaction
+                    && transaction.getApplicationException() != null) pending.add(transaction.getApplicationException());
         }
         return diagnostics;
     }
@@ -381,7 +387,7 @@ class IdentityAuthenticationIT {
     static class ProviderConfiguration {
         @Bean OutageFailures outageFailures() { return new OutageFailures(); }
         @Bean org.springframework.boot.web.servlet.FilterRegistrationBean<org.springframework.web.filter.OncePerRequestFilter> outageDiagnostics(OutageFailures failures) {
-            var filter = new org.springframework.web.filter.OncePerRequestFilter() {
+            org.springframework.web.filter.OncePerRequestFilter filter = new org.springframework.web.filter.OncePerRequestFilter() {
                 @Override protected void doFilterInternal(jakarta.servlet.http.HttpServletRequest request,
                         jakarta.servlet.http.HttpServletResponse response, jakarta.servlet.FilterChain chain)
                         throws java.io.IOException, jakarta.servlet.ServletException {
