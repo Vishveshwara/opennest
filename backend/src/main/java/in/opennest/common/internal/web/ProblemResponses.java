@@ -16,7 +16,7 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
 
 @Component
-public final class ProblemResponses {
+public final class ProblemResponses implements in.opennest.common.HttpFailureResponse {
 
     private static final Logger LOG = LoggerFactory.getLogger(ProblemResponses.class);
     private final JsonMapper mapper;
@@ -37,7 +37,12 @@ public final class ProblemResponses {
             LOG.info("OpenNest HTTP error status={} errorId={}", status, errorId);
         }
         if (response.isCommitted()) return;
+        var corsHeaders = new java.util.LinkedHashMap<String, java.util.Collection<String>>();
+        for (String header : java.util.List.of("Access-Control-Allow-Origin", "Access-Control-Allow-Credentials", "Vary")) {
+            corsHeaders.put(header, java.util.List.copyOf(response.getHeaders(header)));
+        }
         response.reset();
+        corsHeaders.forEach((header, values) -> values.forEach(value -> response.addHeader(header, value)));
         response.setStatus(status);
         response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
         response.setHeader("Cache-Control", "no-store");

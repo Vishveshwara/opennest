@@ -13,6 +13,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.savedrequest.NullRequestCache;
 
 @Configuration(proxyBeanMethods = false)
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "opennest.identity.google-enabled", havingValue = "false", matchIfMissing = true)
 class BaselineSecurityConfiguration {
 
     @Bean

@@ -19,8 +19,10 @@ UNIT_SUITES = {
     "in.opennest.common.internal.configuration.DeploymentEnvironmentPostProcessorTests",
     "in.opennest.common.internal.web.HttpErrorContractTests",
     "in.opennest.common.internal.web.LiveHttpErrorTests",
+    "in.opennest.identity.TrustBadgeTests",
+    "in.opennest.identity.internal.configuration.IdentitySettingsTests",
 }
-INTEGRATION_SUITES = {"in.opennest.SchemaMigrationIT", "in.opennest.BackendIsolationIT"}
+INTEGRATION_SUITES = {"in.opennest.SchemaMigrationIT", "in.opennest.BackendIsolationIT", "in.opennest.IdentityAuthenticationIT"}
 
 
 def require(condition, message):
@@ -73,7 +75,8 @@ def verify_reports():
         application_classes = [name for name in jar.namelist() if name.startswith("BOOT-INF/classes/")]
         require(not any(token in name for name in application_classes for token in
                         ("IsolationProbe", "IsolationTestConfiguration", "BackendIsolationIT", "HttpContractFixtures",
-                         "SchemaMigrationIT", "PersistenceScenarios", "PersistenceScenarioSupport")), "Test fixture packaged in application")
+                         "SchemaMigrationIT", "PersistenceScenarios", "PersistenceScenarioSupport",
+                         "IdentityAuthenticationIT", "ControlledOidcProvider", "ProviderConfiguration")), "Test fixture packaged in application")
         migrations = [name for name in application_classes if name.startswith("BOOT-INF/classes/db/migration/V")]
         require(set(migrations) == {
             "BOOT-INF/classes/db/migration/V1__create_application_schema.sql",

@@ -246,4 +246,4 @@ Phase 1.5's real PostgreSQL 17/PostGIS 3.5 checks cover the following schema acc
 - Verify Kolkata dates around 18:30 UTC and under changed session timezones, including historical fixtures. Verify object expiry and timestamp-order checks.
 - Keep service/transaction behaviors separate from these schema tests. Phase 1.6 now proves Hibernate validation and persistence round trips; publication/reveal quota and review concurrency belong to their feature phases. Broader application isolation and backend CI gates remain later Phase 1 tasks.
 
-Open product/operational decisions remain unchanged: trust thresholds, phone provider, moderation/appeals, retention/erasure policy, public map coarsening, and Phase 3 draft/upload/text limits and edit/deletion routes. They do not authorize a service bypass or a public launch.
+Phase 2 approves and implements trust thresholds without changing the schema. Phone provider, moderation/appeals, retention/erasure policy, public map coarsening, and Phase 3 draft/upload/text limits and edit/deletion routes remain open. They do not authorize a service bypass or a public launch.
