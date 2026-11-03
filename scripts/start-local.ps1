@@ -26,7 +26,6 @@ try {
             ($entryValue.StartsWith("'") -and $entryValue.EndsWith("'")))) {
             $entryValue = $entryValue.Substring(1, $entryValue.Length - 2)
         }
-        if ($entryName -eq 'GOOGLE_CLIENT_SECRET' -and [string]::IsNullOrWhiteSpace($entryValue)) { continue }
         [Environment]::SetEnvironmentVariable($entryName, $entryValue, 'Process')
     }
 
