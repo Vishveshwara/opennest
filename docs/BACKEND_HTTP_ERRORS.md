@@ -36,6 +36,8 @@ The title is the standard HTTP reason phrase. Responses include `Cache-Control: 
 
 The response uses Spring's [ProblemDetail representation](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-ann-rest-exceptions.html). A shared writer handles controller advice, Security entry/access-denied handlers, firewall rejections, a filter boundary, and servlet error dispatch. Direct JSON writing avoids HTML fallback and arbitrary exception-provided Problem Details extensions.
 
+PostgreSQL administrative shutdown, SQLSTATE `57P01`, is a known infrastructure outage and returns 503, including through transaction wrappers. Other operator-intervention codes are not broadly reclassified; database-dropped `57P04` remains 500. The mapping follows [PostgreSQL's error-code definitions](https://www.postgresql.org/docs/17/errcodes-appendix.html).
+
 ## Failure classification
 
 `in.opennest.common.RequestFailure` is common's first public Java contract. Its fixed Kind enum expresses invalid input, unauthenticated, forbidden, missing, conflict, rate limit, or unavailable conditions. It accepts no arbitrary message/cause. Feature modules must declare their common dependency when they begin consuming this contract; no cross-module dependency is added now.
