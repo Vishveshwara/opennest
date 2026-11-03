@@ -299,7 +299,7 @@ class IdentityAuthenticationIT {
         var callback = browser.authorize("valid", "database-down-user");
         databases.getFirst().stop();
         var response = browser.get(callback);
-        assertThat(response.statusCode()).isEqualTo(503);
+        assertThat(response.statusCode()).as("Outage failure chain: %s", outageFailureChain()).isEqualTo(503);
         assertThat(response.body()).contains("The service is temporarily unavailable").doesNotContain("database-down-user");
         assertThat(browser.get("/api/v1/users/me").statusCode()).isEqualTo(401);
     }
@@ -320,6 +320,19 @@ class IdentityAuthenticationIT {
         return browser;
     }
     private RedisSessionRepository repository(int target) { return contexts.get(target).getBean(RedisSessionRepository.class); }
+    private List<String> outageFailureChain() {
+        var diagnostics = new ArrayList<String>();
+        var visited = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<Throwable, Boolean>());
+        Throwable failure = contexts.getFirst().getBean(OutageFailures.class).failure.get();
+        while (failure != null && visited.add(failure)) {
+            diagnostics.add(failure.getClass().getName());
+            if (failure instanceof java.sql.SQLException sql && sql.getSQLState() != null && sql.getSQLState().matches("[0-9A-Z]{5}")) {
+                diagnostics.add(sql.getSQLState());
+            }
+            failure = failure.getCause();
+        }
+        return diagnostics;
+    }
     private <S extends Session> void update(SessionRepository<S> repository, String id, java.util.function.Consumer<Session> change) {
         S session = repository.findById(id);
         change.accept(session);
@@ -366,6 +379,24 @@ class IdentityAuthenticationIT {
 
     @TestConfiguration(proxyBeanMethods = false)
     static class ProviderConfiguration {
+        @Bean OutageFailures outageFailures() { return new OutageFailures(); }
+        @Bean org.springframework.boot.web.servlet.FilterRegistrationBean<org.springframework.web.filter.OncePerRequestFilter> outageDiagnostics(OutageFailures failures) {
+            var filter = new org.springframework.web.filter.OncePerRequestFilter() {
+                @Override protected void doFilterInternal(jakarta.servlet.http.HttpServletRequest request,
+                        jakarta.servlet.http.HttpServletResponse response, jakarta.servlet.FilterChain chain)
+                        throws java.io.IOException, jakarta.servlet.ServletException {
+                    try {
+                        chain.doFilter(request, response);
+                    } catch (RuntimeException | java.io.IOException | jakarta.servlet.ServletException failure) {
+                        failures.failure.set(failure);
+                        throw failure;
+                    }
+                }
+            };
+            var registration = new org.springframework.boot.web.servlet.FilterRegistrationBean<>(filter);
+            registration.setOrder(org.springframework.core.Ordered.HIGHEST_PRECEDENCE + 1);
+            return registration;
+        }
         @Bean @Primary ClientRegistrationRepository controlledClients(Environment environment) {
             var google = IdentitySettings.read(environment).selected(environment);
             return new InMemoryClientRegistrationRepository(ClientRegistration.withRegistrationId("google")
@@ -379,6 +410,10 @@ class IdentityAuthenticationIT {
         @Bean LettuceClientConfigurationBuilderCustomizer identityTestTimeouts() {
             return builder -> builder.commandTimeout(Duration.ofSeconds(2)).shutdownTimeout(Duration.ZERO);
         }
+    }
+
+    static class OutageFailures {
+        final java.util.concurrent.atomic.AtomicReference<Throwable> failure = new java.util.concurrent.atomic.AtomicReference<>();
     }
 
     private class Browser {
