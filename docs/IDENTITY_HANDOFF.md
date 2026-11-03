@@ -4,6 +4,16 @@ Phase 2 implements Google OIDC, backend-owned Redis sessions, CSRF/logout, priva
 
 ## Enable Google login
 
+On Windows, `scripts/start-local.ps1` loads the private `.env`, starts PostgreSQL/Redis through Docker Compose, and runs the Java 25 backend. Set `OPENNEST_GOOGLE_ENABLED=true` and `GOOGLE_CLIENT_ID` in `.env`. Keep `GOOGLE_CLIENT_SECRET` blank to enter it through the hidden prompt at startup. The launcher does not save that input. Use `-Build` after Java source changes.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-local.ps1
+```
+
+The launcher requires DEVELOPMENT/PRIMARY mode and distinct local database passwords. Preserve credentials when reusing existing database volumes. Docker Desktop must use Linux containers. The current Compose file runs stores only; the backend runs on the host JDK. Stop Java with Ctrl+C and stop the stores with `docker compose stop postgres redis`.
+
+Register `http://localhost:8080/login/oauth2/code/google` on the Google Web application client. Open `http://localhost:8080/oauth2/authorization/google` to sign in. The frontend is not implemented, so the redirect to port 3000 may fail. Open `http://localhost:8080/api/v1/users/me` in the same browser to verify the session.
+
 Supply settings through the launching process or IDE. Spring Boot does not load the Compose `.env` file. Keep credentials out of Git, logs, and chat.
 
 | Setting | Primary deployment | Sandbox deployment |
@@ -46,4 +56,6 @@ The controlled OIDC provider runs only in test sources. Tests exercise authoriza
 
 Local verification passed on 1 November 2026 under Temurin Java 25.0.4.1 and Linux amd64 Docker: 205 default tests, 51 schema/persistence tests, 23 datastore-isolation tests, and 19 identity integration tests. All 298 passed with no failures, errors, or skips. The report/artifact verifier passed, including test-fixture exclusion and unchanged V1/V2 migration contents. All six Python report-gate tests and context/wrapper checks passed.
 
-Inspect current PR checks separately before claiming CI success. Live Google smoke testing requires an actual OAuth registration and remains unexecuted. No public hosting, merge, or deployment is part of Phase 2.
+On 3 November 2026, the maintainer reported successful local Google sign-in after configuring the real OAuth client and using the Windows launcher. This is maintainer-reported browser evidence, separate from the automated controlled-provider suite. Repeated real-provider login, denial, and CSRF-protected logout have not been separately confirmed manually.
+
+Inspect current PR checks separately before claiming CI success. Production/sandbox OAuth registrations and hosted browser routing remain unverified. No public hosting, merge, or deployment is part of Phase 2.

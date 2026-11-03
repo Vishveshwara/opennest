@@ -1,6 +1,6 @@
 # OpenNest implementation plan
 
-This plan defines OpenNest's proposed India-wide launch. Phase 0 provides documentation and local infrastructure. Phase 1 supplies the Java 25/Spring foundation, guarded stores, Flyway/Hibernate validation, safe errors, and real-store verification. Phase 2 adds opt-in Google OIDC, Redis sessions, CSRF/logout, private profiles, and approved trust rules. Listing/interaction services, frontend, live Google smoke testing, and hosted deployment remain outstanding. Work proceeds one phase per prompt and one reviewable PR per phase. The AI indexes summarize implemented behavior and proposals. [DEPLOYMENT_STACK.md](DEPLOYMENT_STACK.md) records hosting assumptions.
+This plan defines OpenNest's proposed India-wide launch. Phase 0 provides documentation and local infrastructure. Phase 1 supplies the Java 25/Spring foundation, guarded stores, Flyway/Hibernate validation, safe errors, and real-store verification. Phase 2 adds opt-in Google OIDC, Redis sessions, CSRF/logout, private profiles, and approved trust rules. Listing/interaction services, frontend, and hosted deployment remain outstanding. Work proceeds one phase per prompt and one reviewable PR per phase. The AI indexes summarize implemented behavior and proposals. [DEPLOYMENT_STACK.md](DEPLOYMENT_STACK.md) records hosting assumptions.
 
 ## Confirmed product direction
 
@@ -97,7 +97,7 @@ Implementation and verification are documented in the [Phase 2 handoff](IDENTITY
 | 2.8: integrated security | Controlled OIDC server and two real PostGIS/Redis pairs; concurrency, isolation, dependency outages, and leak checks |
 | 2.9: CI/handoff | Required-suite discovery, packaged fixture exclusion, context/doc alignment; full local gate and separately inspected PR checks |
 
-Tasks 2.1 through 2.9 are implemented and locally verified on 1 November 2026. The complete Java 25/Docker gate passed 298 tests: 205 default, 51 schema/persistence, 23 datastore-isolation, and 19 identity integration cases. Six Python report-gate tests, context/wrapper limits, and packaged fixture checks passed. Inspect current PR checks separately for CI results. Live Google smoke testing requires a real OAuth registration and is not claimed.
+Tasks 2.1 through 2.9 are implemented and locally verified on 1 November 2026. The complete Java 25/Docker gate passed 298 tests: 205 default, 51 schema/persistence, 23 datastore-isolation, and 19 identity integration cases. Six Python report-gate tests, context/wrapper limits, and packaged fixture checks passed. On 3 November, the maintainer reported successful local Google sign-in with the real OAuth client. Manual repeated-login/denial/logout checks and hosted routing remain unverified. Inspect current PR checks separately for CI results.
 
 ## Technical implementation notes for later phases
 

@@ -2,7 +2,7 @@
 
 OpenNest is a zero-brokerage platform for finding flats and PG/hostel accommodation directly from owners across India. OpenNest is an independent project, not affiliated with NoBroker.
 
-**Status:** Phase 1 foundation plus Phase 2 identity: Java 25, Spring Boot 4.1.1, five closed modules, guarded stores, Flyway/Hibernate validation, safe HTTP errors, opt-in Google OIDC, Redis sessions, CSRF/logout, private profiles, and approved trust badges. The [Phase 2 handoff](docs/IDENTITY_HANDOFF.md) records setup and verification. Listing/interaction APIs, live Google smoke testing, and public deployment remain outstanding.
+**Status:** Phase 1 foundation plus Phase 2 identity: Java 25, Spring Boot 4.1.1, five closed modules, guarded stores, Flyway/Hibernate validation, safe HTTP errors, opt-in Google OIDC, Redis sessions, CSRF/logout, private profiles, and approved trust badges. The [Phase 2 handoff](docs/IDENTITY_HANDOFF.md) records automated verification and maintainer-reported local Google login success. Listing/interaction APIs and public deployment remain outstanding.
 
 The complete Java 25/Docker gate passed 298 backend tests on 1 November 2026 with no failures, errors, or skips. Six Python verification tests and packaged-fixture checks also passed. Inspect PR checks separately for CI results.
 

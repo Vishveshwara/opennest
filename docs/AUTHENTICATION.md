@@ -1,6 +1,6 @@
 # OpenNest authentication decisions
 
-Status: Phase 2 implements Google OpenID Connect, Redis sessions, CSRF/logout, private profiles, and derived trust badges. Google login is disabled by default until the selected deployment receives credentials and exact origins. Live Google registration, browser smoke testing, and hosted deployment remain unverified. WhatsApp and phone verification remain deferred and unavailable.
+Status: Phase 2 implements Google OpenID Connect, Redis sessions, CSRF/logout, private profiles, and derived trust badges. Google login is disabled by default until the selected deployment receives credentials and exact origins. The maintainer reported successful local Google sign-in on 3 November 2026. Hosted deployment and manual repeated-login/denial/logout checks remain unverified. WhatsApp and phone verification remain deferred and unavailable.
 
 With Google disabled, the [restrictive security baseline](BACKEND_HTTP_ERRORS.md) denies normal requests and exposes no identity routes. Enabling Google replaces that baseline with identity-owned security. Neither mode provides Basic authentication, a generated password, a framework login page, or demo authentication. Configuration and verification commands are in the [Phase 2 handoff](IDENTITY_HANDOFF.md).
 
