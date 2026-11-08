@@ -21,6 +21,7 @@ UNIT_SUITES = {
     "in.opennest.common.internal.web.LiveHttpErrorTests",
     "in.opennest.identity.TrustBadgeTests",
     "in.opennest.identity.internal.configuration.IdentitySettingsTests",
+    "in.opennest.identity.internal.persistence.AccountStoreTransactionTests",
 }
 INTEGRATION_SUITES = {"in.opennest.SchemaMigrationIT", "in.opennest.BackendIsolationIT", "in.opennest.IdentityAuthenticationIT"}
 

@@ -50,11 +50,13 @@ python .github/scripts/verify_backend.py --reports
 python -m unittest discover --start-directory .github/scripts --pattern '*_test.py'
 ```
 
-On Linux, use `bash backend/mvnw` and `python3`. Existing [Phase 1 commands](BACKEND_HANDOFF.md#local-verification) remain valid. The report verifier now requires trust/configuration suites and `IdentityAuthenticationIT`, in addition to the existing suites. It rejects missing suites, failures, errors, skips, and packaged test fixtures.
+On Linux, use `bash backend/mvnw` and `python3`. Existing [Phase 1 commands](BACKEND_HANDOFF.md#local-verification) remain valid. The report verifier now requires trust/configuration suites, `AccountStoreTransactionTests`, and `IdentityAuthenticationIT`, in addition to the existing suites. It rejects missing suites, failures, errors, skips, and packaged test fixtures.
 
 The controlled OIDC provider runs only in test sources. Tests exercise authorization-code exchange, PKCE, signed ID-token checks, browser-bound state, denial/replay, concurrent signup, email collisions, cookies, session rotation/expiry, CSRF/logout, exact CORS, database/Redis failures, and sandbox-session replay against production. Two real PostGIS/Redis pairs use fabricated accounts and credentials. Production artifacts contain neither the provider nor test configuration.
 
 Local verification passed on 1 November 2026 under Temurin Java 25.0.4.1 and Linux amd64 Docker: 205 default tests, 51 schema/persistence tests, 23 datastore-isolation tests, and 19 identity integration tests. All 298 passed with no failures, errors, or skips. The report/artifact verifier passed, including test-fixture exclusion and unchanged V1/V2 migration contents. All six Python report-gate tests and context/wrapper checks passed.
+
+The 8 November review fix preserves the original account operation failure when database rollback also fails. Login and concurrent-signup recovery retain independent transactions; profile/contact reads retain read-only participation in an existing transaction. Nine regression cases cover rollback, transaction start/commit failures, and successful account reuse. All 217 current default tests passed locally. The real-store suite also checks an authenticated profile during database shutdown; inspect current PR results for its verification. Unexpected application failures remain generic 500 responses.
 
 On 3 November 2026, the maintainer reported successful local Google sign-in after configuring the real OAuth client and using the Windows launcher. This is maintainer-reported browser evidence, separate from the automated controlled-provider suite. Repeated real-provider login, denial, and CSRF-protected logout have not been separately confirmed manually.
 

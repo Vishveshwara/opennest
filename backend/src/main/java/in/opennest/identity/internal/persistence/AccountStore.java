@@ -1,6 +1,7 @@
 package in.opennest.identity.internal.persistence;
 
 import java.util.UUID;
+import java.util.function.Supplier;
 import in.opennest.common.RequestFailure;
 import in.opennest.identity.IdentityAccounts;
 import in.opennest.identity.TrustBadge;
@@ -10,7 +11,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @Repository
@@ -18,15 +18,18 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class AccountStore implements IdentityAccounts {
     @PersistenceContext private EntityManager entityManager;
     private final TransactionTemplate transaction;
+    private final TransactionTemplate readTransaction;
 
     public AccountStore(PlatformTransactionManager manager) {
         transaction = new TransactionTemplate(manager);
         transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        readTransaction = new TransactionTemplate(manager);
+        readTransaction.setReadOnly(true);
     }
 
     public UUID login(String issuer, String subject, String name, String email, boolean emailVerified) {
         try {
-            return transaction.execute(status -> {
+            return transact(transaction, () -> {
                 var existing = identity(issuer, subject);
                 if (existing != null) {
                     existing.email = email;
@@ -48,7 +51,7 @@ public class AccountStore implements IdentityAccounts {
             });
         } catch (RuntimeException failure) {
             if (!identityConflict(failure)) throw failure;
-            return transaction.execute(status -> {
+            return transact(transaction, () -> {
                 var winner = identity(issuer, subject);
                 if (winner == null) throw failure;
                 return winner.userId;
@@ -56,19 +59,43 @@ public class AccountStore implements IdentityAccounts {
         }
     }
 
-    @Transactional(readOnly = true)
-    public AccountProfile profile(UUID id) {
-        var user = entityManager.find(UserEntity.class, id);
-        if (user == null) throw new RequestFailure(RequestFailure.Kind.UNAUTHENTICATED);
-        return new AccountProfile(user.id, user.fullName, user.role.name(), user.phoneNumber, verified(user),
-                user.averageRating, user.reviewCount, user.brokerReportCount,
-                TrustBadge.calculate(user.averageRating, user.reviewCount, user.brokerReportCount));
+    private <T> T transact(TransactionTemplate template, Supplier<T> work) {
+        class ApplicationFailure { RuntimeException cause; }
+        var application = new ApplicationFailure();
+        try {
+            return template.execute(status -> {
+                try {
+                    return work.get();
+                } catch (RuntimeException failure) {
+                    application.cause = failure;
+                    throw failure;
+                }
+            });
+        } catch (RuntimeException failure) {
+            if (application.cause != null && application.cause != failure) {
+                application.cause.addSuppressed(failure);
+                throw application.cause;
+            }
+            throw failure;
+        }
     }
 
-    @Override @Transactional(readOnly = true)
+    public AccountProfile profile(UUID id) {
+        return transact(readTransaction, () -> {
+            var user = entityManager.find(UserEntity.class, id);
+            if (user == null) throw new RequestFailure(RequestFailure.Kind.UNAUTHENTICATED);
+            return new AccountProfile(user.id, user.fullName, user.role.name(), user.phoneNumber, verified(user),
+                    user.averageRating, user.reviewCount, user.brokerReportCount,
+                    TrustBadge.calculate(user.averageRating, user.reviewCount, user.brokerReportCount));
+        });
+    }
+
+    @Override
     public boolean hasVerifiedContact(UUID userId) {
-        var user = entityManager.find(UserEntity.class, userId);
-        return user != null && verified(user);
+        return transact(readTransaction, () -> {
+            var user = entityManager.find(UserEntity.class, userId);
+            return user != null && verified(user);
+        });
     }
 
     private boolean verified(UserEntity user) {

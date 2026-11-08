@@ -295,9 +295,13 @@ class IdentityAuthenticationIT {
     }
 
     @Test @Order(Integer.MAX_VALUE - 1) void databaseFailureDoesNotLeaveAnAuthenticatedSession() throws Exception {
+        var authenticated = login(0, "profile-database-down-user");
         var browser = new Browser(0);
         var callback = browser.authorize("valid", "database-down-user");
         databases.getFirst().stop();
+        var profile = authenticated.get("/api/v1/users/me");
+        assertThat(profile.statusCode()).as("Outage failure chain: %s", outageFailureChain()).isEqualTo(503);
+        assertThat(profile.body()).contains("The service is temporarily unavailable").doesNotContain("profile-database-down-user");
         var response = browser.get(callback);
         assertThat(response.statusCode()).as("Outage failure chain: %s", outageFailureChain()).isEqualTo(503);
         assertThat(response.body()).contains("The service is temporarily unavailable").doesNotContain("database-down-user");

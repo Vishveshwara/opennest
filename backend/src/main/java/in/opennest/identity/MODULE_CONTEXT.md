@@ -6,6 +6,7 @@
 - UUID IDs originate in Java; database creation timestamps read-only; nullable verified contact pair and unrounded BigDecimal aggregates remain private. USER accounts may both own and seek listings, with no privileged role yet.
 - Allowed module dependencies: common, through public RequestFailure and HttpFailureResponse only. No dependency on other modules or common internals.
 - Google identity key is validated issuer/subject, never email. Account and identity creation share a transaction; a losing unique-key race rolls back before reading the winner. Google login does not verify a phone number.
+- Account transactions preserve the original application failure if rollback also fails, retaining the rollback failure as suppressed. Known outages stay 503; unexpected failures stay 500. Begin/commit failures still propagate. Login uses REQUIRES_NEW; profile/contact reads retain read-only REQUIRED participation.
 - Keep entities, credentials, and private contact data internal; expose only authorized account data through deliberate contracts.
 - Public contracts: IdentityAccounts.hasVerifiedContact(UUID), and TrustBadge.calculate with approved aggregate thresholds. Entities and AccountProfile remain in internal packages.
 - Identity owns enabled security, cookie serialization, and session policy. Common retains deny-all security when Google is disabled. No Basic/form/password/demo fallback exists.
