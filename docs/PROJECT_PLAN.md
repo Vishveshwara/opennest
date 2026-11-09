@@ -1,6 +1,6 @@
 # OpenNest implementation plan
 
-This plan defines OpenNest's proposed India-wide launch. Phase 0 provides documentation and local infrastructure. Phase 1 supplies the Java 25/Spring foundation, guarded stores, Flyway/Hibernate validation, safe errors, and real-store verification. Phase 2 adds opt-in Google OIDC, Redis sessions, CSRF/logout, private profiles, and approved trust rules. Listing/interaction services, frontend, and hosted deployment remain outstanding. Work proceeds one phase per prompt and one reviewable PR per phase. The AI indexes summarize implemented behavior and proposals. [DEPLOYMENT_STACK.md](DEPLOYMENT_STACK.md) records hosting assumptions.
+This plan defines OpenNest's proposed India-wide launch. Phase 0 provides documentation and local infrastructure. Phase 1 supplies the Java 25/Spring foundation, guarded stores, Flyway/Hibernate validation, safe errors, and real-store verification. Phase 2 adds opt-in Google OIDC, Redis sessions, CSRF/logout, private profiles, and approved trust rules. Phases 3 through 5 cover listing services, interactions, and the frontend. Phase 6 covers deployment and launch readiness after Phase 5. Those later phases and hosted deployment remain outstanding. Work proceeds one phase per prompt and one reviewable PR per phase. The AI indexes summarize implemented behavior and proposals. [DEPLOYMENT_STACK.md](DEPLOYMENT_STACK.md) records hosting assumptions.
 
 ## Confirmed product direction
 
@@ -46,6 +46,7 @@ This plan defines OpenNest's proposed India-wide launch. Phase 0 provides docume
 | 3: listings | PAUSED drafts, image upload/finalization, explicit publish/pause, owner quota, versioned mode-aware inventory, nationwide search, R2 URLs, optional approved Overpass | Draft-upload-publish flow works for all modes; invalid photos/contact cannot publish; LISTING_MODEL.md and LISTING_SEARCH.md cases pass; concurrent sixth publication rejected; stale writes rejected; PAUSED preserved; unauthorized edits denied; real geo queries; enrichment disabled/outage fallback |
 | 4: interaction/demo | Contact ledger, ratings/reports, multi-city demo seeding/reset/personas | Fabricated listings cover multiple Indian cities; concurrent eleventh reveal rejected; retries free; Kolkata midnight; reports deduplicated; reset cannot touch real data |
 | 5: frontend | India-wide public portal, recruiter UI, URL-backed search filters/sorting/pagination, semantic theme, maps, image compression | Nationwide initial search; search links/back navigation/page reset work; accessible mobile flows; upload/reveal/report end-to-end; private responses absent from public caches |
+| 6: deployment and launch readiness | Hosting, DNS/TLS, production/sandbox OAuth, release delivery, edge rate limits, Redis capacity/alerts, recovery, and hosted verification | Exact OAuth callbacks and browser routing verified; rate limits block excess requests before session creation; Redis headroom and alert delivery tested; hosted smoke, isolation, load, restore, and rollback checks pass before approved public release |
 
 Phase 1 should finalize schema semantics before creating V1. Each later feature updates its module context and API/schema indexes in the same PR.
 
@@ -99,6 +100,23 @@ Implementation and verification are documented in the [Phase 2 handoff](IDENTITY
 
 Tasks 2.1 through 2.9 are implemented and locally verified on 1 November 2026. The complete Java 25/Docker gate passed 298 tests: 205 default, 51 schema/persistence, 23 datastore-isolation, and 19 identity integration cases. Six Python report-gate tests, context/wrapper limits, and packaged fixture checks passed. On 3 November, the maintainer reported successful local Google sign-in with the real OAuth client. Manual repeated-login/denial/logout checks and hosted routing remain unverified. Inspect current PR checks separately for CI results.
 
+### Phase 6 task boundaries
+
+Phase 6 is planned after Phase 5. It owns deployment and launch readiness under [DEPLOYMENT_STACK.md](DEPLOYMENT_STACK.md). No hosting, production OAuth registration, edge configuration, or monitoring is implemented by this plan update.
+
+| Task | Deliverable and completion gate |
+| --- | --- |
+| 6.1: deployment decisions | Confirm budget, providers, target architecture, domain control, production/sandbox hostnames, and remaining launch decisions before provisioning |
+| 6.2: hosting and delivery | Create tested images and release workflows, DNS/TLS and browser routing, isolated stores, restricted database roles, and deployment secrets; verify readiness and prevent public access to backend/store ports around the edge |
+| 6.3: production/sandbox OAuth | Configure distinct Google clients where Google login is enabled, exact registered callbacks and origins, and protected secrets; verify each enabled hosted deployment independently |
+| 6.4: edge rate limits | Limit unauthenticated GET /api/v1/auth/csrf and GET /oauth2/authorization/google with measured per-client and aggregate budgets; verify 429 responses before Redis session creation and prevent edge bypass |
+| 6.5: Redis capacity and alerts | Set measured maxmemory below container and host budgets with persistence/allocator headroom and noeviction; exercise memory-pressure, rejected-write/OOM alerts, and alert delivery |
+| 6.6: launch verification and recovery | Run hosted Google success/repeated-login/denial/CSRF-protected logout checks, browser/session isolation and application smoke tests; prove load capacity, backup restore, and compatible rollback, then obtain explicit approval before public release |
+
+The remaining local Google repeated-login, denial, and CSRF-protected logout checks can run now with configured local credentials. Record manual evidence separately from controlled-provider CI. Repeat the checks through the completed frontend in Phase 5 and against each enabled hosted deployment in Phase 6.
+
+Any earlier public preview must satisfy the applicable OAuth, routing, edge rate-limit, Redis capacity/alert, and hosted session checks before exposure. Phase 6's position after Phase 5 does not postpone those controls for an earlier preview. Purchases, provisioning, and deployment require separate authorization.
+
 ## Technical implementation notes for later phases
 
 - Backend module declarations now exist: common, identity, listing, interaction, sandbox under `in.opennest`. Keep nested implementation packages internal and types package-private where possible. Introduce explicit public contracts and allowed dependencies together; no cross-module edges are allowed at bootstrap. Modulith tests verify module discovery and boundaries.
@@ -120,8 +138,8 @@ Tasks 2.1 through 2.9 are implemented and locally verified on 1 November 2026. T
 
 ## Open decisions and setup dependencies
 
-- Hosting starts personal/non-commercial with minimal cost; no AWS account or credits exist yet. The planned website is `https://opennest.co.in`; confirm domain control, DNS/TLS, budget, image architecture, same-site session routing, map providers, and Redis version/license before public deployment; see [deployment decisions](DEPLOYMENT_STACK.md#decisions-before-public-deployment).
-- Set up the production Google OAuth client/redirect URI. If Google is also enabled in the sandbox, use a separate client and redirect origin; demo personas do not require Google accounts. Use deployment secrets, never chat or Git, for credentials.
+- Phase 6.1 owns hosting decisions: personal/non-commercial start with minimal cost; no AWS account or credits exist yet. The planned website is `https://opennest.co.in`; confirm domain control, DNS/TLS, budget, image architecture, same-site session routing, map providers, and Redis version/license before public deployment; see [deployment decisions](DEPLOYMENT_STACK.md#decisions-before-public-deployment).
+- Phase 6.3 owns production Google OAuth setup and exact redirect registration. If Google is also enabled in the sandbox, use a separate client and redirect origin; demo personas do not require Google accounts. Use deployment secrets, never chat or Git, for credentials.
 - Choose an approved owner-phone verification method before publishing becomes available; WhatsApp production eligibility, flow approval, provider selection, and any spend limit remain pending.
 - Trust precedence is approved and implemented in Phase 2. Phase 3 listing responses must reuse it; Phase 4 review/report writers maintain aggregates transactionally.
 - Decide a manual moderation/appeal policy and retention/deletion requirements before collecting real personal data.

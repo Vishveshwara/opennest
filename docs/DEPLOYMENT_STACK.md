@@ -135,6 +135,8 @@ The public Overpass instance's operator discourages using it as the backend of a
 
 Current foundation CI validates local Compose, datastore startup, distinct network membership/cross-network database reachability, PostGIS/Redis behavior, persistence, and AI-context size. It does not prove application isolation, build an application, or deploy anything.
 
+Phase 6 in the [project plan](PROJECT_PLAN.md#phase-6-task-boundaries) owns deployment and launch readiness after Phase 5. Apply the relevant OAuth, routing, edge rate-limit, Redis capacity/alert, and hosted session checks before any earlier public preview. The sequence below remains planned; provisioning and deployment require separate authorization.
+
 Planned delivery sequence:
 
 1. Pull requests run backend tests against PostGIS/Redis, module-boundary and isolation tests, frontend type/build checks, and appropriate security scans when those sources exist. Review guidance comes from [AGENTS.md](../AGENTS.md) and CodeRabbit configuration; `CLAUDE.md` points to that guidance. Row-level `is_sandbox` checks are not the isolation design.

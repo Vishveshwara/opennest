@@ -41,6 +41,7 @@
 - Phase 3: PAUSED drafts -> presigned/validated images -> explicit publish/pause, quotas, versioned mode-aware inventory, nationwide search with pagination/sorting/filters, optional approved Overpass enrichment.
 - Phase 4: contact reveals, reviews/reports, fabricated multi-city sandbox seed/reset, restricted demo telemetry.
 - Phase 5: India-wide public and recruiter interfaces, URL-backed search filters/sort/pagination, semantic theme, uploads, accessibility and end-to-end checks.
+- Phase 6 planned after Phase 5: hosting/DNS/TLS and release delivery, production/sandbox OAuth, edge rate limits, Redis capacity/alerts, hosted smoke/isolation/load checks, backup restore, and rollback. Applicable controls must precede any earlier public preview. Local Google checks can run now; repeat through Phase 5 UI and Phase 6 hosted deployments.
 - Before launch: OAuth setup, approved owner-contact verification method, moderation/appeals, backup restore, memory/load testing.
 - Hosting readiness: same-site session domains/routing, isolated recruiter resources, Redis version/license review, map/Overpass provider approval, immutable images and approved promotions; no production artifacts implemented.
 - Authoritative decisions and acceptance criteria: `docs/PROJECT_PLAN.md`.
