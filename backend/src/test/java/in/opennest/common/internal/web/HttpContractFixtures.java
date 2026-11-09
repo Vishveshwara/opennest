@@ -124,6 +124,10 @@ class HttpContractFixtures {
                 case "timeout" -> new SQLTimeoutException(CANARY);
                 case "query-timeout" -> new QueryTimeoutException(CANARY);
                 case "connection-state" -> new SQLException(CANARY, "08006");
+                case "admin-shutdown" -> new SQLException(CANARY, "57P01");
+                case "transaction-admin-shutdown" -> new CannotCreateTransactionException(CANARY,
+                        new org.hibernate.TransactionException(CANARY, new SQLException(CANARY, "57P01")));
+                case "database-dropped" -> new SQLException(CANARY, "57P04");
                 case "redis-outage" -> new RedisConnectionFailureException(CANARY);
                 case "redis-bug" -> new RedisSystemException(CANARY, new IllegalStateException(CANARY));
                 case "transaction-outage" -> new CannotCreateTransactionException(CANARY, new SQLException(CANARY, "08001"));

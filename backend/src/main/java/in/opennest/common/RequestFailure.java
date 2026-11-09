@@ -7,7 +7,7 @@ public final class RequestFailure extends RuntimeException {
     private final Kind kind;
 
     public RequestFailure(Kind kind) {
-        super("OpenNest request failed", null, false, false);
+        super("OpenNest request failed", null, true, false);
         this.kind = Objects.requireNonNull(kind);
     }
 

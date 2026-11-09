@@ -33,6 +33,8 @@ public class DeploymentEnvironmentPostProcessor implements EnvironmentPostProces
         }
         DeploymentProperties.Stores stores = deployment.validatedStores();
         Map<String, Object> selected = new LinkedHashMap<>();
+        selected.put("opennest.deployment.environment", deployment.environment().name());
+        selected.put("opennest.deployment.data-mode", deployment.dataMode().name());
         selected.put("spring.datasource.url", stores.database().jdbcUrl());
         selected.put("spring.datasource.username", stores.database().username());
         selected.put("spring.datasource.password", stores.database().password());

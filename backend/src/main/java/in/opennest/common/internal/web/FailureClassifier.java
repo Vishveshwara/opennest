@@ -78,7 +78,8 @@ final class FailureClassifier {
                     || current instanceof SQLRecoverableException) return 503;
             if (current instanceof SQLException sql) {
                 if ("23505".equals(sql.getSQLState())) return 409;
-                if (sql.getSQLState() != null && sql.getSQLState().startsWith("08")) return 503;
+                if ("57P01".equals(sql.getSQLState())
+                        || sql.getSQLState() != null && sql.getSQLState().startsWith("08")) return 503;
                 return 500;
             }
             if (current instanceof DataAccessException || current instanceof PersistenceException

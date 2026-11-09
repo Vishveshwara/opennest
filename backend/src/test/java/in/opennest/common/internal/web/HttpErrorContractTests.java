@@ -71,6 +71,7 @@ class HttpErrorContractTests {
             "duplicate,409", "optimistic,409", "unique-sql,409", "hibernate-unique,409", "integrity-bug,500", "foreign-key-bug,500",
             "not-null-bug,500", "schema-bug,500", "database-outage,503", "resource-outage,503", "timeout,503", "query-timeout,503",
             "connection-state,503", "redis-outage,503", "redis-bug,500", "transaction-outage,503", "transaction-bug,500",
+            "admin-shutdown,503", "transaction-admin-shutdown,503", "database-dropped,500",
             "wrapped-bug,500", "argument-bug,500", "response-conflict,409", "response-bug,500", "custom-problem,409", "constraint-input,400",
             "constraint-return,500", "security-denied,401", "security-authentication,401", "unexpected,500"
     })

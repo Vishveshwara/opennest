@@ -70,6 +70,24 @@ class DeploymentEnvironmentPostProcessorTests {
         assertThat(environment.getProperty("spring.data.redis.password")).isEqualTo("fabricated-redis-secret");
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"production", "Production", "pro-duction", "pro_duction", " PRODUCTION "})
+    void canonicalizesProductionForDownstreamSecurityPolicies(String runtime) throws IOException {
+        var values = production();
+        values.put("OPENNEST_ENVIRONMENT", runtime);
+        var environment = environment(values);
+        process(environment);
+        assertThat(environment.getProperty("opennest.deployment.environment")).isEqualTo("PRODUCTION");
+        assertThat(environment.getProperty("opennest.deployment.data-mode")).isEqualTo("PRIMARY");
+    }
+
+    @Test
+    void canonicalizesSandboxForDownstreamSecurityPolicies() throws IOException {
+        var environment = environment(Map.of("OPENNEST_DATA_MODE", "sand_box", "SANDBOX_DB_PASSWORD", "fabricated-sandbox-secret"));
+        process(environment);
+        assertThat(environment.getProperty("opennest.deployment.data-mode")).isEqualTo("SANDBOX");
+    }
+
     @Test
     void rejectsProductionSandboxMode() throws IOException {
         var values = production();

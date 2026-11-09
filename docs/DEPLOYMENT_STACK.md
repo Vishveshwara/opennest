@@ -1,6 +1,8 @@
 # OpenNest deployment and infrastructure plan
 
-Status: deployment proposal, reviewed against provider documentation on 21 October 2026; website and Java target updated by maintainer decision on 22 October 2026. Local datastore Compose, foundation CI, and the Phase 1 backend foundation exist. Dependency resolution, Java 25 tests, startup guards, and real PostGIS/Redis container isolation are verified locally as of 30 October 2026; the [handoff](BACKEND_HANDOFF.md) records review corrections and regression results. Feature, browser-session isolation, and hosted deployment integration remain unverified. Production Compose, Dockerfiles, Caddy configuration, cloud resources, and deployment workflows are not implemented.
+Phase 2 adds local identity/session implementation and controlled-provider isolation tests; see [identity setup and verification](IDENTITY_HANDOFF.md). The maintainer reported successful local Google sign-in on 3 November 2026. Production and sandbox OAuth registrations, hosted browser routing, and hosted deployment remain unverified. This change provisions no infrastructure.
+
+Status: deployment proposal, reviewed against provider documentation on 21 October 2026; website and Java target updated by maintainer decision on 22 October 2026. Local datastore Compose, foundation CI, and the Phase 1 backend foundation exist. Dependency resolution, Java 25 tests, startup guards, and real PostGIS/Redis container isolation are verified locally as of 30 October 2026; the [handoff](BACKEND_HANDOFF.md) records review corrections and regression results. Phase 2 controlled-provider tests locally verify browser-bound state and session isolation. Hosted browser routing, repeated real-provider flows, and hosted deployment integration remain unverified. Production Compose, Dockerfiles, Caddy configuration, cloud resources, and deployment workflows are not implemented.
 
 This replaces the supplied deployment draft where it conflicts with the [project plan](PROJECT_PLAN.md), [authentication decisions](AUTHENTICATION.md), or existing infrastructure. OpenNest remains India-wide and licensed under [AGPL-3.0-only](../LICENSE). Hosting in Mumbai does not limit listing coverage to that region.
 
@@ -99,6 +101,10 @@ Do not adopt `-Xss256k`, a tight metaspace cap, Serial GC, or `TieredStopAtLevel
 
 Use `noeviction` for Redis that holds sessions. `allkeys-lru` can remove authentication state; memory pressure under `noeviction` instead rejects memory-growing writes, which the application must handle with a controlled failure. Keep cache populations bounded or later move evictable cache data to a separate instance. Redis logical databases/namespaces do not isolate memory or eviction. [Redis eviction](https://redis.io/docs/latest/develop/reference/eviction/).
 
+Before exposing authentication publicly, configure edge rate limits for unauthenticated `GET /api/v1/auth/csrf` and `GET /oauth2/authorization/google` before requests reach session creation. Use per-client and aggregate budgets based on measured capacity, prevent direct public access around the edge, and verify excess requests receive 429 without creating Redis sessions. Application session creation is not a rate limiter. No production edge configuration exists yet.
+
+Provision Redis `maxmemory` below both its container memory limit and the host's available memory budget, allowing for allocator/buffer overhead and persistence rewrite peaks. Before launch, configure and exercise alerts for dataset usage against `maxmemory`, Redis RSS/container/host memory pressure, and rejected writes or OOM errors. The local Compose limit of 40 MB under an 80 MB container cap is a development setting, not production capacity or alerting evidence. Production limits, thresholds, and alert delivery remain unconfigured until the host and monitoring service are selected.
+
 Swap may provide emergency buffering but is slower than RAM and does not prevent OOM kills, container limit failures, or outages. If selected after testing, configure encrypted-disk swap idempotently and monitor it; do not rerun commands that recreate an active swap file or append duplicate `fstab` entries. Use supported Docker package installation for the selected OS. [Docker memory and swap constraints](https://docs.docker.com/engine/containers/resource_constraints/).
 
 Named volumes, `restart: unless-stopped`, and Redis AOF do not guarantee recovery in three seconds or zero data loss. Define recovery point/time objectives, automate encrypted off-host database backups, and test a restore onto a fresh host. Redis recovery must not reset PostgreSQL-backed quotas or extend/revive revoked sessions; choose session invalidation after restore unless revocation/expiry continuity is proven. Keep backup credentials and retention separate from public media access.
@@ -128,6 +134,8 @@ The public Overpass instance's operator discourages using it as the backend of a
 ## Delivery and operational checks
 
 Current foundation CI validates local Compose, datastore startup, distinct network membership/cross-network database reachability, PostGIS/Redis behavior, persistence, and AI-context size. It does not prove application isolation, build an application, or deploy anything.
+
+Phase 6 in the [project plan](PROJECT_PLAN.md#phase-6-task-boundaries) owns deployment and launch readiness after Phase 5. Apply the relevant OAuth, routing, edge rate-limit, Redis capacity/alert, and hosted session checks before any earlier public preview. The sequence below remains planned; provisioning and deployment require separate authorization.
 
 Planned delivery sequence:
 
