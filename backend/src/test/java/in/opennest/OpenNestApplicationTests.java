@@ -37,9 +37,9 @@ class OpenNestApplicationTests {
     private org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping handlerMapping;
 
     @Test
-    void exposesOnlyTheFrameworkErrorHandlerWithoutDiagnosticControllers() {
+    void exposesOnlyListingAndFrameworkErrorHandlersWithoutDiagnosticControllers() {
         assertThat(handlerMapping.getHandlerMethods().values()).allSatisfy(handler ->
-                assertThat(handler.getBeanType().getName()).isEqualTo("in.opennest.common.internal.web.SafeErrorController"));
+                assertThat(handler.getBeanType().getName()).isIn("in.opennest.common.internal.web.SafeErrorController", "in.opennest.listing.internal.ListingController"));
     }
 
     @Test

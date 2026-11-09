@@ -1,6 +1,6 @@
 # OpenNest implementation plan
 
-This plan defines OpenNest's proposed India-wide launch. Phase 0 provides documentation and local infrastructure. Phase 1 supplies the Java 25/Spring foundation, guarded stores, Flyway/Hibernate validation, safe errors, and real-store verification. Phase 2 adds opt-in Google OIDC, Redis sessions, CSRF/logout, private profiles, and approved trust rules. Phases 3 through 5 cover listing services, interactions, and the frontend. Phase 6 covers deployment and launch readiness after Phase 5. Those later phases and hosted deployment remain outstanding. Work proceeds one phase per prompt and one reviewable PR per phase. The AI indexes summarize implemented behavior and proposals. [DEPLOYMENT_STACK.md](DEPLOYMENT_STACK.md) records hosting assumptions.
+This plan defines OpenNest's proposed India-wide launch. Phase 0 provides documentation and local infrastructure. Phase 1 supplies the Java 25/Spring foundation, guarded stores, Flyway/Hibernate validation, safe errors, and real-store verification. Phase 2 adds opt-in Google OIDC, Redis sessions, CSRF/logout, private profiles, and approved trust rules. Phase 3 implements listing services; Phases 4 and 5 cover interactions and the frontend. Phase 6 covers deployment and launch readiness after Phase 5. Phase 3 verification and remaining readiness gates are recorded in [LISTINGS_HANDOFF.md](LISTINGS_HANDOFF.md); later phases and hosted deployment remain outstanding. Work proceeds one phase per prompt and one reviewable PR per phase. The AI indexes summarize implemented behavior and proposals. [DEPLOYMENT_STACK.md](DEPLOYMENT_STACK.md) records hosting assumptions.
 
 ## Confirmed product direction
 
@@ -62,7 +62,7 @@ Phase 1.5 is complete; [migration record](BACKEND_MIGRATIONS.md) documents share
 
 Phase 1.6 is complete; [persistence contract and evidence](BACKEND_PERSISTENCE.md) records six package-private entities inside their owning modules, scalar UUID foreign references, read-only generated columns, and listing @Version. Hibernate validate runs after Flyway and rejects schema drift; direct ORM schema-action overrides are rejected. Generated listing values require flush then refresh/reload after updates to preserve proper stale-write exceptions on the pinned Hibernate release. Its clean Java 25 build passed 57 unit/context/module and 49 real database tests. V1/V2 remained unchanged; no business service/API, Docker/hosted execution, Redis isolation, or CI was claimed at that step.
 
-Phase 1.7 is complete; [HTTP errors/security contract](BACKEND_HTTP_ERRORS.md) records fixed Problem Details for expected 400/401/403/404/409/429/503 failures and generic unexpected 500 responses. Known uniqueness/stale conflicts and connection/timeouts remain distinct from generic integrity/schema/application bugs. Responses reset uncommitted data and never copy exception/validation/request/private values. Logging emits fixed status/error-ID events only; framework diagnostics, SQL/request dumps, and stack traces are suppressed, including at startup. Every normal request is denied; form/Basic/logout/default-password/demo access is absent and CSRF remains enabled. The clean Java 25 build passed 114 unit/context/HTTP and 49 database tests, zero failures/errors/skips, including 50 HTTP tests through test-only controllers/live container. No diagnostic business endpoint is packaged, and migrations/mappings are unchanged. Docker, Redis isolation, CI, and hosted deployment remain unverified. Phase 1.8 datastore isolation is next; Phase 1 overall remains incomplete.
+Phase 1.7 is complete; [HTTP errors/security contract](BACKEND_HTTP_ERRORS.md) records fixed Problem Details for expected 400/401/403/404/409/429/503 failures and generic unexpected 500 responses. Known uniqueness/stale conflicts and connection/timeouts remain distinct from generic integrity/schema/application bugs. Responses reset uncommitted data and never copy exception/validation/request/private values. Logging emits fixed status/error-ID events only; framework diagnostics, SQL/request dumps, and stack traces are suppressed, including at startup. Every normal request is denied; form/Basic/logout/default-password/demo access is absent and CSRF remains enabled. The clean Java 25 build passed 114 unit/context/HTTP and 49 database tests, zero failures/errors/skips, including 50 HTTP tests through test-only controllers/live container. No diagnostic business endpoint is packaged, and migrations/mappings are unchanged. Docker, Redis isolation, CI, and hosted deployment remain unverified. This paragraph records the Phase 1.7 checkpoint. The completed Phase 1.8/1.9 evidence is recorded below.
 
 ### Phase 1 task boundaries
 
@@ -99,6 +99,25 @@ Implementation and verification are documented in the [Phase 2 handoff](IDENTITY
 | 2.9: CI/handoff | Required-suite discovery, packaged fixture exclusion, context/doc alignment; full local gate and separately inspected PR checks |
 
 Tasks 2.1 through 2.9 are implemented and locally verified on 1 November 2026. The complete Java 25/Docker gate passed 298 tests: 205 default, 51 schema/persistence, 23 datastore-isolation, and 19 identity integration cases. Six Python report-gate tests, context/wrapper limits, and packaged fixture checks passed. On 3 November, the maintainer reported successful local Google sign-in with the real OAuth client. Manual repeated-login/denial/logout checks and hosted routing remain unverified. Inspect current PR checks separately for CI results.
+
+### Phase 3 task boundaries
+
+Phase 3 implementation is described in [the listing handoff](LISTINGS_HANDOFF.md). It adds PAUSED drafts, caller-only listing pagination, validated private R2 images, explicit publish/pause, transactional quotas, versioned inventory, and the complete nationwide search contract. Phone verification stays deferred, coordinates stay out of public responses, Overpass stays disabled, and every listing response uses no-store.
+
+| Task | Deliverable and completion gate |
+| --- | --- |
+| 3.1: contracts/schema | Public current-account/contact/owner-lock contracts, safe owner SQL projection and V3 image metadata; clean and populated-V2 migration checks |
+| 3.2: drafts/owner APIs | PAUSED creation, owner collection/detail, numeric/text/mode limits; ownership and draft privacy tests |
+| 3.3: storage | Opt-in R2 adapter, isolated credentials/private buckets, signed direct PUT/GET; real SDK/local HTTP contract tests |
+| 3.4: image lifecycle | Reservation limits, content validation/fresh-pixel finalization, retries, cleanup; malformed/expired/concurrent/storage failure tests |
+| 3.5: lifecycle | Owner-row serialization, five published/20 retained caps, exact versions, PAUSED preservation; concurrency tests |
+| 3.6: search | All filters/sorts/pagination, matching snapshot counts, real geo queries, safe batched DTOs; representative multi-city query plans |
+| 3.7: integration | Google-enabled/disabled security and exact CORS, no-store/private media, sandbox isolation; HTTP/session/privacy regressions |
+| 3.8: handoff | Required suite/artifact gates, aligned context/docs/configuration; complete Java 25/Docker local gate and separately inspected CI |
+
+The clean local Java 25/Linux amd64 Docker gate passed 426 tests on 9 November 2026, with no failures/errors/skips. Report/artifact checks, six Python checks, context limits and whitespace checks passed. Current-change CI, live R2/CORS, and manual real-Google repeated-login/denial/logout remain unverified.
+
+The agreed limits are 20 retained listings per owner, 12 images per listing, 60 image reservations per owner per rolling 24 hours, 5 MiB/20 MP images, ten-minute upload URLs, and five-minute private read URLs. Cleanup runs hourly with a 24-hour object grace period and seven-day rejected-reservation retention. No draft is automatically deleted. Text/price edits, image replacement/removal, listing deletion, phone verification, frontend work, interactions, and recruiter personas remain outside Phase 3.
 
 ### Phase 6 task boundaries
 
@@ -144,7 +163,7 @@ Any earlier public preview must satisfy the applicable OAuth, routing, edge rate
 - Trust precedence is approved and implemented in Phase 2. Phase 3 listing responses must reuse it; Phase 4 review/report writers maintain aggregates transactionally.
 - Decide a manual moderation/appeal policy and retention/deletion requirements before collecting real personal data.
 - Decide a documented public map coarsening/precision policy before Phase 3 response DTOs; until then omit coordinates. Public search/detail responses must never expose precise coordinates, private address, or owner phone. Geo queries may use exact stored coordinates internally.
-- Finalize Phase 3 draft/upload limits, cleanup, and any text/price/image edit or deletion routes before exposing those operations; the published-listing quota does not cap draft storage. The proposed rental-mode field and inventory constraints are defined in [LISTING_MODEL.md](LISTING_MODEL.md).
+- Phase 3 draft/upload limits and cleanup are selected and implemented in LISTINGS_HANDOFF.md. Text/price/image edit and deletion routes still require explicit contracts before exposure; the 20-retained-listing cap does not delete old drafts. The proposed rental-mode field and inventory constraints are defined in [LISTING_MODEL.md](LISTING_MODEL.md).
 
 These remaining items stay open deliberately. Do not silently choose a phone provider, enable deferred WhatsApp, or declare a public launch ready while owner contact verification is unavailable. Trust thresholds are approved for Phase 2.
 

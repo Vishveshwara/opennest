@@ -3,6 +3,7 @@
 - Status: shared RequestFailure/Kind and HttpFailureResponse contracts, internal deployment configuration, MVC errors, and conditional baseline security; no business service or diagnostic API.
 - Own shared HTTP error handling and small domain-independent types; no dependency on feature module internals.
 - Allowed module dependencies: none. Common must not depend on feature modules.
+- Phase 3 adds fixed CONTACT_VERIFICATION_REQUIRED -> 403 guidance without copying caller data. Google-disabled security permits only public listing GETs with exact-origin read CORS; owner routes remain protected and other requests remain denied.
 - `internal.configuration` implements Boot's current EnvironmentPostProcessor SPI, binds immutable deployment settings, and validates production/demo policy, distinct stores/secrets, and reserved Boot configuration after config-data loading and before client construction.
 - JDBC and Redis settings derive from the selected mode once at startup. Validation errors and configuration descriptions redact credentials; no client input or header is consulted.
 - Phase 1.5 pins Flyway to shared db/migration resources and selected datasource, with validation enabled and baseline/clean disabled. Direct spring.flyway inputs are rejected; no independent migration URL or credentials exist.

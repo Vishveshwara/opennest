@@ -9,8 +9,9 @@
 - Account transactions preserve the original application failure if rollback also fails, retaining the rollback failure as suppressed. Known outages stay 503; unexpected failures stay 500. Begin/commit failures still propagate. Login uses REQUIRES_NEW; profile/contact reads retain read-only REQUIRED participation.
 - Profile/contact reads use typed queries: pinned Hibernate find() can swallow a connection error in a rollback-only transaction and return null, incorrectly treating an outage as a missing account.
 - Keep entities, credentials, and private contact data internal; expose only authorized account data through deliberate contracts.
-- Public contracts: IdentityAccounts.hasVerifiedContact(UUID), and TrustBadge.calculate with approved aggregate thresholds. Entities and AccountProfile remain in internal packages.
-- Identity owns enabled security, cookie serialization, and session policy. Common retains deny-all security when Google is disabled. No Basic/form/password/demo fallback exists.
+- Public contracts: CurrentAccount.id(), IdentityAccounts.hasVerifiedContact(UUID)/lockForListingMutation(UUID), and TrustBadge.calculate with approved aggregate thresholds. ListingAccounts uses JDBC and requires an existing transaction for the owner lock; entities and AccountProfile stay internal.
+- Identity owns enabled security, cookie serialization, and session policy. Common permits public listing reads with exact-origin CORS when Google is disabled; protected routes stay denied. No Basic/form/password/demo fallback exists.
+- V3 identity-owned listing_owner_profiles SQL view exposes only owner ID/name/trust aggregates to listing queries; contact/provider fields remain private. Phase 3 publication reads contact eligibility and locks the owner in the shared transaction.
 - Redis sessions use 30-minute idle and 24-hour authenticated absolute limits; only a minimal deployment-bound principal survives successful login. Provider credentials are discarded.
 - Routes: GET /oauth2/authorization/google, GET /login/oauth2/code/google, GET /api/v1/auth/csrf, POST /api/v1/auth/logout, GET /api/v1/users/me. All require explicit Google enablement; REST profile requires authentication.
 - Configuration, contracts, verification, and outstanding Google smoke test: docs/IDENTITY_HANDOFF.md and docs/AUTHENTICATION.md from repository root.

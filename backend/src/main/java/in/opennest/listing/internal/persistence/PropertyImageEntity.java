@@ -46,6 +46,24 @@ class PropertyImageEntity {
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     Instant createdAt;
 
+    @Column(name = "declared_content_type", columnDefinition = "text")
+    String declaredContentType;
+
+    @Column(name = "declared_byte_size")
+    Long declaredByteSize;
+
+    @Column(name = "content_type", columnDefinition = "text")
+    String contentType;
+
+    @Column(name = "byte_size")
+    Long byteSize;
+
+    @Column
+    Integer width;
+
+    @Column
+    Integer height;
+
     protected PropertyImageEntity() {
     }
 

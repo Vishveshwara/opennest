@@ -1,6 +1,6 @@
 # OpenNest listing modes and pricing
 
-Status: proposed feature implementation contract. On 22 October 2026, the maintainer confirmed individual vacant rooms in flats priced per room per month, plus owner-configured numbers of people allowed. PG accommodation remains per person per month. Phase 1.5/1.6 implements the schema and internal mappings; listing services/endpoints remain unimplemented. See [persistence scope](BACKEND_PERSISTENCE.md).
+Status: Phase 3 feature implementation contract; verification and remaining provider gates are in [LISTINGS_HANDOFF.md](LISTINGS_HANDOFF.md). On 22 October 2026, the maintainer confirmed individual vacant rooms in flats priced per room per month, plus owner-configured numbers of people allowed. PG accommodation remains per person per month. Phase 1.5/1.6 implements the schema and internal mappings; listing services/endpoints are now implemented in Phase 3. See [persistence scope](BACKEND_PERSISTENCE.md).
 
 ## Modes
 
@@ -55,5 +55,5 @@ Full pagination and filter behavior remains in [LISTING_SEARCH.md](LISTING_SEARC
 - Reject mismatched category/mode/inventory fields at the API and database constraint layers. Assert stored mode cannot be changed through inventory updates.
 - Verify ACTIVE/FULL_OCCUPIED/PAUSED transitions for the boolean and room-count modes, quota concurrency, stale-version conflicts, and current-version no-ops.
 - Verify mode-filter combinations, whole-flat NULL placement in room sorts, and bedroom versus available-room controls.
-- Before implementing Phase 3, specify limits for drafts, image reservations, file size/count, and orphan cleanup; the five published-listing quota alone does not bound storage abuse. Set numeric limits in the implementation PR.
+- Phase 3 limits are 20 retained listings/owner, 12 images/listing, 60 reservations/rolling 24h, 5 MiB/20 MP images, and hourly orphan cleanup. Details and expiry rules: LISTINGS_HANDOFF.md.
 - Listing text/price edits, image replacement/removal, contact changes, and deletion require explicit contracts before they are exposed. The current endpoint inventory must not be interpreted as implementing these flows.

@@ -1,10 +1,10 @@
 # OpenNest listing search plan
 
-Status: proposed contract for the first listing-search implementation in Phase 3 and the frontend in Phase 5. No search endpoint exists yet. Pagination, sorting, and filters will be implemented together, with the same search semantics in the public portal and recruiter sandbox on their separate backends. Sandbox responses will bypass shared/public caches.
+Status: backend search is implemented in Phase 3; verification is recorded in [LISTINGS_HANDOFF.md](LISTINGS_HANDOFF.md). Browser controls remain Phase 5 work. Pagination, sorting, and filters will be implemented together, with the same search semantics in the public portal and recruiter sandbox on their separate backends. Sandbox responses will bypass shared/public caches.
 
 ## Request and filters
 
-The planned `GET /api/v1/listings/search` will return nationwide results when `city` is omitted. Supplied filters combine with AND and run in the database before pagination. Do not fetch all listings for browser-side filtering or sorting.
+The implemented `GET /api/v1/listings/search` returns nationwide results when `city` is omitted. Supplied filters combine with AND and run in the database before pagination. Do not fetch all listings for browser-side filtering or sorting.
 
 | Parameter | Planned behavior |
 | --- | --- |
@@ -92,3 +92,5 @@ Individual rooms in flats nationwide, at least one vacancy and up to INR 10000 p
 - Verify PAUSED drafts/pending images stay out of search until explicit publication, pausing removes a listing from public results, and inventory/report writes cannot republish a draft. Verify sandbox/authenticated responses use no-store and public caches are invalidated after relevant writes.
 - Verify invalid and incompatible inputs return 400, while valid contradictory filters return an empty result. Record query plans for representative nationwide and multi-filter searches.
 - End-to-end checks cover URL sharing, Back/Forward, filter/sort/size page reset, empty results, stale requests, and mobile/keyboard search controls.
+
+Phase 3 response policy: all listing responses use no-store and no shared cache is implemented. Public coordinates and precise distances are omitted. Only the authenticated owner receives private address/coordinates/version on owner detail and collection routes.

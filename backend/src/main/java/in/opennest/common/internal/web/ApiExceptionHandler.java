@@ -26,6 +26,10 @@ final class ApiExceptionHandler {
     void handle(Exception failure, HttpServletResponse response) throws IOException {
         if (failure instanceof AccessDeniedException denied) throw denied;
         if (failure instanceof AuthenticationException authentication) throw authentication;
+        if (failure instanceof in.opennest.common.RequestFailure request
+                && request.kind() == in.opennest.common.RequestFailure.Kind.CONTACT_VERIFICATION_REQUIRED) {
+            responses.writeContactRequired(response); return;
+        }
         if (failure instanceof HttpRequestMethodNotSupportedException methodFailure) {
             var allowed = methodFailure.getSupportedHttpMethods();
             responses.write(response, FailureClassifier.status(failure), allowed == null ? Set.of() : allowed);

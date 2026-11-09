@@ -123,7 +123,7 @@ class BackendIsolationIT {
             assertThat(database(target).queryForObject("SHOW server_version_num", String.class)).startsWith("17");
             assertThat(contexts.get(target).getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();
             var current = database(target).queryForList("SELECT version || ':' || checksum FROM public.flyway_schema_history ORDER BY installed_rank", String.class);
-            assertThat(current).containsExactly("1:-65807919", "2:842141308");
+            assertThat(current).containsExactly("1:-65807919", "2:842141308", "3:-212349669");
             if (history != null) assertThat(current).isEqualTo(history);
             history = current;
             var selected = contexts.get(target).getBean(LettuceConnectionFactory.class);
@@ -259,7 +259,7 @@ class BackendIsolationIT {
         try (var unmodified = new SpringApplication(OpenNestApplication.class).run(arguments)) {
             var handlers = unmodified.getBean(RequestMappingHandlerMapping.class).getHandlerMethods().values();
             assertThat(handlers).isNotEmpty().allSatisfy(handler -> assertThat(handler.getBeanType().getName())
-                    .isEqualTo("in.opennest.common.internal.web.SafeErrorController"));
+                    .isIn("in.opennest.common.internal.web.SafeErrorController", "in.opennest.listing.internal.ListingController"));
             assertThat(unmodified.getBeansOfType(org.springframework.security.core.userdetails.UserDetailsService.class)).isEmpty();
         }
     }

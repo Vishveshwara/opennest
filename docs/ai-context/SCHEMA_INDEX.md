@@ -1,4 +1,4 @@
-- Status: V1 schema/V2 indexes remain unchanged through Phase 2; no hosted deployment migrated. Identity persistence/profile/trust are implemented; listing/interaction service behaviors remain planned. Contract: `docs/SCHEMA_CONTRACT.md`; migration proof: `docs/BACKEND_MIGRATIONS.md`.
+- Status: V1/V2 remain unchanged; Phase 3 V3 adds six image metadata columns and the identity-owned listing_owner_profiles view. Identity and listing services are implemented; interactions remain planned. No hosted deployment migrated. Contract: `docs/SCHEMA_CONTRACT.md`; migration proof: `docs/BACKEND_MIGRATIONS.md`.
 - Phase 1.6 maps all 70 columns inside owning modules' internal.persistence packages; six package-private entities, scalar UUID foreign references, no entity associations/public contracts. Hibernate validate only; generated fields read-only, PropertyEntity.version @Version. After listing updates flush then refresh/reload generated geography/totals; `docs/BACKEND_PERSISTENCE.md`.
 - V1 conventions: UUID IDs supplied by application, text enums with CHECKs, timestamptz events, immediate RESTRICT foreign keys, no deletion cascades. Retention/erasure policy remains open.
 - Separate production and sandbox databases use the same migrations and distinct runtime credentials.
@@ -47,3 +47,6 @@
 - Only ACTIVE/FULL_OCCUPIED count toward the five-listing quota; PAUSED drafts do not. Inventory changes keep published listings counted even when whole_flat_available=false or room availability reaches zero.
 - Trusted sandbox seeds include historical reveal rows for designated personas so normal review/report eligibility works despite disabled callable contact actions.
 - Quota and review aggregate changes need transaction/concurrency tests in their implementation phases.
+- V3 image metadata: nullable declared_content_type/declared_byte_size and content_type/byte_size/width/height; all-or-none groups, allowlisted types, 5 MiB and 20 MP checks. Legacy V2 rows remain valid; new service writes populate metadata. Six mappings now cover 76 columns.
+- listing_owner_profiles exposes only id/full_name/average_rating/review_count/broker_report_count. Listing reads may join it for summaries and rating sorts; no contacts or provider fields.
+- Phase 3 service enforcement: owner-row lock before listing/image locks; 20 retained/5 published listings, image/rate limits, exact versions, PAUSED preservation, explicit publication/contact/photo gates. Search items/count/image hydration use one repeatable-read snapshot.

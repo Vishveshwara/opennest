@@ -22,8 +22,11 @@ UNIT_SUITES = {
     "in.opennest.identity.TrustBadgeTests",
     "in.opennest.identity.internal.configuration.IdentitySettingsTests",
     "in.opennest.identity.internal.persistence.AccountStoreTransactionTests",
+    "in.opennest.listing.internal.ListingSearchTests",
+    "in.opennest.listing.internal.ImageValidatorTests",
+    "in.opennest.listing.internal.R2StorageTests",
 }
-INTEGRATION_SUITES = {"in.opennest.SchemaMigrationIT", "in.opennest.BackendIsolationIT", "in.opennest.IdentityAuthenticationIT"}
+INTEGRATION_SUITES = {"in.opennest.SchemaMigrationIT", "in.opennest.BackendIsolationIT", "in.opennest.IdentityAuthenticationIT", "in.opennest.listing.internal.ListingLifecycleIT"}
 
 
 def require(condition, message):
@@ -77,11 +80,12 @@ def verify_reports():
         require(not any(token in name for name in application_classes for token in
                         ("IsolationProbe", "IsolationTestConfiguration", "BackendIsolationIT", "HttpContractFixtures",
                          "SchemaMigrationIT", "PersistenceScenarios", "PersistenceScenarioSupport",
-                         "IdentityAuthenticationIT", "ControlledOidcProvider", "ProviderConfiguration")), "Test fixture packaged in application")
+                         "IdentityAuthenticationIT", "ControlledOidcProvider", "ProviderConfiguration", "ListingLifecycleIT", "ControlledStorage")), "Test fixture packaged in application")
         migrations = [name for name in application_classes if name.startswith("BOOT-INF/classes/db/migration/V")]
         require(set(migrations) == {
             "BOOT-INF/classes/db/migration/V1__create_application_schema.sql",
             "BOOT-INF/classes/db/migration/V2__create_application_indexes.sql",
+            "BOOT-INF/classes/db/migration/V3__listing_media_contract.sql",
         }, "Packaged migrations differ from the Phase 1 handoff")
     version = subprocess.run(["java", "--version"], capture_output=True, text=True, check=True).stdout.strip()
     require(re.search(r"(?:openjdk|java) 25[.\s]", version), "Verification must run on Java 25")

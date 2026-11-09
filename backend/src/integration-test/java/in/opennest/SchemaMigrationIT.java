@@ -77,7 +77,7 @@ class SchemaMigrationIT {
                     var context = application.run(arguments.toArray(String[]::new));
                     contexts.add(context);
                     var flyway = context.getBean(Flyway.class);
-                    assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("2");
+                    assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("3");
                     assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
                     assertThat(flyway.migrate().migrationsExecuted).isZero();
                     assertThat(flyway.getConfiguration().isCleanDisabled()).isTrue();
@@ -153,14 +153,14 @@ class SchemaMigrationIT {
                 current += String.join("\n", strings(connection, "SELECT conrelid::regclass::text || ':' || conname || ':' || pg_get_constraintdef(oid) FROM pg_constraint WHERE connamespace='public'::regnamespace AND conname ~ '^(pk_|uq_|fk_|ck_)' ORDER BY conname"));
                 current += String.join("\n", strings(connection, "SELECT indexdef FROM pg_indexes WHERE schemaname='public' AND indexname LIKE 'ix_%' ORDER BY indexname"));
                 var currentHistory = strings(connection, "SELECT version || ':' || checksum || ':' || success FROM public.flyway_schema_history WHERE version IS NOT NULL ORDER BY installed_rank");
-                assertThat(currentHistory).hasSize(2);
+                assertThat(currentHistory).hasSize(3);
                 if (fingerprint != null) {
                     assertThat(current).isEqualTo(fingerprint);
                     assertThat(currentHistory).isEqualTo(history);
                 }
                 fingerprint = current;
                 history = currentHistory;
-                assertThat(value(connection, "SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name IN ('users','auth_identities','properties','property_images','contact_reveals','owner_reviews')")).isEqualTo(70L);
+                assertThat(value(connection, "SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name IN ('users','auth_identities','properties','property_images','contact_reveals','owner_reviews')")).isEqualTo(76L);
                 assertThat(value(connection, "SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND is_generated='ALWAYS'")).isEqualTo(3L);
                 assertThat(value(connection, "SELECT count(*) FROM pg_constraint WHERE connamespace='public'::regnamespace AND contype='f' AND confdeltype='r' AND confupdtype='r' AND NOT condeferrable")).isEqualTo(7L);
             }

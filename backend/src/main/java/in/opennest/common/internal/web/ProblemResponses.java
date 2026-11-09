@@ -30,6 +30,14 @@ public final class ProblemResponses implements in.opennest.common.HttpFailureRes
     }
 
     void write(HttpServletResponse response, int status, Set<HttpMethod> allowedMethods) throws IOException {
+        write(response, status, allowedMethods, detail(status));
+    }
+
+    void writeContactRequired(HttpServletResponse response) throws IOException {
+        write(response, 403, Set.of(), "A separately verified +91 owner contact is required before publication. Contact verification is not available yet.");
+    }
+
+    private void write(HttpServletResponse response, int status, Set<HttpMethod> allowedMethods, String safeDetail) throws IOException {
         UUID errorId = UUID.randomUUID();
         if (status >= 500) {
             LOG.error("OpenNest HTTP error status={} errorId={}", status, errorId);
@@ -53,7 +61,7 @@ public final class ProblemResponses implements in.opennest.common.HttpFailureRes
         if (!allowedMethods.isEmpty()) {
             response.setHeader("Allow", String.join(", ", allowedMethods.stream().map(HttpMethod::name).sorted().toList()));
         }
-        var problem = ProblemDetail.forStatusAndDetail(HttpStatus.valueOf(status), detail(status));
+        var problem = ProblemDetail.forStatusAndDetail(HttpStatus.valueOf(status), safeDetail);
         problem.setType(URI.create("about:blank"));
         problem.setTitle(HttpStatus.valueOf(status).getReasonPhrase());
         problem.setInstance(URI.create("urn:uuid:" + errorId));
