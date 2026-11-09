@@ -4,6 +4,7 @@ import java.sql.SQLException;
 import java.util.UUID;
 import java.util.stream.Stream;
 
+import in.opennest.common.RequestFailure;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceException;
 import jakarta.persistence.TypedQuery;
@@ -151,6 +152,27 @@ class AccountStoreTransactionTests {
         verify(manager).getTransaction(definition.capture());
         assertThat(definition.getValue().isReadOnly()).isTrue();
         assertThat(definition.getValue().getPropagationBehavior()).isEqualTo(TransactionDefinition.PROPAGATION_REQUIRED);
+        verify(manager).rollback(status);
+        verify(manager, never()).commit(any());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void missingProfileRetainsRollbackFailureWithoutStackTrace() {
+        TypedQuery<UserEntity> query = mock(TypedQuery.class);
+        when(entityManager.createQuery(anyString(), eq(UserEntity.class))).thenReturn(query);
+        when(query.setParameter(anyString(), any())).thenReturn(query);
+        when(query.getSingleResultOrNull()).thenReturn(null);
+        var rollback = rollbackFailure();
+        doThrow(rollback).when(manager).rollback(status);
+
+        assertThat(catchThrowable(() -> accounts.profile(UUID.randomUUID())))
+                .isInstanceOfSatisfying(RequestFailure.class, failure -> {
+                    assertThat(failure.kind()).isEqualTo(RequestFailure.Kind.UNAUTHENTICATED);
+                    assertThat(failure.getSuppressed()).containsExactly(rollback);
+                    assertThat(failure.getStackTrace()).isEmpty();
+                    assertThat(failure.fillInStackTrace().getStackTrace()).isEmpty();
+                });
         verify(manager).rollback(status);
         verify(manager, never()).commit(any());
     }
