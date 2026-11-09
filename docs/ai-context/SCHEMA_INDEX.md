@@ -48,5 +48,5 @@
 - Trusted sandbox seeds include historical reveal rows for designated personas so normal review/report eligibility works despite disabled callable contact actions.
 - Quota and review aggregate changes need transaction/concurrency tests in their implementation phases.
 - V3 image metadata: nullable declared_content_type/declared_byte_size and content_type/byte_size/width/height; all-or-none groups, allowlisted types, 5 MiB and 20 MP checks. Legacy V2 rows remain valid; new service writes populate metadata. Six mappings now cover 76 columns.
-- listing_owner_profiles exposes only id/full_name/average_rating/review_count/broker_report_count. Listing reads may join it for summaries and rating sorts; no contacts or provider fields.
+- listing_owner_profiles exposes only id/full_name/average_rating/review_count/broker_report_count. Listing reads may join it for summaries and rating sorts; no contacts or provider fields. Schema comparisons require its presence and include its definition; drift/missing-view regressions run against both targets.
 - Phase 3 service enforcement: owner-row lock before listing/image locks; 20 retained/5 published listings, image/rate limits, exact versions, PAUSED preservation, explicit publication/contact/photo gates. Search items/count/image hydration use one repeatable-read snapshot.

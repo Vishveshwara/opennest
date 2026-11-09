@@ -10,6 +10,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
@@ -31,6 +33,33 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class R2StorageTests {
+    @Test void abortsTricklingStagingBodyAtTheTotalDeadline() throws Exception {
+        try (var fixture = new StorageFixture(Duration.ofSeconds(1))) {
+            fixture.chunkDelay = Duration.ofMillis(150);
+            long started = System.nanoTime();
+            failure(RequestFailure.Kind.UNAVAILABLE, () -> fixture.storage.read("listings/draft/image", fixture.bytes.length));
+            var elapsed = Duration.ofNanos(System.nanoTime() - started);
+            assertThat(elapsed).isBetween(Duration.ofMillis(600), Duration.ofSeconds(3));
+            assertThat(fixture.getCalls.get()).isEqualTo(1);
+            assertThat(fixture.getIfMatch).isEqualTo("\"staging-etag\"");
+            assertThat(fixture.bodyFinished.await(2, TimeUnit.SECONDS)).isTrue();
+            assertThat(fixture.sentBytes.get()).isLessThan(fixture.bytes.length);
+        }
+    }
+
+    @Test void headAndBodyShareOneTotalDeadline() throws Exception {
+        try (var fixture = new StorageFixture(Duration.ofSeconds(1))) {
+            fixture.headDelay = Duration.ofMillis(600);
+            fixture.chunkDelay = Duration.ofMillis(150);
+            long started = System.nanoTime();
+            failure(RequestFailure.Kind.UNAVAILABLE, () -> fixture.storage.read("listings/draft/image", fixture.bytes.length));
+            assertThat(Duration.ofNanos(System.nanoTime() - started)).isBetween(Duration.ofMillis(600), Duration.ofMillis(1600));
+            assertThat(fixture.getCalls.get()).isEqualTo(1);
+            assertThat(fixture.bodyFinished.await(2, TimeUnit.SECONDS)).isTrue();
+            assertThat(fixture.sentBytes.get()).isLessThan(5);
+        }
+    }
+
     @Test void readsTheHeadObjectThroughAConditionalGet() throws Exception {
         try (var fixture = new StorageFixture()) {
             assertThat(fixture.storage.read("listings/draft/image", fixture.bytes.length)).isEqualTo(fixture.bytes);
@@ -184,12 +213,19 @@ class R2StorageTests {
         final R2Storage storage;
         final AtomicInteger headCalls = new AtomicInteger();
         final AtomicInteger getCalls = new AtomicInteger();
+        final AtomicInteger sentBytes = new AtomicInteger();
+        final CountDownLatch bodyFinished = new CountDownLatch(1);
         volatile int headStatus = 200, getStatus = 200, putStatus = 200;
+        volatile Duration headDelay = Duration.ZERO, chunkDelay = Duration.ZERO;
         volatile long headLength = bytes.length;
         volatile String headPath, getPath, getIfMatch, putPath, putIfNoneMatch, putContentType, putCacheControl;
         volatile byte[] putBody;
 
         StorageFixture() throws IOException {
+            this(Duration.ofSeconds(20));
+        }
+
+        StorageFixture(Duration deadline) throws IOException {
             server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
             server.createContext("/", this::handle);
             server.setExecutor(executor); server.start();
@@ -201,7 +237,7 @@ class R2StorageTests {
                             .apiCallAttemptTimeout(Duration.ofSeconds(3)).retryPolicy(RetryPolicy.none())).build();
             var signer = S3Presigner.builder().endpointOverride(endpoint).region(Region.of("auto")).credentialsProvider(credentials)
                     .serviceConfiguration(configuration).build();
-            storage = new R2Storage(client, signer, "staging", "final");
+            storage = new R2Storage(client, signer, "staging", "final", deadline);
         }
 
         void handle(HttpExchange request) throws IOException {
@@ -210,6 +246,7 @@ class R2StorageTests {
                 int status = method.equals("HEAD") ? headStatus : method.equals("GET") ? getStatus : putStatus;
                 if (method.equals("HEAD")) {
                     headCalls.incrementAndGet(); headPath = request.getRequestURI().getPath();
+                    pause(headDelay);
                     request.getResponseHeaders().set("ETag", "\"staging-etag\"");
                     request.getResponseHeaders().set("Content-Length", status == 200 ? Long.toString(headLength) : "0");
                     request.sendResponseHeaders(status, -1); return;
@@ -219,7 +256,12 @@ class R2StorageTests {
                     getIfMatch = request.getRequestHeaders().getFirst("If-Match");
                     if (status == 200) {
                         request.getResponseHeaders().set("ETag", "\"staging-etag\"");
-                        request.sendResponseHeaders(200, bytes.length); request.getResponseBody().write(bytes); return;
+                        request.sendResponseHeaders(200, bytes.length);
+                        if (chunkDelay.isZero()) request.getResponseBody().write(bytes);
+                        else for (byte value : bytes) {
+                            request.getResponseBody().write(value); request.getResponseBody().flush(); sentBytes.incrementAndGet(); pause(chunkDelay);
+                        }
+                        return;
                     }
                 }
                 if (method.equals("PUT")) {
@@ -232,7 +274,14 @@ class R2StorageTests {
                         + "</Code><Message>Controlled test failure</Message></Error>").getBytes(StandardCharsets.UTF_8);
                 request.getResponseHeaders().set("Content-Type", "application/xml");
                 request.sendResponseHeaders(status, error.length); request.getResponseBody().write(error);
-            } finally { request.close(); }
+            } finally {
+                if (request.getRequestMethod().equals("GET")) bodyFinished.countDown();
+                request.close();
+            }
+        }
+        private static void pause(Duration duration) throws IOException {
+            try { Thread.sleep(duration); }
+            catch (InterruptedException failure) { Thread.currentThread().interrupt(); throw new IOException("Controlled HTTP fixture interrupted"); }
         }
         @Override public void close() { storage.close(); server.stop(0); executor.shutdownNow(); }
     }

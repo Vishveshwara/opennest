@@ -82,7 +82,7 @@ class IdentitySecurityConfiguration {
         return web -> web.requestRejectedHandler((request, response, failure) -> errors.write(response, 400));
     }
 
-    @Bean CorsConfigurationSource identityCors(Environment environment) {
+    @Bean({"identityCors", "applicationCors"}) CorsConfigurationSource identityCors(Environment environment) {
         var cors = new CorsConfiguration();
         cors.setAllowedOrigins(List.of(IdentitySettings.read(environment).selected(environment).frontendOrigin()));
         cors.setAllowCredentials(true);

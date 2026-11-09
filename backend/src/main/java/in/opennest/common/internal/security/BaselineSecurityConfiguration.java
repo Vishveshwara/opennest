@@ -23,8 +23,8 @@ class BaselineSecurityConfiguration {
         };
     }
 
-    @Bean
-    SecurityFilterChain baselineSecurity(HttpSecurity http, ProblemResponses responses, org.springframework.core.env.Environment environment) throws Exception {
+    @Bean({"baselineCors", "applicationCors"})
+    org.springframework.web.cors.CorsConfigurationSource baselineCors(org.springframework.core.env.Environment environment) {
         String mode = environment.getProperty("opennest.deployment.data-mode", "PRIMARY");
         String origin = environment.getProperty("opennest.identity." + (mode.equals("SANDBOX") ? "sandbox" : "primary") + ".frontend-origin", "http://localhost:3000");
         var cors = new org.springframework.web.cors.CorsConfiguration();
@@ -40,7 +40,13 @@ class BaselineSecurityConfiguration {
         cors.setAllowCredentials(true);
         var source = new org.springframework.web.cors.UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/api/v1/listings/**", cors);
-        var filter = new org.springframework.web.filter.CorsFilter(source);
+        return source;
+    }
+
+    @Bean
+    SecurityFilterChain baselineSecurity(HttpSecurity http, ProblemResponses responses,
+            org.springframework.web.cors.CorsConfigurationSource baselineCors) throws Exception {
+        var filter = new org.springframework.web.filter.CorsFilter(baselineCors);
         filter.setCorsProcessor(new org.springframework.web.cors.DefaultCorsProcessor() {
             @Override protected void rejectRequest(org.springframework.http.server.ServerHttpResponse response) throws java.io.IOException {
                 responses.write(((org.springframework.http.server.ServletServerHttpResponse) response).getServletResponse(), 403);

@@ -4,6 +4,11 @@ import java.net.URI;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import in.opennest.common.RequestFailure;
 import org.springframework.core.env.Environment;
@@ -11,6 +16,7 @@ import org.springframework.stereotype.Component;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3Configuration;
@@ -19,17 +25,27 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 @Component
 class R2Storage implements StorageObjects, AutoCloseable {
+    private static final Duration STORAGE_DEADLINE = Duration.ofSeconds(20);
+    private static final ScheduledThreadPoolExecutor DEADLINES = deadlines();
     private final S3Client client;
     private final S3Presigner signer;
     private final String staging;
     private final String finals;
+    private final Duration readDeadline;
 
     R2Storage(S3Client client, S3Presigner signer, String staging, String finals) {
+        this(client, signer, staging, finals, STORAGE_DEADLINE);
+    }
+
+    R2Storage(S3Client client, S3Presigner signer, String staging, String finals, Duration readDeadline) {
+        if (readDeadline.isNegative() || readDeadline.isZero()) throw new IllegalArgumentException();
         this.client = client; this.signer = signer; this.staging = staging; this.finals = finals;
+        this.readDeadline = readDeadline;
     }
 
     @org.springframework.beans.factory.annotation.Autowired
     R2Storage(Environment environment) {
+        readDeadline = STORAGE_DEADLINE;
         boolean production = "PRODUCTION".equals(environment.getProperty("opennest.deployment.environment", "DEVELOPMENT"));
         boolean sandbox = "SANDBOX".equals(environment.getProperty("opennest.deployment.data-mode", "PRIMARY"));
         var primary = settings(environment, "");
@@ -53,7 +69,7 @@ class R2Storage implements StorageObjects, AutoCloseable {
         var endpoint = URI.create("https://" + selected.get("account") + ".r2.cloudflarestorage.com");
         var configuration = S3Configuration.builder().chunkedEncodingEnabled(false).pathStyleAccessEnabled(true).build();
         client = S3Client.builder().credentialsProvider(credentials).endpointOverride(endpoint).region(Region.of("auto"))
-                .serviceConfiguration(configuration).overrideConfiguration(builder -> builder.apiCallTimeout(Duration.ofSeconds(20))
+                .serviceConfiguration(configuration).overrideConfiguration(builder -> builder.apiCallTimeout(STORAGE_DEADLINE)
                         .apiCallAttemptTimeout(Duration.ofSeconds(10))).build();
         signer = S3Presigner.builder().credentialsProvider(credentials).endpointOverride(endpoint).region(Region.of("auto"))
                 .serviceConfiguration(configuration).build();
@@ -77,11 +93,18 @@ class R2Storage implements StorageObjects, AutoCloseable {
     }
     @Override public byte[] read(String key, long expectedSize) {
         requireEnabled();
-        try {
-            var head = client.headObject(builder -> builder.bucket(staging).key(key));
+        try (var deadline = new ReadDeadline(readDeadline)) {
+            var remaining = deadline.remaining();
+            var head = client.headObject(builder -> builder.bucket(staging).key(key).overrideConfiguration(configuration -> configuration
+                    .apiCallTimeout(remaining).apiCallAttemptTimeout(remaining.compareTo(Duration.ofSeconds(10)) < 0 ? remaining : Duration.ofSeconds(10))));
             if (head.contentLength() != expectedSize || head.contentLength() > ListingMedia.MAX_BYTES) throw ListingInput.invalid();
-            try (var stream = client.getObject(builder -> builder.bucket(staging).key(key).ifMatch(head.eTag()))) {
+            var bodyRemaining = deadline.remaining();
+            try (var stream = client.getObject(builder -> builder.bucket(staging).key(key).ifMatch(head.eTag())
+                    .overrideConfiguration(configuration -> configuration.apiCallTimeout(bodyRemaining)
+                            .apiCallAttemptTimeout(bodyRemaining.compareTo(Duration.ofSeconds(10)) < 0 ? bodyRemaining : Duration.ofSeconds(10))))) {
+                deadline.attach(stream);
                 var bytes = stream.readNBytes(ListingMedia.MAX_BYTES + 1);
+                deadline.remaining();
                 ListingInput.require(bytes.length == expectedSize);
                 return bytes;
             }
@@ -115,4 +138,40 @@ class R2Storage implements StorageObjects, AutoCloseable {
         } catch (software.amazon.awssdk.core.exception.SdkException failure) { throw unavailable(); }
     }
     @Override public void close() { if (client != null) client.close(); if (signer != null) signer.close(); }
+
+    private static ScheduledThreadPoolExecutor deadlines() {
+        var executor = new ScheduledThreadPoolExecutor(1, Thread.ofPlatform().daemon().name("opennest-storage-deadline-", 0).factory());
+        executor.setRemoveOnCancelPolicy(true);
+        return executor;
+    }
+
+    private static final class ReadDeadline implements AutoCloseable {
+        private final long started = System.nanoTime();
+        private final long duration;
+        private final AtomicBoolean expired = new AtomicBoolean();
+        private final AtomicReference<ResponseInputStream<GetObjectResponse>> response = new AtomicReference<>();
+        private final ScheduledFuture<?> alarm;
+
+        ReadDeadline(Duration timeout) {
+            duration = timeout.toNanos();
+            alarm = DEADLINES.schedule(() -> {
+                expired.set(true);
+                var stream = response.get();
+                if (stream != null) stream.abort();
+            }, duration, TimeUnit.NANOSECONDS);
+        }
+        Duration remaining() {
+            long nanos = duration - (System.nanoTime() - started);
+            if (expired.get() || nanos <= 0) throw unavailable();
+            return Duration.ofNanos(nanos);
+        }
+        void attach(ResponseInputStream<GetObjectResponse> stream) {
+            response.set(stream);
+            if (expired.get() || System.nanoTime() - started >= duration) {
+                stream.abort();
+                throw unavailable();
+            }
+        }
+        @Override public void close() { alarm.cancel(false); }
+    }
 }

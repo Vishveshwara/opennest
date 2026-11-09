@@ -4,7 +4,7 @@ OpenNest is a zero-brokerage platform for finding flats and PG/hostel accommodat
 
 **Status:** Phase 1 foundation, Phase 2 identity and Phase 3 listings are implemented on Java 25/Spring Boot 4.1.1. Listings include drafts, owner retrieval, validated private image uploads, publication/inventory controls, and nationwide search. The [listing handoff](docs/LISTINGS_HANDOFF.md) records contracts, limits, verification, and pending provider checks. Interactions, the frontend, and public deployment remain outstanding.
 
-The complete Phase 3 Java 25/Docker gate passed 426 backend tests locally on 9 November 2026 with no failures, errors, or skips. Six Python verification tests, context limits, and packaged-fixture checks also passed. CI for these changes has not been run.
+The complete Phase 3 Java 25/Docker gate passed 450 backend tests locally after review corrections on 9 November 2026 with no failures, errors, or skips. Six Python verification tests, context limits, and packaged-fixture checks also passed. CI for these changes has not been run.
 
 **Planned website:** [opennest.co.in](https://opennest.co.in). The backend target is Java 25 with Spring Boot 4.1.1; DNS, TLS, and hosting readiness remain unverified.
 

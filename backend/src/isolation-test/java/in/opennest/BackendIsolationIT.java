@@ -260,8 +260,30 @@ class BackendIsolationIT {
             var handlers = unmodified.getBean(RequestMappingHandlerMapping.class).getHandlerMethods().values();
             assertThat(handlers).isNotEmpty().allSatisfy(handler -> assertThat(handler.getBeanType().getName())
                     .isIn("in.opennest.common.internal.web.SafeErrorController", "in.opennest.listing.internal.ListingController"));
+            assertListingRoutes(unmodified.getBean(RequestMappingHandlerMapping.class).getHandlerMethods());
             assertThat(unmodified.getBeansOfType(org.springframework.security.core.userdetails.UserDetailsService.class)).isEmpty();
         }
+    }
+
+    @Test void diagnosticListingGetIsNotAnAllowedRegisteredRoute() {
+        var mappings = new LinkedHashMap<>(contexts.getFirst().getBean(RequestMappingHandlerMapping.class).getHandlerMethods());
+        var controller = mappings.values().stream().filter(handler -> handler.getBeanType().getName().equals("in.opennest.listing.internal.ListingController")).findFirst().orElseThrow();
+        mappings.put(org.springframework.web.servlet.mvc.method.RequestMappingInfo.paths("/api/v1/listings/diagnostic")
+                .methods(org.springframework.web.bind.annotation.RequestMethod.GET).build(), controller);
+        assertThatThrownBy(() -> assertListingRoutes(mappings)).isInstanceOf(AssertionError.class);
+    }
+
+    private void assertListingRoutes(Map<org.springframework.web.servlet.mvc.method.RequestMappingInfo, org.springframework.web.method.HandlerMethod> mappings) {
+        var expected = java.util.Set.of("GET /api/v1/listings/search", "GET /api/v1/listings/mine", "GET /api/v1/listings/{id}",
+                "POST /api/v1/listings", "POST /api/v1/listings/{id}/publish", "POST /api/v1/listings/{id}/pause",
+                "PATCH /api/v1/listings/{id}/inventory", "POST /api/v1/listings/{id}/images/presign", "POST /api/v1/listings/{id}/images/complete");
+        var actual = new java.util.ArrayList<String>();
+        mappings.forEach((mapping, handler) -> {
+            if (!handler.getBeanType().getName().equals("in.opennest.listing.internal.ListingController")) return;
+            assertThat(mapping.getMethodsCondition().getMethods()).hasSize(1);
+            mapping.getPatternValues().forEach(path -> mapping.getMethodsCondition().getMethods().forEach(method -> actual.add(method.name() + " " + path)));
+        });
+        assertThat(actual).containsExactlyInAnyOrderElementsOf(expected);
     }
 
     @ParameterizedTest

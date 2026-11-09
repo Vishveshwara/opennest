@@ -51,6 +51,9 @@ jobs:
       - name: Verify test discovery, results, and packaged boundaries
         if: always() && !cancelled()
         run: python3 .github/scripts/verify_backend.py --reports
+      - name: Require listing query-plan evidence
+        if: always() && !cancelled()
+        run: test -f backend/target/listing-query-plans.txt
       - name: Upload verification reports
         if: always() && !cancelled()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

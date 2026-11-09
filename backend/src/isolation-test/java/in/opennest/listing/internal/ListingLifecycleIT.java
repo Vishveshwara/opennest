@@ -148,28 +148,50 @@ class ListingLifecycleIT {
         assertThatThrownBy(() -> media().complete(id, owner, node(json.writeValueAsString(Map.of("imageId", pending))))).isInstanceOf(RequestFailure.class);
     }
     @Test void allSortsFiltersGeoAndPaginationRunAgainstPostgisWithoutDuplicateCards() throws Exception {
-        UUID owner = owner(0, true);
-        for (String mode : List.of("ENTIRE_FLAT", "ROOM", "PG_HOSTEL")) {
-            UUID id = (UUID) as(owner, () -> service().create(draft(mode, "SearchCity", 11000))).get("id");
+        var ids = new ArrayList<UUID>();
+        var modes = List.of("ENTIRE_FLAT", "ROOM", "PG_HOSTEL", "ROOM");
+        var rents = List.of(9000, 5000, 5000, 12000);
+        var created = List.of("2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z", "2026-01-02T00:00:00Z", "2026-01-03T00:00:00Z");
+        var latitudes = List.of(12.9717, 12.9718, 12.9718, 12.9720);
+        for (int index = 0; index < modes.size(); index++) {
+            UUID owner = owner(0, true);
+            String mode = modes.get(index); int rent = rents.get(index);
+            UUID id = (UUID) as(owner, () -> service().create(draft(mode, "SearchCity", rent))).get("id");
             images(id, owner, mode); as(owner, () -> service().change(id, node("{\"version\":0}"), "publish"));
+            jdbc(0).update("update properties set created_at=?, latitude=? where id=?", Timestamp.from(Instant.parse(created.get(index))), latitudes.get(index), id);
+            if (index < 3) jdbc(0).update("update users set review_count=3,average_rating=? where id=?", index == 2 ? 2.0 : 4.8, owner);
+            if (index == 2) jdbc(0).update("update properties set male_rooms_available=3 where id=?", id);
+            ids.add(id);
         }
+        var tie23 = ordered(ids.get(1), ids.get(2)); var tie24 = ordered(ids.get(1), ids.get(3)); var tie12 = ordered(ids.get(0), ids.get(1));
+        var expected = Map.of(
+                "NEWEST", List.of(ids.get(3), tie23.get(0), tie23.get(1), ids.get(0)),
+                "RENT_ASC", List.of(tie23.get(0), tie23.get(1), ids.get(0), ids.get(3)),
+                "RENT_DESC", List.of(ids.get(3), ids.get(0), tie23.get(0), tie23.get(1)),
+                "ROOMS_DESC", List.of(ids.get(2), tie24.get(0), tie24.get(1), ids.get(0)),
+                "RATING_DESC", List.of(tie12.get(0), tie12.get(1), ids.get(2), ids.get(3)),
+                "DISTANCE_ASC", List.of(ids.get(0), tie23.get(0), tie23.get(1), ids.get(3)));
         for (String sort : List.of("NEWEST", "RENT_ASC", "RENT_DESC", "ROOMS_DESC", "RATING_DESC", "DISTANCE_ASC")) {
             var query = query("city", " searchcity ", "size", "2", "sort", sort, "lat", "12.9716", "lng", "77.5946", "radiusKm", "1");
             var first = service().search(query, false);
-            assertThat(first).containsEntry("totalElements", 3L).containsEntry("totalPages", 2L).containsEntry("hasNext", true);
-            assertThat((List<?>) first.get("items")).hasSize(2);
+            assertThat(first).containsEntry("totalElements", 4L).containsEntry("totalPages", 2L).containsEntry("hasNext", true).containsEntry("sort", sort);
+            assertThat(itemIds(first)).as(sort + " first page").containsExactlyElementsOf(expected.get(sort).subList(0, 2));
             query.set("page", "1");
             var last = service().search(query, false);
-            assertThat((List<?>) last.get("items")).hasSize(1);
+            assertThat(itemIds(last)).as(sort + " second page").containsExactlyElementsOf(expected.get(sort).subList(2, 4));
             assertThat(last).containsEntry("hasPrevious", true).containsEntry("hasNext", false);
         }
-        assertThat(service().search(query("city", "SearchCity", "minBedrooms", "3", "maxBedrooms", "3", "hasWifi", "true"), false)).containsEntry("totalElements", 2L);
-        assertThat(service().search(query("city", "SearchCity", "minTotalRooms", "1", "genderRoomAvailable", "MALE", "maxSharingPerRoom", "2"), false)).containsEntry("totalElements", 2L);
+        assertThat(service().search(query("city", "SearchCity", "minBedrooms", "3", "maxBedrooms", "3", "hasWifi", "true"), false)).containsEntry("totalElements", 3L);
+        assertThat(service().search(query("city", "SearchCity", "minTotalRooms", "1", "genderRoomAvailable", "MALE", "maxSharingPerRoom", "2"), false)).containsEntry("totalElements", 3L);
         assertThat(service().search(query("city", "SearchCity", "hasWifi", "false"), false)).containsEntry("totalElements", 0L);
-        assertThat(service().search(query("city", "SearchCity", "page", "500", "size", "20"), false)).containsEntry("totalElements", 3L);
+        assertThat(service().search(query("city", "SearchCity", "page", "500", "size", "20"), false)).containsEntry("totalElements", 4L);
         assertThat((Long) service().search(query(), false).get("totalElements")).isGreaterThanOrEqualTo(3L);
         assertThat(jdbc(0).queryForList("explain select id from properties where status='ACTIVE' order by created_at desc,id asc limit 20")).isNotEmpty();
         assertThat(jdbc(0).queryForList("explain select id from properties where status='ACTIVE' and city='SEARCHCITY' and monthly_rent between 5000 and 15000 order by monthly_rent asc,id asc limit 20")).isNotEmpty();
+    }
+    private List<UUID> ordered(UUID... ids) { return Arrays.stream(ids).sorted(Comparator.comparing(UUID::toString)).toList(); }
+    private List<UUID> itemIds(Map<String, Object> page) {
+        return ((List<?>) page.get("items")).stream().map(item -> (UUID) ((Map<?, ?>) item).get("id")).toList();
     }
     @Test void browserSecurityPrivacyStrictJsonAndSandboxReplay() throws Exception {
         UUID owner = owner(0, false);
@@ -219,6 +241,27 @@ class ListingLifecycleIT {
         assertThat((List<?>) result.get("items")).hasSize(1);
         assertThat(service().search(query("city", "SnapshotCity"), false)).containsEntry("totalElements", 0L);
     }
+    @Test void standaloneSearchOpensItsOwnSnapshotBeforeConcurrentCountAndPageUpdate() throws Exception {
+        UUID owner = owner(0, true);
+        UUID id = (UUID) as(owner, () -> service().create(draft("PG_HOSTEL", "StandaloneSnapshotCity", 7000))).get("id");
+        images(id, owner, "PG_HOSTEL"); as(owner, () -> service().change(id, node("{\"version\":0}"), "publish"));
+        var jdbc = apps.getFirst().getBean(SnapshotJdbc.class);
+        var committed = new CountDownLatch(1);
+        jdbc.afterCount.set(() -> {
+            try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+                executor.submit(() -> {
+                    jdbc(0).update("update properties set status='PAUSED' where id=?", id); committed.countDown();
+                }).get(10, TimeUnit.SECONDS);
+            } catch (Exception failure) { throw new AssertionError(failure); }
+        });
+        Map<String, Object> result;
+        try { result = service().search(query("city", "StandaloneSnapshotCity"), false); }
+        finally { jdbc.afterCount.set(null); }
+        assertThat(committed.getCount()).isZero();
+        assertThat(result).containsEntry("totalElements", 1L);
+        assertThat(itemIds(result)).containsExactly(id);
+        assertThat(service().search(query("city", "StandaloneSnapshotCity"), false)).containsEntry("totalElements", 0L);
+    }
     @Test void googleDisabledBrowsingHasExactOriginCorsAndNoAuthenticatedRoutes() throws Exception {
         var configuration = settings(0); configuration.put("OPENNEST_GOOGLE_ENABLED", "false");
         try (var application = new SpringApplication(OpenNestApplication.class).run(configuration.entrySet().stream()
@@ -236,7 +279,26 @@ class ListingLifecycleIT {
             assertThat(http.send(HttpRequest.newBuilder(URI.create(origin + "/api/v1/listings/mine")).GET().build(), HttpResponse.BodyHandlers.ofString()).statusCode()).isEqualTo(401);
         }
     }
-    @Test void upgradesPopulatedV2WithoutChangingHistoricalMigrations() {
+    @Test void encodedListingPathKeepsLimitsAndCorsAheadOfLaterSecurityFilter() throws Exception {
+        var configuration = settings(0);
+        configuration.put("spring.security.filter.order", "-80"); configuration.put("server.servlet.context-path", "/context");
+        try (var application = new SpringApplication(OpenNestApplication.class, StorageConfiguration.class).run(configuration.entrySet().stream()
+                .map(entry -> "--" + entry.getKey() + "=" + entry.getValue()).toArray(String[]::new))) {
+            String origin = "http://127.0.0.1:" + application.getEnvironment().getProperty("local.server.port");
+            for (String path : List.of("/context/api/v1/listings", "/context/%61pi/v1/listings")) {
+                var duplicate = http.send(HttpRequest.newBuilder(URI.create(origin + path)).header("Origin", "https://opennest.example.invalid")
+                        .header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString("{\"title\":\"a\",\"title\":\"b\"}")).build(), HttpResponse.BodyHandlers.ofString());
+                assertThat(duplicate.statusCode()).isEqualTo(400);
+                assertThat(duplicate.headers().firstValue("Access-Control-Allow-Origin")).contains("https://opennest.example.invalid");
+                assertThat(json.readTree(duplicate.body()).get("detail").asString()).isEqualTo("The request is invalid.");
+                var oversized = http.send(HttpRequest.newBuilder(URI.create(origin + path)).header("Origin", "https://opennest.example.invalid")
+                        .header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString(" ".repeat(32769))).build(), HttpResponse.BodyHandlers.ofString());
+                assertThat(oversized.statusCode()).isEqualTo(413);
+                assertThat(oversized.headers().firstValue("Access-Control-Allow-Origin")).contains("https://opennest.example.invalid");
+            }
+        }
+    }
+    @Test void upgradesPopulatedV2WithoutChangingHistoricalMigrations() throws Exception {
         jdbc(0).execute("create database opennest_listing_upgrade");
         var db = databases.getFirst();
         var datasource = new org.springframework.jdbc.datasource.DriverManagerDataSource(
@@ -251,6 +313,22 @@ class ListingLifecycleIT {
         org.flywaydb.core.Flyway.configure().dataSource(datasource).load().migrate();
         assertThat(jdbc.queryForList("select checksum from flyway_schema_history where version in ('1','2') order by installed_rank", Integer.class)).isEqualTo(checksums);
         assertThat(jdbc.queryForObject("select count(*) from property_images where id=? and declared_byte_size is null", Long.class, image)).isEqualTo(1L);
+        var legacySettings = settings(0); legacySettings.put("DB_NAME", "opennest_listing_upgrade");
+        try (var legacy = new SpringApplication(OpenNestApplication.class, StorageConfiguration.class).run(legacySettings.entrySet().stream()
+                .map(entry -> "--" + entry.getKey() + "=" + entry.getValue()).toArray(String[]::new))) {
+            var body = node(json.writeValueAsString(Map.of("imageId", image)));
+            assertThatThrownBy(() -> legacy.getBean(ListingMedia.class).complete(property, owner, body))
+                    .isInstanceOfSatisfying(RequestFailure.class, failure -> assertThat(failure.kind()).isEqualTo(RequestFailure.Kind.CONFLICT));
+            String cookie = savedSession(legacy.getBean(RedisSessionRepository.class), 0, owner, "production:primary");
+            String origin = "http://127.0.0.1:" + legacy.getEnvironment().getProperty("local.server.port");
+            var csrfResponse = http.send(HttpRequest.newBuilder(URI.create(origin + "/api/v1/auth/csrf")).header("Cookie", cookie).GET().build(), HttpResponse.BodyHandlers.ofString());
+            String csrf = json.readTree(csrfResponse.body()).get("token").asString();
+            var response = http.send(HttpRequest.newBuilder(URI.create(origin + "/api/v1/listings/" + property + "/images/complete"))
+                    .header("Cookie", cookie).header("X-CSRF-TOKEN", csrf).header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(body))).build(), HttpResponse.BodyHandlers.ofString());
+            assertThat(response.statusCode()).isEqualTo(409);
+            assertThat(json.readTree(response.body()).get("detail").asString()).isEqualTo("The request conflicts with the current state.");
+        }
         assertThat(org.flywaydb.core.Flyway.configure().dataSource(datasource).load().migrate().migrationsExecuted).isZero();
     }
     @Test void reservationRateSurvivesExpiredUploadSlots() {
@@ -373,6 +451,19 @@ class ListingLifecycleIT {
     @TestConfiguration(proxyBeanMethods = false)
     static class StorageConfiguration {
         @Bean @Primary ControlledStorage controlledStorage() { return new ControlledStorage(); }
+        @Bean @Primary SnapshotJdbc snapshotJdbc(javax.sql.DataSource dataSource) { return new SnapshotJdbc(dataSource); }
+    }
+    static class SnapshotJdbc extends JdbcTemplate {
+        final java.util.concurrent.atomic.AtomicReference<Runnable> afterCount = new java.util.concurrent.atomic.AtomicReference<>();
+        SnapshotJdbc(javax.sql.DataSource dataSource) { super(dataSource); }
+        @Override public <T> T query(org.springframework.jdbc.core.PreparedStatementCreator creator,
+                org.springframework.jdbc.core.PreparedStatementSetter setter, org.springframework.jdbc.core.ResultSetExtractor<T> extractor) {
+            T result = super.query(creator, setter, extractor);
+            if (creator instanceof org.springframework.jdbc.core.SqlProvider sql && sql.getSql().startsWith("select count(*) from properties p join listing_owner_profiles")) {
+                var callback = afterCount.getAndSet(null); if (callback != null) callback.run();
+            }
+            return result;
+        }
     }
     static class ControlledStorage implements StorageObjects {
         final Map<String, byte[]> staging = new ConcurrentHashMap<>(), finals = new ConcurrentHashMap<>();

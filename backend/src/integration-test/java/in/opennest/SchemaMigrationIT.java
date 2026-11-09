@@ -152,6 +152,7 @@ class SchemaMigrationIT {
                         """));
                 current += String.join("\n", strings(connection, "SELECT conrelid::regclass::text || ':' || conname || ':' || pg_get_constraintdef(oid) FROM pg_constraint WHERE connamespace='public'::regnamespace AND conname ~ '^(pk_|uq_|fk_|ck_)' ORDER BY conname"));
                 current += String.join("\n", strings(connection, "SELECT indexdef FROM pg_indexes WHERE schemaname='public' AND indexname LIKE 'ix_%' ORDER BY indexname"));
+                current += "\n" + ownerProfileViewFingerprint(connection);
                 var currentHistory = strings(connection, "SELECT version || ':' || checksum || ':' || success FROM public.flyway_schema_history WHERE version IS NOT NULL ORDER BY installed_rank");
                 assertThat(currentHistory).hasSize(3);
                 if (fingerprint != null) {
@@ -163,6 +164,29 @@ class SchemaMigrationIT {
                 assertThat(value(connection, "SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name IN ('users','auth_identities','properties','property_images','contact_reveals','owner_reviews')")).isEqualTo(76L);
                 assertThat(value(connection, "SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND is_generated='ALWAYS'")).isEqualTo(3L);
                 assertThat(value(connection, "SELECT count(*) FROM pg_constraint WHERE connamespace='public'::regnamespace AND contype='f' AND confdeltype='r' AND confupdtype='r' AND NOT condeferrable")).isEqualTo(7L);
+            }
+        }
+    }
+
+    private String ownerProfileViewFingerprint(Connection connection) throws SQLException {
+        var views = strings(connection, "SELECT schemaname || '.' || viewname || ':' || definition FROM pg_views WHERE schemaname='public' AND viewname='listing_owner_profiles' ORDER BY viewname");
+        assertThat(views).as("The listing owner projection must exist as a view").hasSize(1);
+        return views.getFirst();
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1})
+    void ownerProfileViewFingerprintDetectsDefinitionDriftAndMissingView(int target) throws Exception {
+        try (var connection = databases.get(target).connect()) {
+            connection.setAutoCommit(false);
+            try {
+                String original = ownerProfileViewFingerprint(connection);
+                execute(connection, "CREATE OR REPLACE VIEW public.listing_owner_profiles AS SELECT id, full_name || '' AS full_name, average_rating, review_count, broker_report_count FROM public.users");
+                assertThat(ownerProfileViewFingerprint(connection)).isNotEqualTo(original);
+                execute(connection, "DROP VIEW public.listing_owner_profiles");
+                assertThatThrownBy(() -> ownerProfileViewFingerprint(connection)).isInstanceOf(AssertionError.class);
+            } finally {
+                connection.rollback();
             }
         }
     }

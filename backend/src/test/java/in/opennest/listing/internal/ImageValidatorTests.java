@@ -4,6 +4,7 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.zip.CRC32;
@@ -12,6 +13,7 @@ import in.opennest.common.RequestFailure;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -35,7 +37,45 @@ class ImageValidatorTests {
         var decoded = ImageIO.read(new ByteArrayInputStream(validated.bytes()));
         assertThat(decoded.getWidth()).isEqualTo(24);
         assertThat(decoded.getHeight()).isEqualTo(16);
+        assertColor(decoded.getRGB(12, 8), 0xff285078, format.equals("jpeg") ? 6 : 0);
         assertThat(validated.toString()).isEqualTo("Validated[private]");
+    }
+
+    @ParameterizedTest @CsvSource({"1,0,1,2,3", "2,1,0,3,2", "3,3,2,1,0", "4,2,3,0,1",
+            "5,0,2,1,3", "6,2,0,3,1", "7,3,1,2,0", "8,1,3,0,2"})
+    void appliesAllExifOrientationsToPixelsAndStripsTheTag(int orientation, int topLeft, int topRight, int bottomLeft, int bottomRight) throws Exception {
+        int[] colors = {0xffd02020, 0xff20b040, 0xff2040c0, 0xffd0b020};
+        var source = new BufferedImage(80, 48, BufferedImage.TYPE_INT_RGB);
+        for (int y = 0; y < 48; y++) for (int x = 0; x < 80; x++) source.setRGB(x, y, colors[(y >= 24 ? 2 : 0) + (x >= 40 ? 1 : 0)]);
+        var encoded = new ByteArrayOutputStream();
+        assertThat(ImageIO.write(source, "jpeg", encoded)).isTrue();
+        for (var order : new ByteOrder[]{ByteOrder.BIG_ENDIAN, ByteOrder.LITTLE_ENDIAN}) {
+            byte[] original = withOrientation(encoded.toByteArray(), orientation, order);
+            var validated = ImageValidator.validate(original, "image/jpeg");
+            int width = orientation >= 5 ? 48 : 80, height = orientation >= 5 ? 80 : 48;
+            assertThat(validated.width()).isEqualTo(width);
+            assertThat(validated.height()).isEqualTo(height);
+            assertThat(new String(validated.bytes(), StandardCharsets.ISO_8859_1)).doesNotContain("Exif");
+            var decoded = ImageIO.read(new ByteArrayInputStream(validated.bytes()));
+            assertThat(decoded.getWidth()).isEqualTo(width);
+            assertThat(decoded.getHeight()).isEqualTo(height);
+            assertColor(decoded.getRGB(width / 4, height / 4), colors[topLeft], 12);
+            assertColor(decoded.getRGB(width * 3 / 4, height / 4), colors[topRight], 12);
+            assertColor(decoded.getRGB(width / 4, height * 3 / 4), colors[bottomLeft], 12);
+            assertColor(decoded.getRGB(width * 3 / 4, height * 3 / 4), colors[bottomRight], 12);
+        }
+    }
+
+    @ParameterizedTest @ValueSource(ints = {0, 9})
+    void rejectsInvalidExifOrientationValues(int orientation) throws Exception {
+        byte[] original = withOrientation(image("jpeg", false), orientation, ByteOrder.BIG_ENDIAN);
+        invalid(() -> ImageValidator.validate(original, "image/jpeg"));
+    }
+
+    @Test void rejectsExifDirectoryOutsideItsMetadataSegment() throws Exception {
+        byte[] original = withOrientation(image("jpeg", false), 6, ByteOrder.BIG_ENDIAN);
+        ByteBuffer.wrap(original).putInt(16, Integer.MAX_VALUE);
+        invalid(() -> ImageValidator.validate(original, "image/jpeg"));
     }
 
     @Test void removesPngTextMetadataFromFinalPixels() throws Exception {
@@ -94,6 +134,23 @@ class ImageValidatorTests {
         var output = new ByteArrayOutputStream();
         assertThat(ImageIO.write(image, format, output)).isTrue();
         return output.toByteArray();
+    }
+    private static byte[] withOrientation(byte[] jpeg, int orientation, ByteOrder order) {
+        var metadata = ByteBuffer.allocate(32).order(order);
+        metadata.put("Exif\0\0".getBytes(StandardCharsets.US_ASCII));
+        metadata.put((byte) (order == ByteOrder.LITTLE_ENDIAN ? 'I' : 'M'));
+        metadata.put((byte) (order == ByteOrder.LITTLE_ENDIAN ? 'I' : 'M'));
+        metadata.putShort((short) 42).putInt(8).putShort((short) 1).putShort((short) 274).putShort((short) 3).putInt(1)
+                .putShort((short) orientation).putShort((short) 0).putInt(0);
+        var segment = ByteBuffer.allocate(36).put((byte) 255).put((byte) 225).putShort((short) 34).put(metadata.array()).array();
+        return insert(jpeg, 2, segment);
+    }
+    private static void assertColor(int actual, int expected, int tolerance) {
+        assertThat(actual >>> 24).isEqualTo(255);
+        for (int shift : new int[]{16, 8, 0}) {
+            int expectedChannel = expected >> shift & 255;
+            assertThat(actual >> shift & 255).isBetween(expectedChannel - tolerance, expectedChannel + tolerance);
+        }
     }
     private static byte[] imageUnchecked(String format, boolean alpha) {
         try { return image(format, alpha); } catch (Exception failure) { throw new AssertionError(failure); }

@@ -25,6 +25,7 @@ UNIT_SUITES = {
     "in.opennest.listing.internal.ListingSearchTests",
     "in.opennest.listing.internal.ImageValidatorTests",
     "in.opennest.listing.internal.R2StorageTests",
+    "in.opennest.listing.internal.ListingRequestLimitTests",
 }
 INTEGRATION_SUITES = {"in.opennest.SchemaMigrationIT", "in.opennest.BackendIsolationIT", "in.opennest.IdentityAuthenticationIT", "in.opennest.listing.internal.ListingLifecycleIT"}
 
