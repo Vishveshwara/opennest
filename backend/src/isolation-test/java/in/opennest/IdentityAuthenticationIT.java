@@ -298,7 +298,9 @@ class IdentityAuthenticationIT {
         var authenticated = login(0, "profile-database-down-user");
         var browser = new Browser(0);
         var callback = browser.authorize("valid", "database-down-user");
+        assertThat(repository(0).findById(authenticated.sessionId()) != null).as("Profile session exists before outage").isTrue();
         databases.getFirst().stop();
+        assertThat(repository(0).findById(authenticated.sessionId()) != null).as("Profile session survives database outage").isTrue();
         var profile = authenticated.get("/api/v1/users/me");
         assertThat(profile.statusCode()).as("Outage failure chain: %s", outageFailureChain()).isEqualTo(503);
         assertThat(profile.body()).contains("The service is temporarily unavailable").doesNotContain("profile-database-down-user");

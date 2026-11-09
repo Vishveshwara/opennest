@@ -82,7 +82,7 @@ public class AccountStore implements IdentityAccounts {
 
     public AccountProfile profile(UUID id) {
         return transact(readTransaction, () -> {
-            var user = entityManager.find(UserEntity.class, id);
+            var user = user(id);
             if (user == null) throw new RequestFailure(RequestFailure.Kind.UNAUTHENTICATED);
             return new AccountProfile(user.id, user.fullName, user.role.name(), user.phoneNumber, verified(user),
                     user.averageRating, user.reviewCount, user.brokerReportCount,
@@ -93,13 +93,18 @@ public class AccountStore implements IdentityAccounts {
     @Override
     public boolean hasVerifiedContact(UUID userId) {
         return transact(readTransaction, () -> {
-            var user = entityManager.find(UserEntity.class, userId);
+            var user = user(userId);
             return user != null && verified(user);
         });
     }
 
     private boolean verified(UserEntity user) {
         return user.phoneVerifiedAt != null && user.phoneNumber != null && user.phoneNumber.matches("\\+91[0-9]{10}");
+    }
+
+    private UserEntity user(UUID id) {
+        return entityManager.createQuery("select u from UserEntity u where u.id = :id", UserEntity.class)
+                .setParameter("id", id).getSingleResultOrNull();
     }
 
     private AuthIdentityEntity identity(String issuer, String subject) {

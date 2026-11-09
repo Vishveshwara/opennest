@@ -58,6 +58,8 @@ Local verification passed on 1 November 2026 under Temurin Java 25.0.4.1 and Lin
 
 The 8 November review fix preserves the original account operation failure when database rollback also fails. Login and concurrent-signup recovery retain independent transactions; profile/contact reads retain read-only participation in an existing transaction. Nine regression cases cover rollback, transaction start/commit failures, and successful account reuse. All 217 current default tests passed locally. The real-store suite also checks an authenticated profile during database shutdown; inspect current PR results for its verification. Unexpected application failures remain generic 500 responses.
 
+Profile/contact reads use typed queries to preserve database connection errors. The pinned Hibernate `find()` path can return null after a connection error marks the transaction rollback-only, causing an outage to look like a missing account. The real-store outage case requires a 503 response for an authenticated profile.
+
 On 3 November 2026, the maintainer reported successful local Google sign-in after configuring the real OAuth client and using the Windows launcher. This is maintainer-reported browser evidence, separate from the automated controlled-provider suite. Repeated real-provider login, denial, and CSRF-protected logout have not been separately confirmed manually.
 
 Inspect current PR checks separately before claiming CI success. Production/sandbox OAuth registrations and hosted browser routing remain unverified. No public hosting, merge, or deployment is part of Phase 2.

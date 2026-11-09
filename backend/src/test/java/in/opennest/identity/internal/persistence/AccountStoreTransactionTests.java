@@ -135,7 +135,7 @@ class AccountStoreTransactionTests {
     void preservesReadOutageWhenRollbackAlsoFails(String operation) {
         var outage = new PersistenceException(new SQLException("fabricated outage", "57P01"));
         var rollback = rollbackFailure();
-        when(entityManager.find(eq(UserEntity.class), any())).thenThrow(outage);
+        when(entityManager.createQuery(anyString(), eq(UserEntity.class))).thenThrow(outage);
         doThrow(rollback).when(manager).rollback(status);
         var factory = new ProxyFactory(accounts);
         factory.setProxyTargetClass(true);
