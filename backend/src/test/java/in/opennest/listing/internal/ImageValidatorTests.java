@@ -49,8 +49,8 @@ class ImageValidatorTests {
         for (int y = 0; y < 48; y++) for (int x = 0; x < 80; x++) source.setRGB(x, y, colors[(y >= 24 ? 2 : 0) + (x >= 40 ? 1 : 0)]);
         var encoded = new ByteArrayOutputStream();
         assertThat(ImageIO.write(source, "jpeg", encoded)).isTrue();
-        for (var order : new ByteOrder[]{ByteOrder.BIG_ENDIAN, ByteOrder.LITTLE_ENDIAN}) {
-            byte[] original = withOrientation(encoded.toByteArray(), orientation, order);
+        for (var order : new ByteOrder[]{ByteOrder.BIG_ENDIAN, ByteOrder.LITTLE_ENDIAN}) for (boolean precedingEntry : new boolean[]{false, true}) {
+            byte[] original = withOrientation(encoded.toByteArray(), orientation, order, precedingEntry);
             var validated = ImageValidator.validate(original, "image/jpeg");
             int width = orientation >= 5 ? 48 : 80, height = orientation >= 5 ? 80 : 48;
             assertThat(validated.width()).isEqualTo(width);
@@ -136,13 +136,19 @@ class ImageValidatorTests {
         return output.toByteArray();
     }
     private static byte[] withOrientation(byte[] jpeg, int orientation, ByteOrder order) {
-        var metadata = ByteBuffer.allocate(32).order(order);
+        return withOrientation(jpeg, orientation, order, false);
+    }
+    private static byte[] withOrientation(byte[] jpeg, int orientation, ByteOrder order, boolean precedingEntry) {
+        int metadataSize = precedingEntry ? 44 : 32;
+        var metadata = ByteBuffer.allocate(metadataSize).order(order);
         metadata.put("Exif\0\0".getBytes(StandardCharsets.US_ASCII));
         metadata.put((byte) (order == ByteOrder.LITTLE_ENDIAN ? 'I' : 'M'));
         metadata.put((byte) (order == ByteOrder.LITTLE_ENDIAN ? 'I' : 'M'));
-        metadata.putShort((short) 42).putInt(8).putShort((short) 1).putShort((short) 274).putShort((short) 3).putInt(1)
+        metadata.putShort((short) 42).putInt(8).putShort((short) (precedingEntry ? 2 : 1));
+        if (precedingEntry) metadata.putShort((short) 256).putShort((short) 4).putInt(1).putInt(80);
+        metadata.putShort((short) 274).putShort((short) 3).putInt(1)
                 .putShort((short) orientation).putShort((short) 0).putInt(0);
-        var segment = ByteBuffer.allocate(36).put((byte) 255).put((byte) 225).putShort((short) 34).put(metadata.array()).array();
+        var segment = ByteBuffer.allocate(metadataSize + 4).put((byte) 255).put((byte) 225).putShort((short) (metadataSize + 2)).put(metadata.array()).array();
         return insert(jpeg, 2, segment);
     }
     private static void assertColor(int actual, int expected, int tolerance) {

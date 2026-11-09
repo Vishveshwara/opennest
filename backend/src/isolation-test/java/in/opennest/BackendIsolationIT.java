@@ -265,9 +265,11 @@ class BackendIsolationIT {
         }
     }
 
-    @Test void diagnosticListingGetIsNotAnAllowedRegisteredRoute() {
+    @ParameterizedTest
+    @ValueSource(strings = {"in.opennest.listing.internal.ListingController", "in.opennest.common.internal.web.SafeErrorController"})
+    void diagnosticListingGetIsNotAnAllowedRegisteredRoute(String controllerType) {
         var mappings = new LinkedHashMap<>(contexts.getFirst().getBean(RequestMappingHandlerMapping.class).getHandlerMethods());
-        var controller = mappings.values().stream().filter(handler -> handler.getBeanType().getName().equals("in.opennest.listing.internal.ListingController")).findFirst().orElseThrow();
+        var controller = mappings.values().stream().filter(handler -> handler.getBeanType().getName().equals(controllerType)).findFirst().orElseThrow();
         mappings.put(org.springframework.web.servlet.mvc.method.RequestMappingInfo.paths("/api/v1/listings/diagnostic")
                 .methods(org.springframework.web.bind.annotation.RequestMethod.GET).build(), controller);
         assertThatThrownBy(() -> assertListingRoutes(mappings)).isInstanceOf(AssertionError.class);
@@ -279,9 +281,10 @@ class BackendIsolationIT {
                 "PATCH /api/v1/listings/{id}/inventory", "POST /api/v1/listings/{id}/images/presign", "POST /api/v1/listings/{id}/images/complete");
         var actual = new java.util.ArrayList<String>();
         mappings.forEach((mapping, handler) -> {
-            if (!handler.getBeanType().getName().equals("in.opennest.listing.internal.ListingController")) return;
+            var paths = mapping.getPatternValues().stream().filter(path -> path.equals("/api/v1/listings") || path.startsWith("/api/v1/listings/")).toList();
+            if (paths.isEmpty()) return;
             assertThat(mapping.getMethodsCondition().getMethods()).hasSize(1);
-            mapping.getPatternValues().forEach(path -> mapping.getMethodsCondition().getMethods().forEach(method -> actual.add(method.name() + " " + path)));
+            paths.forEach(path -> mapping.getMethodsCondition().getMethods().forEach(method -> actual.add(method.name() + " " + path)));
         });
         assertThat(actual).containsExactlyInAnyOrderElementsOf(expected);
     }

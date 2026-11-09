@@ -60,6 +60,20 @@ class R2StorageTests {
         }
     }
 
+    @Test void getHeadersCannotOutlastTheRemainingTotalDeadline() throws Exception {
+        try (var fixture = new StorageFixture(Duration.ofSeconds(1))) {
+            fixture.headDelay = Duration.ofMillis(600);
+            fixture.getHeaderDelay = Duration.ofSeconds(2);
+            long started = System.nanoTime();
+            failure(RequestFailure.Kind.UNAVAILABLE, () -> fixture.storage.read("listings/draft/image", fixture.bytes.length));
+            var elapsed = Duration.ofNanos(System.nanoTime() - started);
+            assertThat(elapsed).isBetween(Duration.ofMillis(600), Duration.ofMillis(1600)).isLessThan(StorageFixture.CLIENT_TIMEOUT);
+            assertThat(fixture.getCalls.get()).isEqualTo(1);
+            assertThat(fixture.getIfMatch).isEqualTo("\"staging-etag\"");
+            assertThat(fixture.sentBytes.get()).isZero();
+        }
+    }
+
     @Test void readsTheHeadObjectThroughAConditionalGet() throws Exception {
         try (var fixture = new StorageFixture()) {
             assertThat(fixture.storage.read("listings/draft/image", fixture.bytes.length)).isEqualTo(fixture.bytes);
@@ -207,6 +221,7 @@ class R2StorageTests {
     }
 
     private static final class StorageFixture implements AutoCloseable {
+        static final Duration CLIENT_TIMEOUT = Duration.ofSeconds(5);
         final byte[] bytes = "fabricated image bytes".getBytes(StandardCharsets.UTF_8);
         final HttpServer server;
         final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
@@ -216,7 +231,7 @@ class R2StorageTests {
         final AtomicInteger sentBytes = new AtomicInteger();
         final CountDownLatch bodyFinished = new CountDownLatch(1);
         volatile int headStatus = 200, getStatus = 200, putStatus = 200;
-        volatile Duration headDelay = Duration.ZERO, chunkDelay = Duration.ZERO;
+        volatile Duration headDelay = Duration.ZERO, getHeaderDelay = Duration.ZERO, chunkDelay = Duration.ZERO;
         volatile long headLength = bytes.length;
         volatile String headPath, getPath, getIfMatch, putPath, putIfNoneMatch, putContentType, putCacheControl;
         volatile byte[] putBody;
@@ -233,7 +248,7 @@ class R2StorageTests {
             var credentials = StaticCredentialsProvider.create(AwsBasicCredentials.create("fabricated-access", "fabricated-secret"));
             var configuration = S3Configuration.builder().chunkedEncodingEnabled(false).pathStyleAccessEnabled(true).build();
             var client = S3Client.builder().endpointOverride(endpoint).region(Region.of("auto")).credentialsProvider(credentials)
-                    .serviceConfiguration(configuration).overrideConfiguration(builder -> builder.apiCallTimeout(Duration.ofSeconds(5))
+                    .serviceConfiguration(configuration).overrideConfiguration(builder -> builder.apiCallTimeout(CLIENT_TIMEOUT)
                             .apiCallAttemptTimeout(Duration.ofSeconds(3)).retryPolicy(RetryPolicy.none())).build();
             var signer = S3Presigner.builder().endpointOverride(endpoint).region(Region.of("auto")).credentialsProvider(credentials)
                     .serviceConfiguration(configuration).build();
@@ -254,6 +269,7 @@ class R2StorageTests {
                 if (method.equals("GET")) {
                     getCalls.incrementAndGet(); getPath = request.getRequestURI().getPath();
                     getIfMatch = request.getRequestHeaders().getFirst("If-Match");
+                    pause(getHeaderDelay);
                     if (status == 200) {
                         request.getResponseHeaders().set("ETag", "\"staging-etag\"");
                         request.sendResponseHeaders(200, bytes.length);
