@@ -2,21 +2,22 @@
 
 OpenNest is a zero-brokerage platform for finding flats and PG/hostel accommodation directly from owners across India. OpenNest is an independent project, not affiliated with NoBroker.
 
-**Status:** Phase 1 foundation plus Phase 2 identity: Java 25, Spring Boot 4.1.1, five closed modules, guarded stores, Flyway/Hibernate validation, safe HTTP errors, opt-in Google OIDC, Redis sessions, CSRF/logout, private profiles, and approved trust badges. The [Phase 2 handoff](docs/IDENTITY_HANDOFF.md) records automated verification and maintainer-reported local Google login success. Listing/interaction APIs and public deployment remain outstanding.
+**Status:** Phase 1 foundation, Phase 2 identity and Phase 3 listings are implemented on Java 25/Spring Boot 4.1.1. Listings include drafts, owner retrieval, validated private image uploads, publication/inventory controls, and nationwide search. The [listing handoff](docs/LISTINGS_HANDOFF.md) records contracts, limits, verification, and pending provider checks. Interactions, the frontend, and public deployment remain outstanding.
 
-The complete Java 25/Docker gate passed 298 backend tests on 1 November 2026 with no failures, errors, or skips. Six Python verification tests and packaged-fixture checks also passed. Inspect PR checks separately for CI results.
+The complete Phase 3 Java 25/Docker gate passed 450 backend tests locally after review corrections on 9 November 2026 with no failures, errors, or skips. Six Python verification tests, context limits, and packaged-fixture checks also passed. CI for these changes has not been run.
 
 **Planned website:** [opennest.co.in](https://opennest.co.in). The backend target is Java 25 with Spring Boot 4.1.1; DNS, TLS, and hosting readiness remain unverified.
 
-The launch plan supports cities throughout India. Planned search will default to nationwide results with pagination and sorting, plus filters for city, locality, rent, bedrooms/BHK, available rooms, amenities, sharing, and nearby location. The recruiter sandbox will use fabricated listings across multiple Indian cities, with callable contact actions disabled.
+Search defaults to nationwide results with server-side pagination and sorting, plus filters for city, locality, rent, bedrooms/BHK, available rooms, amenities, sharing, and nearby location. The recruiter sandbox will use fabricated listings across multiple Indian cities, with callable contact actions disabled.
 
-Google sign-in through Spring Security is implemented behind explicit configuration; WhatsApp verification remains deferred. Google signup does not verify an owner's contact number. Phase 3 will let authenticated owners create PAUSED drafts, validate photos, and explicitly publish after separate contact verification and quota checks. Monthly prices will be in INR per person for PGs, per property for entire flats, and per room for individual flat rooms.
+Google sign-in through Spring Security is implemented behind explicit configuration; WhatsApp verification remains deferred. Google signup does not verify an owner's contact number. Owners can create PAUSED drafts and upload photos; publication requires separately verified contact and remains blocked for ordinary Google accounts until a verification method exists. Monthly prices use INR per person for PGs, per property for entire flats, and per room for individual flat rooms.
 
-Owners will set how many people are allowed in the entire flat or each offered room. Listings will show that capacity separately from rent and current availability.
+Owners set how many people are allowed in the entire flat or each offered room. Listing responses return that capacity separately from rent and current availability.
 
 ## Start here
 
 - [Project plan and decisions](docs/PROJECT_PLAN.md)
+- [Phase 3 listing APIs, media configuration, limits, and verification](docs/LISTINGS_HANDOFF.md)
 - [Backend dependency versions and verification status](docs/BACKEND_DEPENDENCIES.md)
 - [Backend deployment modes, environment inputs, and guards](docs/BACKEND_CONFIGURATION.md)
 - [Phase 1.4 database schema contract and enforcement boundaries](docs/SCHEMA_CONTRACT.md)
@@ -52,7 +53,7 @@ The default build tests deployment policy, identity configuration/trust threshol
 
 Phase 1.8 adds `-Pisolation-integration` for independently configured primary/sandbox contexts, real PostGIS/Redis reads and writes, credential rejection, header handling, and migration/dependency failures. It requires Docker and has no external-store fallback. On 30 October 2026, the review-fix Java 25 build passed 130 default, 51 migration/persistence, and 23 isolation tests with no failures, errors, or skips on Linux amd64 Docker. See [isolation verification](docs/BACKEND_ISOLATION.md).
 
-The server starts after Flyway/Hibernate validation. Google-disabled mode denies normal requests. Enable identity with `OPENNEST_GOOGLE_ENABLED=true`, selected OAuth credentials, and exact frontend/API origins as described in the [Phase 2 handoff](docs/IDENTITY_HANDOFF.md). Logging retains fixed HTTP events and redacted framework diagnostics. Startup requires selected PostgreSQL/PostGIS credentials and migration privileges; production also requires a Redis password. Datastore selection is fixed at startup. Supply variables through the process or IDE; Spring Boot does not load Compose's `.env` file.
+The server starts after Flyway/Hibernate validation. Google-disabled mode permits public listing reads; owner routes still require authentication. Enable identity with `OPENNEST_GOOGLE_ENABLED=true`, selected OAuth credentials, and exact frontend/API origins as described in the [Phase 2 handoff](docs/IDENTITY_HANDOFF.md). Logging retains fixed HTTP events and redacted framework diagnostics. Startup requires selected PostgreSQL/PostGIS credentials and migration privileges; production also requires a Redis password. Datastore selection is fixed at startup. Supply variables through the process or IDE; Spring Boot does not load Compose's `.env` file.
 
 ## Local infrastructure
 

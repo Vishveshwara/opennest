@@ -28,7 +28,7 @@ Origins contain only a scheme, host, and optional port. Paths, trailing slashes,
 
 Primary and sandbox OAuth registrations and callback origins must differ. Production rejects sandbox OAuth secrets even when Google login is disabled. Existing datastore and demo guards still apply. Direct Spring OAuth2, session, servlet-session, and forwarded-header settings are reserved. Deployment enums and the Google enable flag are canonicalized before security conditions run.
 
-When `OPENNEST_GOOGLE_ENABLED=false`, all identity routes are unavailable and the deny-all baseline remains active. Blank credentials never enable a substitute login. Enabled login requires a working selected PostgreSQL database and Redis store. Form login, Basic authentication, a generated password, account linking, phone verification, WhatsApp routes, and sandbox persona login remain unavailable.
+When `OPENNEST_GOOGLE_ENABLED=false`, all identity routes are unavailable; Phase 3 permits public listing reads while protected routes remain denied. Blank credentials never enable a substitute login. Enabled login requires a working selected PostgreSQL database and Redis store. Form login, Basic authentication, a generated password, account linking, phone verification, WhatsApp routes, and sandbox persona login remain unavailable.
 
 ## Browser and session contract
 

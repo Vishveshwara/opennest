@@ -3,7 +3,6 @@ package in.opennest.identity.internal.persistence;
 import java.util.UUID;
 import java.util.function.Supplier;
 import in.opennest.common.RequestFailure;
-import in.opennest.identity.IdentityAccounts;
 import in.opennest.identity.TrustBadge;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -15,7 +14,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 @Repository
 @ConditionalOnProperty(name = "opennest.identity.google-enabled", havingValue = "true")
-public class AccountStore implements IdentityAccounts {
+public class AccountStore {
     @PersistenceContext private EntityManager entityManager;
     private final TransactionTemplate transaction;
     private final TransactionTemplate readTransaction;
@@ -90,7 +89,6 @@ public class AccountStore implements IdentityAccounts {
         });
     }
 
-    @Override
     public boolean hasVerifiedContact(UUID userId) {
         return transact(readTransaction, () -> {
             var user = user(userId);

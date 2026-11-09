@@ -123,7 +123,7 @@ class BackendIsolationIT {
             assertThat(database(target).queryForObject("SHOW server_version_num", String.class)).startsWith("17");
             assertThat(contexts.get(target).getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();
             var current = database(target).queryForList("SELECT version || ':' || checksum FROM public.flyway_schema_history ORDER BY installed_rank", String.class);
-            assertThat(current).containsExactly("1:-65807919", "2:842141308");
+            assertThat(current).containsExactly("1:-65807919", "2:842141308", "3:-212349669");
             if (history != null) assertThat(current).isEqualTo(history);
             history = current;
             var selected = contexts.get(target).getBean(LettuceConnectionFactory.class);
@@ -259,9 +259,34 @@ class BackendIsolationIT {
         try (var unmodified = new SpringApplication(OpenNestApplication.class).run(arguments)) {
             var handlers = unmodified.getBean(RequestMappingHandlerMapping.class).getHandlerMethods().values();
             assertThat(handlers).isNotEmpty().allSatisfy(handler -> assertThat(handler.getBeanType().getName())
-                    .isEqualTo("in.opennest.common.internal.web.SafeErrorController"));
+                    .isIn("in.opennest.common.internal.web.SafeErrorController", "in.opennest.listing.internal.ListingController"));
+            assertListingRoutes(unmodified.getBean(RequestMappingHandlerMapping.class).getHandlerMethods());
             assertThat(unmodified.getBeansOfType(org.springframework.security.core.userdetails.UserDetailsService.class)).isEmpty();
         }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"in.opennest.listing.internal.ListingController", "in.opennest.common.internal.web.SafeErrorController"})
+    void diagnosticListingGetIsNotAnAllowedRegisteredRoute(String controllerType) {
+        var mappings = new LinkedHashMap<>(contexts.getFirst().getBean(RequestMappingHandlerMapping.class).getHandlerMethods());
+        var controller = mappings.values().stream().filter(handler -> handler.getBeanType().getName().equals(controllerType)).findFirst().orElseThrow();
+        mappings.put(org.springframework.web.servlet.mvc.method.RequestMappingInfo.paths("/api/v1/listings/diagnostic")
+                .methods(org.springframework.web.bind.annotation.RequestMethod.GET).build(), controller);
+        assertThatThrownBy(() -> assertListingRoutes(mappings)).isInstanceOf(AssertionError.class);
+    }
+
+    private void assertListingRoutes(Map<org.springframework.web.servlet.mvc.method.RequestMappingInfo, org.springframework.web.method.HandlerMethod> mappings) {
+        var expected = java.util.Set.of("GET /api/v1/listings/search", "GET /api/v1/listings/mine", "GET /api/v1/listings/{id}",
+                "POST /api/v1/listings", "POST /api/v1/listings/{id}/publish", "POST /api/v1/listings/{id}/pause",
+                "PATCH /api/v1/listings/{id}/inventory", "POST /api/v1/listings/{id}/images/presign", "POST /api/v1/listings/{id}/images/complete");
+        var actual = new java.util.ArrayList<String>();
+        mappings.forEach((mapping, handler) -> {
+            var paths = mapping.getPatternValues().stream().filter(path -> path.equals("/api/v1/listings") || path.startsWith("/api/v1/listings/")).toList();
+            if (paths.isEmpty()) return;
+            assertThat(mapping.getMethodsCondition().getMethods()).hasSize(1);
+            paths.forEach(path -> mapping.getMethodsCondition().getMethods().forEach(method -> actual.add(method.name() + " " + path)));
+        });
+        assertThat(actual).containsExactlyInAnyOrderElementsOf(expected);
     }
 
     @ParameterizedTest

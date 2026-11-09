@@ -82,7 +82,7 @@ class IdentitySecurityConfiguration {
         return web -> web.requestRejectedHandler((request, response, failure) -> errors.write(response, 400));
     }
 
-    @Bean CorsConfigurationSource identityCors(Environment environment) {
+    @Bean({"identityCors", "applicationCors"}) CorsConfigurationSource identityCors(Environment environment) {
         var cors = new CorsConfiguration();
         cors.setAllowedOrigins(List.of(IdentitySettings.read(environment).selected(environment).frontendOrigin()));
         cors.setAllowCredentials(true);
@@ -114,6 +114,11 @@ class IdentitySecurityConfiguration {
                         .requestMatchers(org.springframework.http.HttpMethod.GET,
                                 "/api/v1/auth/csrf", "/oauth2/authorization/google", "/login/oauth2/code/google").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/users/me").authenticated()
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/listings/mine").authenticated()
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/listings/search", "/api/v1/listings/*").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/listings", "/api/v1/listings/*/publish", "/api/v1/listings/*/pause",
+                                "/api/v1/listings/*/images/presign", "/api/v1/listings/*/images/complete").authenticated()
+                        .requestMatchers(org.springframework.http.HttpMethod.PATCH, "/api/v1/listings/*/inventory").authenticated()
                         .anyRequest().denyAll())
                 .formLogin(AbstractHttpConfigurer::disable).httpBasic(AbstractHttpConfigurer::disable)
                 .requestCache(cache -> cache.requestCache(new NullRequestCache()))

@@ -2,7 +2,7 @@
 
 Status: Phase 2 implements Google OpenID Connect, Redis sessions, CSRF/logout, private profiles, and derived trust badges. Google login is disabled by default until the selected deployment receives credentials and exact origins. The maintainer reported successful local Google sign-in on 3 November 2026. Hosted deployment and manual repeated-login/denial/logout checks remain unverified. WhatsApp and phone verification remain deferred and unavailable.
 
-With Google disabled, the [restrictive security baseline](BACKEND_HTTP_ERRORS.md) denies normal requests and exposes no identity routes. Enabling Google replaces that baseline with identity-owned security. Neither mode provides Basic authentication, a generated password, a framework login page, or demo authentication. Configuration and verification commands are in the [Phase 2 handoff](IDENTITY_HANDOFF.md).
+With Google disabled, the [restrictive security baseline](BACKEND_HTTP_ERRORS.md) permits public Phase 3 listing reads with exact-origin CORS and exposes no identity routes. Enabling Google replaces that baseline with identity-owned security. Neither mode provides Basic authentication, a generated password, a framework login page, or demo authentication. Configuration and verification commands are in the [Phase 2 handoff](IDENTITY_HANDOFF.md).
 
 ## Initial Google login
 
@@ -29,7 +29,7 @@ This intentionally revises the supplied stateless-JWT browser-auth target. One b
 | `POST /api/v1/auth/logout` | CSRF-protected session invalidation; expire cookie; return 204. |
 | `GET /api/v1/users/me` | Authenticated account and verification state; no-store; 401 when unauthenticated. |
 
-Successful login redirects to the configured frontend origin plus `/`. Failed login redirects to that origin plus `/?login=failed`. Caller-supplied return URLs are ignored. Neither redirect includes provider codes or tokens. Listing, draft, and image routes remain Phase 3 work and must reuse the session and CSRF policy.
+Successful login redirects to the configured frontend origin plus `/`. Failed login redirects to that origin plus `/?login=failed`. Caller-supplied return URLs are ignored. Neither redirect includes provider codes or tokens. Phase 3 listing, draft, and image routes reuse the session and CSRF policy; see [the listing handoff](LISTINGS_HANDOFF.md).
 
 An invalid callback or replay does not revoke an existing authenticated session. Logout remains a CSRF-protected POST. If account persistence fails after valid provider authentication, the new authentication state is cleared before returning the safe error.
 

@@ -41,7 +41,7 @@ jobs:
         run: |
           test "$(docker info --format '{{.OSType}}')" = linux
           test "$(uname -m)" = x86_64
-      - name: Run module, authentication, error, migration, persistence, and isolation tests
+      - name: Run module, authentication, listing, media, migration, and isolation tests
         run: >-
           bash backend/mvnw --batch-mode --no-transfer-progress
           --settings docs/verification/backend-dependencies/settings.xml
@@ -51,6 +51,9 @@ jobs:
       - name: Verify test discovery, results, and packaged boundaries
         if: always() && !cancelled()
         run: python3 .github/scripts/verify_backend.py --reports
+      - name: Require listing query-plan evidence
+        if: always() && !cancelled()
+        run: test -f backend/target/listing-query-plans.txt
       - name: Upload verification reports
         if: always() && !cancelled()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -60,5 +63,6 @@ jobs:
             backend/target/surefire-reports/TEST-*.xml
             backend/target/failsafe-reports/TEST-*.xml
             backend/target/backend-verification.json
+            backend/target/listing-query-plans.txt
           retention-days: 7
           if-no-files-found: warn

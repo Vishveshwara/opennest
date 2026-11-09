@@ -1,18 +1,18 @@
 # OpenNest backend context
 
-- Status: Phase 1 foundation plus opt-in Phase 2 identity; Java 25, Spring Boot 4.1.1, Spring Modulith 2.1.1. Authentication setup and verification: ../docs/IDENTITY_HANDOFF.md.
+- Status: Phase 1 foundation, opt-in Phase 2 identity and Phase 3 listings; Java 25, Spring Boot 4.1.1, Spring Modulith 2.1.1. Setup/verification: ../docs/IDENTITY_HANDOFF.md and ../docs/LISTINGS_HANDOFF.md.
 - Entry point: `in.opennest.OpenNestApplication`; product and application name: OpenNest.
 - Five closed logical modules: common, identity, listing, interaction, sandbox; one Maven application.
-- Identity declares common as its only dependency through public RequestFailure/HttpFailureResponse. Other module dependencies remain empty; common never depends on feature internals.
+- Identity depends on common; listing depends on common and identity public contracts. Interaction/sandbox dependencies remain empty; common never depends on feature internals.
 - Module root packages hold explicit public contracts when implemented; nested packages hold internals. Keep types package-private where possible; never expose persistence entities as cross-module contracts.
-- Shared V1/V2 and six package-private entities implement storage unchanged. Identity adds account persistence, Google OIDC, Redis sessions, profile/CSRF/logout, IdentityAccounts, and TrustBadge. Listing/interaction/demo services remain unimplemented.
+- Shared V1/V2 remain unchanged; V3 adds six image metadata columns and identity's safe listing owner SQL view. Six private entities remain Hibernate-validated. Identity and listing services are implemented; interaction/demo remain planned.
 - Modulith core/test starters support metadata and boundary checks; no JDBC/JPA event registry, messaging, or observability starter is enabled.
 - `ModuleStructureTests` checks all five modules are discovered and invokes Modulith verification for cycles, internal access, and declared dependency violations.
 - Build: from `backend/`, select a Java 25 JDK and run `./mvnw clean verify` or `./mvnw.cmd clean verify`.
-- HTTP server runs after Flyway/Hibernate validate on selected PostgreSQL; production requires a Redis password. Google-disabled mode denies normal requests; enabled mode exposes only identity routes. No Basic/form/generated-password/demo access. Redis fails closed on use.
+- HTTP starts after Flyway/Hibernate validate on selected PostgreSQL; production requires a Redis password. Google-disabled mode permits public listing reads; enabled mode adds identity and authenticated listing routes. No Basic/form/generated-password/demo access. Redis fails closed on use.
 - Common's internal deployment post-processor validates mode/policy and supplies JDBC/Hikari and Lettuce settings before clients are created. Runtime environment and data mode are separate; production permits PRIMARY only, with demo/development flags false and no sandbox secrets.
 - Hikari maximum/minimum idle are 5/1; virtual threads default true; SQL script initialization and Redis repositories are disabled. No undocumented lazy-connection setting is used.
-- Datastore routing is fixed at startup; no request header selects a database. Phase 2 enforces authenticated principals, deployment-realm rejection, and session expiry. Listing ownership/publication authorization and contact-reveal authorization remain unimplemented in Phases 3/4.
+- Datastore routing is fixed at startup; no request header selects stores. Phase 2 enforces principals/realms/expiry. Phase 3 enforces ownership, exact versions, image/contact publication gates and transactional quotas. Contact reveals remain Phase 4.
 - Configuration: `../docs/BACKEND_CONFIGURATION.md`; storage semantics: `../docs/SCHEMA_CONTRACT.md`; migration sequence/proof: `../docs/BACKEND_MIGRATIONS.md`. Flyway inherits the selected datasource; direct spring.flyway inputs are rejected.
 - Both `schema-integration,isolation-integration` profiles cover default, schema/persistence, and isolation tests under Java 25/Linux amd64 Docker; `../docs/BACKEND_ISOLATION.md`. Review regressions add return-validation, Security delegation, client statuses, log levels/redaction, and timestamp clamping. Test handlers/fixtures are not packaged; inspect PR checks for CI evidence.
 - Error/security contract: `../docs/BACKEND_HTTP_ERRORS.md`; fixed safe Problem Details, INFO 4xx/ERROR 5xx correlation logs, and redacted framework ERROR events. Raw framework/SQL/request/exception data is suppressed; policy overrides rejected. Only trusted ERROR dispatch reaches /error; no diagnostic business route.

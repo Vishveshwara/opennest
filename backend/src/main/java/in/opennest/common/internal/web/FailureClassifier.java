@@ -43,7 +43,7 @@ final class FailureClassifier {
             return switch (request.kind()) {
                 case INVALID_INPUT -> 400;
                 case UNAUTHENTICATED -> 401;
-                case FORBIDDEN -> 403;
+                case FORBIDDEN, CONTACT_VERIFICATION_REQUIRED -> 403;
                 case NOT_FOUND -> 404;
                 case CONFLICT -> 409;
                 case RATE_LIMITED -> 429;

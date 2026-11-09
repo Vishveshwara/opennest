@@ -1,10 +1,10 @@
 # OpenNest listing search plan
 
-Status: proposed contract for the first listing-search implementation in Phase 3 and the frontend in Phase 5. No search endpoint exists yet. Pagination, sorting, and filters will be implemented together, with the same search semantics in the public portal and recruiter sandbox on their separate backends. Sandbox responses will bypass shared/public caches.
+Status: backend search is implemented in Phase 3; verification is recorded in [LISTINGS_HANDOFF.md](LISTINGS_HANDOFF.md). Browser controls remain Phase 5 work. Pagination, sorting, and filters will be implemented together, with the same search semantics in the public portal and recruiter sandbox on their separate backends. Sandbox responses will bypass shared/public caches.
 
 ## Request and filters
 
-The planned `GET /api/v1/listings/search` will return nationwide results when `city` is omitted. Supplied filters combine with AND and run in the database before pagination. Do not fetch all listings for browser-side filtering or sorting.
+The implemented `GET /api/v1/listings/search` returns nationwide results when `city` is omitted. Supplied filters combine with AND and run in the database before pagination. Do not fetch all listings for browser-side filtering or sorting.
 
 | Parameter | Planned behavior |
 | --- | --- |
@@ -59,7 +59,7 @@ Offset pagination is the initial design because numbered pages and exact totals 
 - Provide accessible Previous/Next controls, numbered pages, matching count, and page-size selection. Display page numbers as one-based while translating to the zero-based API. Enable nearest sorting only with a valid geo query.
 - Keep exact totals even when they exceed the offset cap; only offer pages whose offset is <= 10000. At the browsing limit, disable further navigation and prompt for narrower filters even if hasNext indicates more matches.
 - Show loading, empty, error, and out-of-range page states. Offer return to the first page when changes leave the requested page beyond the result set. Cancel or ignore stale responses after a query change.
-- Only unauthenticated production listing responses may enter shared caches. Their keys include the complete normalized query (all filters, sort, page, size) and deployment. All sandbox and authenticated responses use no-store, even when search semantics match; never cache them publicly. Invalidate affected public searches/details on listing/status/inventory/review changes.
+- Every listing response and Phase 5 listing fetch uses no-store, including anonymous production search/detail. Do not place listing data or signed image URLs into shared Next.js caches. Writes are observed through fresh reads, with no shared cache invalidation required under this policy. A future explicitly approved API/cache-policy change must define eligible anonymous production responses, complete deployment/query keys, signed-image URL handling, and tested invalidation for listing/status/inventory/review writes before caching is enabled. Sandbox and authenticated responses remain no-store.
 
 ## Examples
 
@@ -89,6 +89,8 @@ Individual rooms in flats nationwide, at least one vacancy and up to INR 10000 p
 - Verify each sort, ties across page boundaries on unchanged data, unrated owners last, and nearest ordering in metres; reject distance sort without geo inputs and all unknown sort values.
 - Verify paused/private records and other-deployment data cannot affect results or counts. Multiple images must not duplicate a listing or inflate totals.
 - Verify public search/detail payloads omit owner phone, private address, and precise coordinates; expose map coordinates only under the documented coarsening policy. Verify coarse coordinate-bound validation does not claim strict India geofencing.
-- Verify PAUSED drafts/pending images stay out of search until explicit publication, pausing removes a listing from public results, and inventory/report writes cannot republish a draft. Verify sandbox/authenticated responses use no-store and public caches are invalidated after relevant writes.
+- Verify PAUSED drafts/pending images stay out of search until explicit publication, pausing removes a listing from public results, and inventory/report writes cannot republish a draft. Verify every listing response and frontend fetch remains no-store and that fresh reads reflect listing/status/inventory/review writes. Test shared-cache invalidation only if a separately approved future cache-policy change introduces it.
 - Verify invalid and incompatible inputs return 400, while valid contradictory filters return an empty result. Record query plans for representative nationwide and multi-filter searches.
 - End-to-end checks cover URL sharing, Back/Forward, filter/sort/size page reset, empty results, stale requests, and mobile/keyboard search controls.
+
+Phase 3 response policy: all listing responses use no-store and no shared cache is implemented. Public coordinates and precise distances are omitted. Only the authenticated owner receives private address/coordinates/version on owner detail and collection routes.

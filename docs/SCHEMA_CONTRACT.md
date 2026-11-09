@@ -1,6 +1,6 @@
 # OpenNest database schema contract
 
-Status: Phase 1.4 design implemented by Phase 1.5's V1 schema/V2 indexes and Phase 1.6's module-owned mappings/Hibernate validation, verified on isolated PostgreSQL 17/PostGIS 3.5 targets on 22 October 2026. See [migration execution](BACKEND_MIGRATIONS.md) and [persistence evidence](BACKEND_PERSISTENCE.md). Hosted databases are not migrated; repositories, triggers, and feature APIs remain unimplemented.
+Status: Phase 1.4 design implemented by Phase 1.5's V1 schema/V2 indexes and Phase 1.6's module-owned mappings/Hibernate validation, verified on isolated PostgreSQL 17/PostGIS 3.5 targets on 22 October 2026. See [migration execution](BACKEND_MIGRATIONS.md) and [persistence evidence](BACKEND_PERSISTENCE.md). Phase 3 adds V3 media metadata and listing services, described below. Hosted databases are not migrated; triggers and interaction APIs remain unimplemented.
 
 The [listing model](LISTING_MODEL.md), [search contract](LISTING_SEARCH.md), and [authentication decisions](AUTHENTICATION.md) remain authoritative for feature behavior. Production and sandbox use identical migrations in separate databases. No row-level sandbox flag or request-selected database is introduced.
 
@@ -246,4 +246,21 @@ Phase 1.5's real PostgreSQL 17/PostGIS 3.5 checks cover the following schema acc
 - Verify Kolkata dates around 18:30 UTC and under changed session timezones, including historical fixtures. Verify object expiry and timestamp-order checks.
 - Keep service/transaction behaviors separate from these schema tests. Phase 1.6 now proves Hibernate validation and persistence round trips; publication/reveal quota and review concurrency belong to their feature phases. Broader application isolation and backend CI gates remain later Phase 1 tasks.
 
-Phase 2 approves and implements trust thresholds without changing the schema. Phone provider, moderation/appeals, retention/erasure policy, public map coarsening, and Phase 3 draft/upload/text limits and edit/deletion routes remain open. They do not authorize a service bypass or a public launch.
+Phase 2 approves and implements trust thresholds without changing the schema. Phase 3 implements listing services and the V3 additions below. Phone provider, moderation/appeals, retention/erasure policy, future public map coarsening, and edit/deletion routes remain open. They do not authorize a service bypass or a public launch.
+
+## Phase 3 V3 additions
+
+V1/V2 remain unchanged. V3 adds the identity-owned `listing_owner_profiles` view selecting only `id`, `full_name`, `average_rating`, `review_count`, and `broker_report_count` from users. Listing queries may join this view within their snapshot. Contact/provider fields remain private.
+
+V3 adds six nullable columns to `property_images`; the six entity mappings now cover 76 columns. Nullable groups preserve legacy V2 rows. New image service writes always populate reservation and validated metadata.
+
+| Column | Type | Service and database rules |
+| --- | --- | --- |
+| `declared_content_type` | text | Both declared fields absent for legacy rows or both present; JPEG, PNG, WebP only |
+| `declared_byte_size` | bigint | 1 through 5,242,880 bytes when present |
+| `content_type` | text | All four final metadata fields absent or all present on VALIDATED rows; JPEG or PNG |
+| `byte_size` | bigint | 1 through 5,242,880 bytes when present |
+| `width` | integer | Positive; width times height at most 20,000,000 |
+| `height` | integer | Positive; product uses bigint arithmetic |
+
+Constraints are `ck_property_images_declared_metadata` and `ck_property_images_validated_metadata`. Explicit `num_nonnulls` checks reject partial groups rather than allowing SQL NULL to bypass validation. No table, deletion cascade, or extra index is added. Service reservations/finalization, quotas, cleanup and response rules are in [LISTINGS_HANDOFF.md](LISTINGS_HANDOFF.md).

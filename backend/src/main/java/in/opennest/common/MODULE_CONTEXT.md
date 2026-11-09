@@ -3,6 +3,7 @@
 - Status: shared RequestFailure/Kind and HttpFailureResponse contracts, internal deployment configuration, MVC errors, and conditional baseline security; no business service or diagnostic API.
 - Own shared HTTP error handling and small domain-independent types; no dependency on feature module internals.
 - Allowed module dependencies: none. Common must not depend on feature modules.
+- Phase 3 adds fixed CONTACT_VERIFICATION_REQUIRED -> 403 guidance without copying caller data. Google-disabled security permits only public listing GETs with exact-origin read CORS; owner routes remain protected and other requests remain denied.
 - `internal.configuration` implements Boot's current EnvironmentPostProcessor SPI, binds immutable deployment settings, and validates production/demo policy, distinct stores/secrets, and reserved Boot configuration after config-data loading and before client construction.
 - JDBC and Redis settings derive from the selected mode once at startup. Validation errors and configuration descriptions redact credentials; no client input or header is consulted.
 - Phase 1.5 pins Flyway to shared db/migration resources and selected datasource, with validation enabled and baseline/clean disabled. Direct spring.flyway inputs are rejected; no independent migration URL or credentials exist.
@@ -13,3 +14,4 @@
 - The deployment postprocessor publishes canonical environment/mode values before identity guards run. Fixed error rendering preserves validated CORS headers across response reset.
 - PostgreSQL administrative shutdown SQLSTATE 57P01 and connection class 08 map to 503, as do recognized connection/resource failures and timeouts, including query timeouts. Unique/stale conflicts map to 409; generic integrity/schema/application failures and database-dropped 57P04 remain 500.
 - HTTP logs emit fixed status/error-ID events at INFO for 4xx and ERROR for 5xx. Root ERROR diagnostics use a literal redacted pattern without messages, logger/thread names, MDC, arguments, or stack traces. Raw framework/SQL/request data, access/debug/trace logs, and policy overrides remain disabled; `docs/BACKEND_HTTP_ERRORS.md`.
+- Baseline and enabled identity security expose the configured applicationCors source; listing body validation uses the same source before returning early errors, preserving exact-origin headers even when the security filter runs later.
