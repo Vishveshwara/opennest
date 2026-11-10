@@ -2,15 +2,15 @@
 
 OpenNest is a zero-brokerage platform for finding flats and PG/hostel accommodation directly from owners across India. OpenNest is an independent project, not affiliated with NoBroker.
 
-**Status:** Phase 1 foundation, Phase 2 identity and Phase 3 listings are implemented on Java 25/Spring Boot 4.1.1. Listings include drafts, owner retrieval, validated private image uploads, publication/inventory controls, and nationwide search. The [listing handoff](docs/LISTINGS_HANDOFF.md) records contracts, limits, verification, and pending provider checks. Interactions, the frontend, and public deployment remain outstanding.
+**Status:** Phase 1 foundation, Phase 2 identity, Phase 3 listings, and opt-in Phase 3A Telegram-only authentication are implemented on Java 25/Spring Boot 4.1.1. Listings include drafts, owner retrieval, validated private image uploads, publication/inventory controls, and nationwide search. The [listing handoff](docs/LISTINGS_HANDOFF.md) records contracts, limits, verification, and pending provider checks. Interactions, the frontend, and public deployment remain outstanding.
 
-The complete Phase 3 Java 25/Docker gate passed 450 backend tests locally after review corrections on 9 November 2026 with no failures, errors, or skips. Six Python verification tests, context limits, and packaged-fixture checks also passed. CI for these changes has not been run.
+The clean Java 25/Docker gate passed 553 backend tests and six Python checks locally on 10 November 2026, with no failures, errors or skips. [The Telegram handoff](docs/TELEGRAM_HANDOFF.md) records evidence and remaining live checks. Bot setup passed, and the maintainer confirmed real local Telegram OTP authentication plus the verified private profile on 10 November. CI and hosted readiness remain unverified. [API verification](docs/API_VERIFICATION.md) distinguishes isolated cross-API tests from live provider checks.
 
 **Planned website:** [opennest.co.in](https://opennest.co.in). The backend target is Java 25 with Spring Boot 4.1.1; DNS, TLS, and hosting readiness remain unverified.
 
 Search defaults to nationwide results with server-side pagination and sorting, plus filters for city, locality, rent, bedrooms/BHK, available rooms, amenities, sharing, and nearby location. The recruiter sandbox will use fabricated listings across multiple Indian cities, with callable contact actions disabled.
 
-Google sign-in through Spring Security is implemented behind explicit configuration; WhatsApp verification remains deferred. Google signup does not verify an owner's contact number. Owners can create PAUSED drafts and upload photos; publication requires separately verified contact and remains blocked for ordinary Google accounts until a verification method exists. Monthly prices use INR per person for PGs, per property for entire flats, and per room for individual flat rooms.
+Telegram Bot API is the only authentication method. Start a browser-session challenge, share your own +91 contact with the bot, then enter its OTP in the initiating browser. Successful completion creates the verified account/session; it does not prove fresh SIM possession or property ownership. Follow the [Telegram setup and Postman guide](docs/TELEGRAM_HANDOFF.md). Browsing stays public; publication still requires validated images and the transactional listing quota.
 
 Owners set how many people are allowed in the entire flat or each offered room. Listing responses return that capacity separately from rent and current availability.
 
@@ -27,6 +27,9 @@ Owners set how many people are allowed in the entire flat or each offered room. 
 - [Backend store isolation and required container verification](docs/BACKEND_ISOLATION.md)
 - [Phase 1 handoff, Java 25 CI, local startup, and complete verification](docs/BACKEND_HANDOFF.md)
 - [Phase 2 identity setup, session contract, and verification](docs/IDENTITY_HANDOFF.md)
+- [Phase 3A Telegram setup, Postman flow, and verification](docs/TELEGRAM_HANDOFF.md)
+- [Step-by-step Postman guide for login, listings, and images](docs/POSTMAN_API_GUIDE.md)
+- [Authenticated API verification matrix and OAuth removal audit](docs/API_VERIFICATION.md)
 - [Backend modules and local build](backend/MODULE_CONTEXT.md)
 - [Whole flats, individual rooms, pricing, and inventory](docs/LISTING_MODEL.md)
 - [Pagination, sorting, and listing filters](docs/LISTING_SEARCH.md)
@@ -35,7 +38,7 @@ Owners set how many people are allowed in the entire flat or each offered room. 
 - [AI development instructions](AGENTS.md)
 - [Current implementation state](docs/ai-context/ARCHITECTURE_STATE.md)
 - [Database schema and planned service invariants](docs/ai-context/SCHEMA_INDEX.md)
-- [Implemented identity and proposed listing/interaction APIs](docs/ai-context/API_CONTRACTS.md)
+- [Implemented identity/listing and proposed interaction APIs](docs/ai-context/API_CONTRACTS.md)
 - [Contributing](CONTRIBUTING.md)
 
 ## Backend bootstrap
@@ -53,7 +56,7 @@ The default build tests deployment policy, identity configuration/trust threshol
 
 Phase 1.8 adds `-Pisolation-integration` for independently configured primary/sandbox contexts, real PostGIS/Redis reads and writes, credential rejection, header handling, and migration/dependency failures. It requires Docker and has no external-store fallback. On 30 October 2026, the review-fix Java 25 build passed 130 default, 51 migration/persistence, and 23 isolation tests with no failures, errors, or skips on Linux amd64 Docker. See [isolation verification](docs/BACKEND_ISOLATION.md).
 
-The server starts after Flyway/Hibernate validation. Google-disabled mode permits public listing reads; owner routes still require authentication. Enable identity with `OPENNEST_GOOGLE_ENABLED=true`, selected OAuth credentials, and exact frontend/API origins as described in the [Phase 2 handoff](docs/IDENTITY_HANDOFF.md). Logging retains fixed HTTP events and redacted framework diagnostics. Startup requires selected PostgreSQL/PostGIS credentials and migration privileges; production also requires a Redis password. Datastore selection is fixed at startup. Supply variables through the process or IDE; Spring Boot does not load Compose's `.env` file.
+The server starts after Flyway/Hibernate validation. With authentication disabled, public listing reads remain available and owner routes stay denied. Enable Telegram through the [local helper](scripts/setup-telegram-local.ps1) and [setup guide](docs/TELEGRAM_HANDOFF.md). Exact frontend/API origins, isolated stores, migration privileges and redacted logging remain required. Spring Boot does not load Compose's .env directly; the local launcher loads it privately.
 
 ## Local infrastructure
 
@@ -76,7 +79,7 @@ The optional recruiter infrastructure uses a separate PostgreSQL instance, crede
 docker compose --profile sandbox up -d --wait
 ```
 
-With default port settings, sandbox PostGIS uses `localhost:5433` and sandbox Redis uses `localhost:6380`. The command starts both primary and sandbox store pairs. Future production and sandbox backends must use separate connections, session stores, and cookies, plus separate OAuth clients if Google login is enabled in both. This Compose separation does not prove application isolation; the file is for local development, not production deployment.
+With default port settings, sandbox PostGIS uses `localhost:5433` and sandbox Redis uses `localhost:6380`. The command starts both primary and sandbox store pairs. Future production and sandbox backends must use separate connections, session stores, and cookies, and separate bot secrets where applicable. This Compose separation does not prove application isolation; the file is for local development, not production deployment.
 
 To stop only the recruiter sandbox services:
 

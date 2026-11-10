@@ -1,5 +1,7 @@
 # OpenNest Flyway migrations
 
+Current schema: V1/V2 foundation, V3 listing metadata/owner projection, V4 private contact provenance and V5 expiring Telegram login receipts. Earlier migration contents remain unchanged. This Phase 1 execution record is historical; [SCHEMA_CONTRACT.md](SCHEMA_CONTRACT.md) gives current totals, and [API_VERIFICATION.md](API_VERIFICATION.md) records the current full gate.
+
 Phase 1.5 implements schema/indexes; Phase 1.6 adds [mappings/Hibernate validation](BACKEND_PERSISTENCE.md). Phase 1.7 adds [HTTP errors and restrictive security](BACKEND_HTTP_ERRORS.md), without changing V1/V2. Business services/endpoints and publication/quota transactions remain later work. The [schema contract](SCHEMA_CONTRACT.md) defines storage semantics; its service invariants are not database authorization.
 
 ## Migration sequence

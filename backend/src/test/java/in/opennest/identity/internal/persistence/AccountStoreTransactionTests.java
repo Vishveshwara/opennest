@@ -1,8 +1,8 @@
 package in.opennest.identity.internal.persistence;
 
 import java.sql.SQLException;
+import java.time.Instant;
 import java.util.UUID;
-import java.util.stream.Stream;
 
 import in.opennest.common.RequestFailure;
 import jakarta.persistence.EntityManager;
@@ -48,87 +48,55 @@ class AccountStoreTransactionTests {
     }
 
     @Test
-    void preservesDatabaseOutageWhenRollbackAlsoFails() {
-        var outage = new PersistenceException(new SQLException("fabricated outage", "57P01"));
-        var rollback = rollbackFailure();
-        when(entityManager.createQuery(anyString(), eq(AuthIdentityEntity.class))).thenThrow(outage);
-        doThrow(rollback).when(manager).rollback(status);
-
-        assertThat(catchThrowable(this::login)).isSameAs(outage);
-        assertThat(outage.getSuppressed()).containsExactly(rollback);
-        verify(manager).rollback(status);
-        verify(manager, never()).commit(any());
-    }
-
-    @Test
-    void preservesOriginalFailureWhenRollbackSucceeds() {
+    void preservesOriginalReadFailureWhenRollbackSucceeds() {
         var outage = new PersistenceException(new SQLException("fabricated outage", "08006"));
-        when(entityManager.createQuery(anyString(), eq(AuthIdentityEntity.class))).thenThrow(outage);
+        when(entityManager.createQuery(anyString(), eq(UserEntity.class))).thenThrow(outage);
 
-        assertThat(catchThrowable(this::login)).isSameAs(outage);
+        assertThat(catchThrowable(() -> accounts.profile(UUID.randomUUID()))).isSameAs(outage);
         assertThat(outage.getSuppressed()).isEmpty();
         verify(manager).rollback(status);
     }
 
     @Test
-    void preservesUnexpectedApplicationFailureWhenRollbackFails() {
+    void preservesUnexpectedReadFailureWhenRollbackFails() {
         var failure = new IllegalStateException("fabricated application failure");
         var rollback = rollbackFailure();
-        when(entityManager.createQuery(anyString(), eq(AuthIdentityEntity.class))).thenThrow(failure);
+        when(entityManager.createQuery(anyString(), eq(UserEntity.class))).thenThrow(failure);
         doThrow(rollback).when(manager).rollback(status);
 
-        assertThat(catchThrowable(this::login)).isSameAs(failure);
+        assertThat(catchThrowable(() -> accounts.profile(UUID.randomUUID()))).isSameAs(failure);
         assertThat(failure.getSuppressed()).containsExactly(rollback);
     }
 
     @Test
-    void preservesTransactionStartFailure() {
+    void preservesReadTransactionStartFailure() {
         var failure = new CannotCreateTransactionException("fabricated start failure");
         when(manager.getTransaction(any())).thenThrow(failure);
 
-        assertThat(catchThrowable(this::login)).isSameAs(failure);
+        assertThat(catchThrowable(() -> accounts.profile(UUID.randomUUID()))).isSameAs(failure);
         verify(manager, never()).rollback(any());
         verify(manager, never()).commit(any());
     }
 
     @Test
-    void preservesCommitFailureAfterSuccessfulAccountLookup() {
-        existingIdentity();
+    void preservesCommitFailureAfterSuccessfulContactLookup() {
+        var user = verifiedUser();
         var failure = rollbackFailure();
         doThrow(failure).when(manager).commit(status);
 
-        assertThat(catchThrowable(this::login)).isSameAs(failure);
+        assertThat(catchThrowable(() -> accounts.hasVerifiedContact(user.id))).isSameAs(failure);
         assertThat(failure.getSuppressed()).isEmpty();
         verify(manager).commit(status);
     }
 
     @Test
-    void returnsExistingAccountOnlyAfterCommit() {
-        var identity = existingIdentity();
+    void returnsContactEligibilityOnlyAfterCommit() {
+        var user = verifiedUser();
 
-        assertThat(login()).isEqualTo(identity.userId);
+        assertThat(accounts.hasVerifiedContact(user.id)).isTrue();
         verify(manager).commit(status);
         verify(manager, never()).rollback(any());
         verify(entityManager, never()).persist(any());
-    }
-
-    @Test
-    void preservesOutageDuringConcurrentSignupWinnerLookup() {
-        var conflict = new org.hibernate.exception.ConstraintViolationException(
-                "fabricated conflict", new SQLException("fabricated unique violation", "23505"),
-                "uq_auth_identities_issuer_subject");
-        var outage = new PersistenceException(new SQLException("fabricated outage", "57P01"));
-        var winnerStatus = new SimpleTransactionStatus();
-        var rollback = rollbackFailure();
-        when(manager.getTransaction(any())).thenReturn(status, winnerStatus);
-        when(entityManager.createQuery(anyString(), eq(AuthIdentityEntity.class))).thenThrow(conflict, outage);
-        doThrow(rollback).when(manager).rollback(winnerStatus);
-
-        assertThat(catchThrowable(this::login)).isSameAs(outage);
-        assertThat(outage.getSuppressed()).containsExactly(rollback);
-        verify(manager).rollback(status);
-        verify(manager).rollback(winnerStatus);
-        verify(manager, never()).commit(any());
     }
 
     @ParameterizedTest
@@ -177,23 +145,20 @@ class AccountStoreTransactionTests {
         verify(manager, never()).commit(any());
     }
 
-    private UUID login() {
-        return accounts.login("https://accounts.google.com", "fabricated-subject", "OpenNest test", null, false);
-    }
-
     private JpaSystemException rollbackFailure() {
         return new JpaSystemException(new TransactionException(
                 "fabricated rollback failure", new SQLException("fabricated closed connection")));
     }
 
     @SuppressWarnings("unchecked")
-    private AuthIdentityEntity existingIdentity() {
-        TypedQuery<AuthIdentityEntity> query = mock(TypedQuery.class);
-        var identity = new AuthIdentityEntity();
-        identity.userId = UUID.randomUUID();
-        when(entityManager.createQuery(anyString(), eq(AuthIdentityEntity.class))).thenReturn(query);
+    private UserEntity verifiedUser() {
+        TypedQuery<UserEntity> query = mock(TypedQuery.class);
+        var user = new UserEntity();
+        user.phoneNumber = "+910000000001";
+        user.phoneVerifiedAt = Instant.now();
+        when(entityManager.createQuery(anyString(), eq(UserEntity.class))).thenReturn(query);
         when(query.setParameter(anyString(), any())).thenReturn(query);
-        when(query.getResultStream()).thenReturn(Stream.of(identity));
-        return identity;
+        when(query.getSingleResultOrNull()).thenReturn(user);
+        return user;
     }
 }

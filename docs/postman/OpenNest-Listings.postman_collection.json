@@ -1,0 +1,384 @@
+{
+  "info": {
+    "name": "OpenNest listing APIs with Telegram session",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Manual local testing only. First finish Telegram login in the OpenNest Telegram login collection, keep the localhost cookie jar enabled, and postpone logout. This collection refreshes its own CSRF variable using that session. Requests create a real retained PAUSED draft; deletion is not implemented. Send requests individually and reuse listingId instead of repeatedly creating drafts. Media requires explicitly configured R2, actual file bytes and both ROOM/BATHROOM segments for this PG example. Storage disabled ->503; publish without required photos ->409. Do not export cookies, contacts, codes or signed URLs."
+  },
+  "auth": {
+    "type": "noauth"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "csrfToken",
+      "value": ""
+    },
+    {
+      "key": "listingId",
+      "value": ""
+    },
+    {
+      "key": "version",
+      "value": ""
+    },
+    {
+      "key": "imageId",
+      "value": ""
+    },
+    {
+      "key": "uploadUrl",
+      "value": ""
+    },
+    {
+      "key": "uploadHeaders",
+      "value": ""
+    },
+    {
+      "key": "imageByteSize",
+      "value": ""
+    },
+    {
+      "key": "segment",
+      "value": "ROOM"
+    },
+    {
+      "key": "imageContentType",
+      "value": "image/png"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Refresh CSRF in the Telegram-authenticated session",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/auth/csrf"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('CSRF received', () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) pm.collectionVariables.set('csrfToken', pm.response.json().token);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Verify authenticated profile",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/users/me"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Verified profile', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().phoneVerified).to.eql(true); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Create one PAUSED PG draft",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{csrfToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/listings",
+        "description": "Creates a retained draft in your local account. Change the fabricated sample fields before using real data; any Indian city is supported. Avoid repeated sends because listing deletion is not implemented.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Postman sample PG draft\",\n  \"description\": \"Fabricated example for local API testing\",\n  \"category\": \"PG_HOSTEL\",\n  \"city\": \"Pune\",\n  \"locality\": \"Sample locality\",\n  \"privateAddress\": \"Fabricated test address\",\n  \"latitude\": 18.52,\n  \"longitude\": 73.85,\n  \"monthlyRent\": 5000,\n  \"securityDeposit\": 0,\n  \"hasWifi\": true,\n  \"hasGym\": false,\n  \"hasSwimmingPool\": false,\n  \"maleRoomsAvailable\": 1,\n  \"femaleRoomsAvailable\": 0,\n  \"sharedRoomsAvailable\": 0,\n  \"maxSharingPerRoom\": 2\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Draft created', () => { pm.response.to.have.status(201); pm.expect(pm.response.json().status).to.eql('PAUSED'); });",
+              "if (pm.response.code === 201) pm.collectionVariables.set('listingId', pm.response.json().id);",
+              "if ([200, 201].includes(pm.response.code)) { const data = pm.response.json(); if (data.version !== undefined) pm.collectionVariables.set('version', String(data.version)); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. List your drafts and published listings",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/listings/mine?page=0&size=20"
+      }
+    },
+    {
+      "name": "5. Read your listing detail",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/listings/{{listingId}}"
+      }
+    },
+    {
+      "name": "6. Search nationwide public listings",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/listings/search?page=0&size=20&sort=NEWEST",
+        "description": "PAUSED drafts are excluded even when the request uses their owner's session."
+      }
+    },
+    {
+      "name": "7. Reserve an image upload",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{csrfToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/listings/{{listingId}}/images/presign",
+        "description": "Requires enabled/configured R2. Set imageByteSize to the exact positive file byte count, imageContentType to the matching type and segment to ROOM or BATHROOM. Repeat reserve/upload/complete once for each required PG segment.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"segment\": \"{{segment}}\",\n  \"contentType\": \"{{imageContentType}}\",\n  \"byteSize\": {{imageByteSize}}\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Upload reserved', () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) { const data = pm.response.json(); pm.collectionVariables.set('imageId', data.imageId); pm.collectionVariables.set('uploadUrl', data.uploadUrl); pm.collectionVariables.set('uploadHeaders', JSON.stringify(data.requiredHeaders)); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. Upload selected file directly to storage",
+      "request": {
+        "method": "PUT",
+        "header": [],
+        "url": "{{uploadUrl}}",
+        "description": "Choose Body > binary and select the exact file used to calculate imageByteSize. The pre-request script applies backend-returned signed headers. This request goes directly to storage; it does not use the OpenNest CSRF header.",
+        "body": {
+          "mode": "file",
+          "file": {
+            "src": ""
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const headers = JSON.parse(pm.collectionVariables.get('uploadHeaders') || '{}');",
+              "Object.entries(headers).forEach(([key, value]) => pm.request.headers.upsert({key, value: String(value)}));"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Direct upload accepted', () => pm.expect([200, 201, 204]).to.include(pm.response.code));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "9. Validate and complete the uploaded image",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{csrfToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/listings/{{listingId}}/images/complete",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"imageId\": \"{{imageId}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Image validated', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().width).to.be.above(0); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10. Publish after all required images validate",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{csrfToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/listings/{{listingId}}/publish",
+        "description": "Requires verified contact, required images and an available publication quota. For this PG example, first complete ROOM and BATHROOM. A missing prerequisite returns409; do not bypass it.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"version\": {{version}}\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if ([200, 201].includes(pm.response.code)) { const data = pm.response.json(); if (data.version !== undefined) pm.collectionVariables.set('version', String(data.version)); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11. Mark PG rooms unavailable",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{csrfToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/listings/{{listingId}}/inventory",
+        "description": "This PG/ROOM payload is not valid for ENTIRE_FLAT. Published PG becomes FULL_OCCUPIED; a PAUSED draft remains PAUSED.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"maleRoomsAvailable\": 0,\n  \"femaleRoomsAvailable\": 0,\n  \"sharedRoomsAvailable\": 0,\n  \"maxSharingPerRoom\": 2,\n  \"version\": {{version}}\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if ([200, 201].includes(pm.response.code)) { const data = pm.response.json(); if (data.version !== undefined) pm.collectionVariables.set('version', String(data.version)); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12. Pause the listing",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{csrfToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/listings/{{listingId}}/pause",
+        "description": "Returns PAUSED and updates version. Public search excludes it and anonymous detail returns404. The draft stays retained.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"version\": {{version}}\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if ([200, 201].includes(pm.response.code)) { const data = pm.response.json(); if (data.version !== undefined) pm.collectionVariables.set('version', String(data.version)); }"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

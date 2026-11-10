@@ -34,7 +34,7 @@ public final class ProblemResponses implements in.opennest.common.HttpFailureRes
     }
 
     void writeContactRequired(HttpServletResponse response) throws IOException {
-        write(response, 403, Set.of(), "A separately verified +91 owner contact is required before publication. Contact verification is not available yet.");
+        write(response, 403, Set.of(), "A separately verified +91 owner contact is required before publication. Complete contact verification when it is enabled for this deployment.");
     }
 
     private void write(HttpServletResponse response, int status, Set<HttpMethod> allowedMethods, String safeDetail) throws IOException {

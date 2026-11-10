@@ -1,6 +1,6 @@
 # OpenNest Phase 1 handoff
 
-This is the Phase 1 verification record. Phase 2 now adds opt-in Google OIDC, Redis sessions, private profiles, and approved trust rules. Current identity setup and verification are in the [Phase 2 handoff](IDENTITY_HANDOFF.md). Statements below describing deny-all behavior apply to Google-disabled mode.
+This is the Phase 1 verification record. Current identity uses Telegram-only login, Redis sessions, private profiles and approved trust rules. Setup and current verification are in the [Telegram handoff](TELEGRAM_HANDOFF.md). Statements below describe the earlier foundation; authentication-disabled mode now permits public listing reads while denying protected routes.
 
 Status on 30 October 2026: the review-fix Java 25 build passed all 204 tests, including real Docker/PostGIS/Redis suites and the previously missing return-validation regression. Phase 1.8 is verified locally and the Phase 1.9 workflow/handoff is implemented. Review corrections are described below. Inspect [PR #2](https://github.com/Vishveshwara/opennest/pull/2) for completed checks on the current revision. No merge, deployment, release image, or public hosting is part of this handoff.
 
@@ -79,7 +79,7 @@ Stop each backend with Ctrl+C. `docker compose --profile sandbox down` stops dev
 
 Phase 1 provides five closed modules, guarded deployment configuration, shared Flyway schema/indexes, six internal persistence mappings, Hibernate validation, optimistic locking, fixed common errors, restrictive security, and real-store test suites. `common` exposes `RequestFailure`; modules do not expose entities or depend on one another's internals.
 
-Phase 2 implements Google OIDC, Redis sessions, CSRF/logout, private profiles, and trust calculation after threshold approval. Phase 3 implements draft/upload/publication, verified-contact and quota gates, inventory/version checks, and paginated nationwide search. Phase 4 implements reveals/reviews/reports and isolated fabricated multi-city demo operations. Phase 5 implements the frontend. Phone verification/provider approval, public map coarsening, restricted production database roles, backups, capacity, and hosting remain explicit prerequisites. No feature endpoint or transactional business invariant is claimed by the foundation.
+Phase 2 supplied identity sessions, CSRF/logout, private profiles and approved trust calculation; Phase 3A now implements sole Telegram authentication and approved contact evidence. Phase 3 implements draft/upload/publication, verified-contact and quota gates, inventory/version checks, and paginated nationwide search. Phase 4 implements reveals/reviews/reports and isolated fabricated multi-city demo operations. Phase 5 implements the frontend. Live provider readiness, public map coarsening, restricted production database roles, backups, capacity, and hosting remain explicit prerequisites. No feature endpoint or transactional business invariant is claimed by the foundation.
 
 ## Review corrections
 

@@ -1,6 +1,6 @@
 # OpenNest HTTP errors and security baseline
 
-Phase 1.7 added Spring MVC, Jakarta validation, common Problem Details, and restrictive security. Phase 2 reuses this contract for enabled Google OIDC and Redis sessions; see the [identity handoff](IDENTITY_HANDOFF.md). Disabled Google retains the baseline. Demo authentication, public health endpoints, and diagnostic APIs remain unavailable. Error rendering preserves validated CORS response headers for the configured frontend.
+Phase 1.7 added Spring MVC, Jakarta validation, common Problem Details, and restrictive security. Telegram-only authentication reuses this contract with Redis sessions; see the [current setup](TELEGRAM_HANDOFF.md). Authentication-disabled mode retains the baseline. Demo authentication, public health endpoints, and diagnostic APIs remain unavailable. Error rendering preserves validated CORS response headers for the configured frontend.
 
 ## Response contract
 
@@ -60,7 +60,7 @@ Cause inspection unwraps recognized data-access, persistence, transaction, JDBC,
 
 - Every normal request is denied, including requests with an injected authenticated principal. Anonymous requests receive 401; authenticated denied requests receive 403. An unsafe request without valid CSRF receives 403 before authorization. There are no public application route exceptions yet.
 - Form login, HTTP Basic, logout processing, and saved-request caching are disabled. The AuthenticationManager rejects all authentication attempts. Its bean prevents Boot from creating a default password user; configuring spring.security.user does not create access. [Boot security configuration](https://docs.spring.io/spring-boot/reference/web/spring-security.html) documents that distinction.
-- CSRF and standard Security headers remain enabled. This phase does not expose a CSRF-token endpoint or implement Google/server-session login. Framework CSRF state is not an authentication flow.
+- CSRF and standard Security headers remain enabled. This phase does not expose a CSRF-token endpoint or implement provider/server-session login. Framework CSRF state is not an authentication flow.
 - Only trusted servlet ERROR dispatch bypasses request authorization to render the framework's internal `/error` fallback. A direct HTTP request to `/error` remains denied. The fallback reads only a recognized status; it discards error messages, exception objects, and request metadata.
 - No actuator, demo-login provider, persona switch, or diagnostic business endpoint is added. Test-only controllers and a higher-priority test-only chain exist solely in test sources under `/api/v1/test-contract/...`; they are absent from the packaged application.
 
@@ -89,4 +89,4 @@ Docker is unavailable locally, so database tests used isolated PostgreSQL 17.11/
 
 The initial 30 October run passed all 186 tests with real Docker/PostGIS/Redis. Review corrections now cover the previously missing return-value ConstraintViolationException case, preserve empty-set 400 behavior, verify Security delegation and shared status handling, and check log levels and redaction during real startup failure. The [handoff](BACKEND_HANDOFF.md) records the final regression results. Earlier execution limits above describe the 22 October run.
 
-Phase 3 amendment: Google-disabled security now permits public listing GETs with exact configured-origin CORS while protected/other routes remain denied. CONTACT_VERIFICATION_REQUIRED maps to fixed 403 guidance about separately verified +91 contact; it copies no submitted value. All listing responses are no-store; listing JSON request limits return fixed 400/413 errors. See [LISTINGS_HANDOFF.md](LISTINGS_HANDOFF.md).
+Phase 3 amendment: authentication-disabled security now permits public listing GETs with exact configured-origin CORS while protected/other routes remain denied. CONTACT_VERIFICATION_REQUIRED maps to fixed 403 guidance about separately verified +91 contact; it copies no submitted value. All listing responses are no-store; listing JSON request limits return fixed 400/413 errors. See [LISTINGS_HANDOFF.md](LISTINGS_HANDOFF.md).

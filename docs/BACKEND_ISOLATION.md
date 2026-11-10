@@ -38,7 +38,7 @@ Probe handlers, their security chain, test principals, and shortened client time
 
 ## Boundaries and outstanding proof
 
-The suite checks application store selection, real server authentication, and applicable failure handling. It does not establish deployed network firewalls, restricted runtime-role privileges, DNS/TLS, session/cookie/OIDC isolation, storage buckets, or future demo operations. Container PostgreSQL users are migration-capable development users, not the restricted production runtime roles required before deployment.
+The suite checks application store selection, real server authentication, and applicable failure handling. It does not establish deployed network firewalls, restricted runtime-role privileges, DNS/TLS, hosted session/cookie isolation, storage buckets, or future demo operations. Container PostgreSQL users are migration-capable development users, not the restricted production runtime roles required before deployment.
 
 PostgreSQL migration/schema failures prevent startup. Redis remains a lazy dependency: valid configuration can boot while Redis is unavailable or its password is wrong; the first Redis operation fails closed. These tests exercise that operation through the existing common error handler. Test-only timeouts bound failures without changing production client settings.
 

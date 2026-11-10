@@ -26,8 +26,11 @@ UNIT_SUITES = {
     "in.opennest.listing.internal.ImageValidatorTests",
     "in.opennest.listing.internal.R2StorageTests",
     "in.opennest.listing.internal.ListingRequestLimitTests",
+    "in.opennest.identity.internal.telegram.TelegramSettingsTests",
+    "in.opennest.identity.internal.telegram.TelegramHttpBotTests",
+    "in.opennest.identity.internal.telegram.TelegramCryptoTests",
 }
-INTEGRATION_SUITES = {"in.opennest.SchemaMigrationIT", "in.opennest.BackendIsolationIT", "in.opennest.IdentityAuthenticationIT", "in.opennest.listing.internal.ListingLifecycleIT"}
+INTEGRATION_SUITES = {"in.opennest.SchemaMigrationIT", "in.opennest.BackendIsolationIT", "in.opennest.listing.internal.ListingLifecycleIT", "in.opennest.identity.internal.telegram.TelegramContactIT"}
 
 
 def require(condition, message):
@@ -39,6 +42,7 @@ def verify_inputs():
     namespace = {"m": "http://maven.apache.org/POM/4.0.0"}
     pom = ET.parse(BACKEND / "pom.xml").getroot()
     require(pom.findtext("m:properties/m:java.version", namespaces=namespace) == "25", "Java target must remain 25")
+    require(not any(node.text == "spring-boot-starter-oauth2-client" for node in pom.findall("m:dependencies/m:dependency/m:artifactId", namespaces=namespace)), "Removed OAuth client dependency must not return")
     properties = dict(line.split("=", 1) for line in (BACKEND / ".mvn/wrapper/maven-wrapper.properties")
                       .read_text().splitlines() if line and not line.startswith("#"))
     manifest = json.loads((BACKEND / ".mvn/wrapper/checksums.json").read_text())
@@ -77,22 +81,26 @@ def verify_reports():
     integration = read_reports(target / "failsafe-reports", INTEGRATION_SUITES)
     artifact = target / "opennest-backend-0.0.1-SNAPSHOT.jar"
     with zipfile.ZipFile(artifact) as jar:
+        require(not any(re.search(r"oauth|oidc", name, re.IGNORECASE) for name in jar.namelist()
+                        if name.startswith(("BOOT-INF/lib/", "BOOT-INF/classes/"))), "Removed OAuth/OIDC classes or libraries packaged in application")
         application_classes = [name for name in jar.namelist() if name.startswith("BOOT-INF/classes/")]
         require(not any(token in name for name in application_classes for token in
                         ("IsolationProbe", "IsolationTestConfiguration", "BackendIsolationIT", "HttpContractFixtures",
                          "SchemaMigrationIT", "PersistenceScenarios", "PersistenceScenarioSupport",
-                         "IdentityAuthenticationIT", "ControlledOidcProvider", "ProviderConfiguration", "ListingLifecycleIT", "ControlledStorage")), "Test fixture packaged in application")
+                         "IdentityAuthenticationIT", "ControlledOidcProvider", "ProviderConfiguration", "ListingLifecycleIT", "ControlledStorage", "TelegramContactIT", "ControlledTelegram", "TelegramListingStorageFixture", "ControlledListingStorage")), "Test fixture packaged in application")
         migrations = [name for name in application_classes if name.startswith("BOOT-INF/classes/db/migration/V")]
         require(set(migrations) == {
             "BOOT-INF/classes/db/migration/V1__create_application_schema.sql",
             "BOOT-INF/classes/db/migration/V2__create_application_indexes.sql",
             "BOOT-INF/classes/db/migration/V3__listing_media_contract.sql",
+            "BOOT-INF/classes/db/migration/V4__telegram_contact_receipts.sql",
+            "BOOT-INF/classes/db/migration/V5__telegram_login_receipts.sql",
         }, "Packaged migrations differ from the Phase 1 handoff")
     version = subprocess.run(["java", "--version"], capture_output=True, text=True, check=True).stdout.strip()
     require(re.search(r"(?:openjdk|java) 25[.\s]", version), "Verification must run on Java 25")
     result = {"java": version, "unit": unit, "integration": integration,
               "totalTests": sum(counts["tests"] for counts in [*unit.values(), *integration.values()]),
-              "packagedTestFixtures": False}
+              "packagedTestFixtures": False, "oauthArtifactsPackaged": False}
     (target / "backend-verification.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     print(f"Verified {result['totalTests']} tests with no failures, errors, or skips; packaged boundaries pass.")
 

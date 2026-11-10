@@ -6,29 +6,36 @@ import org.springframework.boot.context.properties.bind.Bindable;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.core.env.Environment;
 
-public record IdentitySettings(boolean googleEnabled, Google primary, Google sandbox) {
+public record IdentitySettings(boolean telegramEnabled, Origins primary, Origins sandbox) {
 
-    public record Google(String clientId, String clientSecret, String backendOrigin, String frontendOrigin) {
-        @Override public String toString() { return "Google[redacted]"; }
+    public record Origins(String backendOrigin, String frontendOrigin) {
+        @Override public String toString() { return "Origins[redacted]"; }
     }
 
     public static IdentitySettings read(Environment environment) {
         try {
+            String flag = environment.getProperty("opennest.identity.telegram-enabled",
+                    environment.getProperty("OPENNEST_TELEGRAM_AUTH_ENABLED", "false"));
+            require("true".equals(flag) || "false".equals(flag));
+            for (String key : new String[] {"opennest.identity.google-enabled", "OPENNEST_GOOGLE_ENABLED"}) {
+                String google = environment.getProperty(key, "false");
+                require(google.isBlank() || "false".equalsIgnoreCase(google.strip()));
+            }
             var settings = Binder.get(environment).bind("opennest.identity", Bindable.of(IdentitySettings.class))
                     .orElseThrow(IllegalStateException::new);
+            settings = new IdentitySettings(Boolean.parseBoolean(flag), settings.primary(), settings.sandbox());
             boolean production = production(environment);
-            require(!production || blank(settings.sandbox().clientSecret()), "Production forbids sandbox OAuth secrets");
-            if (settings.googleEnabled()) {
-                var google = settings.selected(environment);
-                require(!blank(google.clientId()) && !blank(google.clientSecret()), "Google credentials are required");
-                origin(google.backendOrigin(), production);
-                origin(google.frontendOrigin(), production);
-                require(!google.backendOrigin().equals((sandbox(environment) ? settings.primary() : settings.sandbox()).backendOrigin()),
-                        "Primary and sandbox callback origins must differ");
-                require(blank(settings.primary().clientId()) || blank(settings.sandbox().clientId())
-                        || !settings.primary().clientId().equals(settings.sandbox().clientId()), "OAuth client IDs must differ");
-                require(blank(settings.primary().clientSecret()) || blank(settings.sandbox().clientSecret())
-                        || !settings.primary().clientSecret().equals(settings.sandbox().clientSecret()), "OAuth secrets must differ");
+            if (production) {
+                for (String key : new String[] {"GOOGLE_CLIENT_SECRET", "SANDBOX_GOOGLE_CLIENT_SECRET",
+                        "opennest.identity.primary.client-secret", "opennest.identity.sandbox.client-secret"}) {
+                    require(environment.getProperty(key, "").isBlank());
+                }
+            }
+            if (settings.telegramEnabled()) {
+                var selected = settings.selected(environment);
+                origin(selected.backendOrigin(), production);
+                origin(selected.frontendOrigin(), production);
+                require(!selected.backendOrigin().equals((sandbox(environment) ? settings.primary() : settings.sandbox()).backendOrigin()));
             }
             return settings;
         } catch (RuntimeException failure) {
@@ -36,7 +43,7 @@ public record IdentitySettings(boolean googleEnabled, Google primary, Google san
         }
     }
 
-    public Google selected(Environment environment) { return sandbox(environment) ? sandbox : primary; }
+    public Origins selected(Environment environment) { return sandbox(environment) ? sandbox : primary; }
     public static boolean production(Environment environment) {
         return "PRODUCTION".equalsIgnoreCase(environment.getProperty("opennest.deployment.environment", "DEVELOPMENT").strip());
     }
@@ -53,11 +60,10 @@ public record IdentitySettings(boolean googleEnabled, Google primary, Google san
         var uri = URI.create(value);
         require(uri.getHost() != null && uri.getRawUserInfo() == null && uri.getRawQuery() == null
                 && uri.getRawFragment() == null && (uri.getRawPath() == null || uri.getRawPath().isEmpty())
-                && uri.getPort() != 0 && uri.getPort() <= 65535, "Exact origins required");
+                && uri.getPort() != 0 && uri.getPort() <= 65535);
         require("https".equals(uri.getScheme()) || (!production && "http".equals(uri.getScheme())
-                && Set.of("localhost", "127.0.0.1", "[::1]").contains(uri.getHost())), "HTTPS required outside local development");
+                && Set.of("localhost", "127.0.0.1", "[::1]").contains(uri.getHost())));
     }
-    private static boolean blank(String value) { return value == null || value.isBlank(); }
-    private static void require(boolean valid, String message) { if (!valid) throw new IllegalStateException(message); }
+    private static void require(boolean valid) { if (!valid) throw new IllegalStateException(); }
     @Override public String toString() { return "IdentitySettings[redacted]"; }
 }

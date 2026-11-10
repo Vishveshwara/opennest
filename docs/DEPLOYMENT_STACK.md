@@ -1,6 +1,6 @@
 # OpenNest deployment and infrastructure plan
 
-Phase 2 adds local identity/session implementation and controlled-provider isolation tests; see [identity setup and verification](IDENTITY_HANDOFF.md). The maintainer reported successful local Google sign-in on 3 November 2026. Production and sandbox OAuth registrations, hosted browser routing, and hosted deployment remain unverified. This change provisions no infrastructure.
+Telegram Bot API is the sole authentication provider by maintainer decision on 10 November 2026. Local bot identity/webhook-state checks passed, and the maintainer confirmed real local OTP authentication plus the verified private profile on 10 November. Production HTTPS webhook routing, hosted browser behavior, and deployment remain unverified. See [Telegram setup](TELEGRAM_HANDOFF.md). No infrastructure is provisioned by this change.
 
 Status: deployment proposal, reviewed against provider documentation on 21 October 2026; website and Java target updated by maintainer decision on 22 October 2026. Local datastore Compose, foundation CI, and the Phase 1 backend foundation exist. Dependency resolution, Java 25 tests, startup guards, and real PostGIS/Redis container isolation are verified locally as of 30 October 2026; the [handoff](BACKEND_HANDOFF.md) records review corrections and regression results. Phase 2 controlled-provider tests locally verify browser-bound state and session isolation. Hosted browser routing, repeated real-provider flows, and hosted deployment integration remain unverified. Production Compose, Dockerfiles, Caddy configuration, cloud resources, and deployment workflows are not implemented.
 
@@ -24,7 +24,7 @@ This replaces the supplied deployment draft where it conflicts with the [project
 | Sessions and cache | Dedicated Redis per production/sandbox environment, backend-owned Spring sessions | Local baseline is Redis 7.4. Use `noeviction` for session-bearing Redis; PostgreSQL remains authoritative for quotas. License and supported production version need review below. |
 | Photos | Cloudflare R2 Standard, direct browser presigned PUTs, validated immutable final images | Monthly free allowance is 10 GB-month storage, 1 million Class A operations, and 10 million Class B operations. Egress is free under current pricing; storage/operations beyond allowances are billable. The allowance excludes Infrequent Access. [R2 pricing](https://developers.cloudflare.com/r2/pricing/). |
 | DNS and TLS | Planned website `opennest.co.in`; proposed Cloudflare DNS and Caddy on the API host | Domain control, DNS, and certificates remain unverified; registration/renewal is separate. DNS-only records do not provide HTTP caching or bot protection. Proxy/WAF behavior must be explicitly configured; do not promise that all scraping is blocked. [Cloudflare proxy status](https://developers.cloudflare.com/dns/proxy-status/). |
-| Identity | Google OIDC through Spring Security; Redis sessions | Google login does not verify phone ownership. WhatsApp remains disabled pending the separate review in [AUTHENTICATION.md](AUTHENTICATION.md). There is no approved zero-cost phone-verification service. |
+| Identity | Telegram Bot API only; Spring Security and Redis sessions | Self-contact +91 match and original-browser OTP; no automatic bot-update login. Bot API has no per-message charge within current limits; Gateway is unselected. Local polling is explicit and forbidden in production; production requires separate bot/secrets and HTTPS webhooks. |
 | Maps and nearby places | MapLibre GL JS plus a separately selected tile/style provider; optional Overpass enrichment | MapLibre renders supplied map data; it does not include production tile hosting or address search. Provider choice and usage allowance remain open. [MapLibre documentation](https://maplibre.org/maplibre-gl-js/docs/). |
 | Build and registry | GitHub Actions, GHCR, immutable image digests | Standard hosted runners are free for public repositories; larger runners are charged. Public packages are free under current terms. Check artifact/cache quotas separately. [Actions billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions), [Packages billing](https://docs.github.com/en/billing/concepts/product-billing/github-packages). |
 | Review and operations | Existing CodeRabbit guidance; planned security scanning and basic monitoring | Cubic and Sentry are optional, unconfigured services. Their eligibility/quotas must be checked if selected; no spend or installation is assumed. |
@@ -56,7 +56,7 @@ Proposed public topology for the selected website `https://opennest.co.in`; API/
 ```mermaid
 flowchart LR
     Browser -->|HTTPS| Frontend[Next.js on Vercel]
-    Browser -->|HTTPS API and OIDC| Caddy[Caddy on EC2]
+    Browser -->|HTTPS API and OTP| Caddy[Caddy on EC2]
     Caddy --> Backend[Spring Boot]
     Backend --> DB[(PostgreSQL and PostGIS)]
     Backend --> Sessions[(Redis sessions and cache)]
@@ -68,7 +68,7 @@ flowchart LR
 
 A candidate arrangement is `https://opennest.co.in` on Vercel and `https://api.opennest.co.in` on EC2: different origins within the same HTTPS site. The API subdomain is proposed, not configured or confirmed. The API host owns its host-only session cookie. Browser API calls include credentials; CORS allows only the exact configured frontend origin with credentials, and mutations require the synchronizer CSRF token. Do not automatically allow every subdomain or add a parent-domain session cookie. CORS does not replace authentication or CSRF protection. Keep `Secure`, `HttpOnly`, and `SameSite=Lax` as specified in [authentication](AUTHENTICATION.md). [Browser cookie semantics](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Set-Cookie).
 
-Send login navigation to `/oauth2/authorization/google` on the API origin and register its exact `/login/oauth2/code/google` callback with Google. Application REST paths remain `/api/v1/...`. Redirect successful login to the configured frontend without forwarding authorization codes or tokens. With an API-host-only cookie, Next.js SSR cannot assume it receives that cookie: initially load private account data through credentialed browser requests. A future same-origin proxy would need explicit cookie, redirect, forwarding, and cache tests.
+The browser obtains CSRF then POSTs /api/v1/auth/telegram/challenges, opens botUrl, shares its own contact, and POSTs the OTP to /api/v1/auth/telegram/challenges/{id}/complete. No OAuth redirects/callbacks are configured. With API-host-only cookies, private Next.js data initially uses credentialed browser fetches. A future same-origin proxy requires explicit cookie, forwarding and cache tests.
 
 An unrelated `*.vercel.app` frontend and API domain are cross-site; they do not satisfy this cookie plan by merely adding a CORS entry. Until the chosen domain has verified HTTPS routing, or equivalent same-origin routing is tested, use local development and isolated demo previews. Do not weaken cookies or enable production credentials for arbitrary preview URLs. Preview builds and sandbox deployments get no production secrets or data access.
 
@@ -76,11 +76,11 @@ Expose only Caddy's required HTTP/HTTPS ports publicly. Keep PostgreSQL, Redis, 
 
 Caddy needs a valid hostname, certificate storage, and a working ACME challenge route. If Cloudflare proxies the API, configure Full (strict) origin TLS and test certificate issuance/renewal. DNS challenges require the appropriate Caddy DNS module and scoped credentials; do not assume the default image includes it. [Caddy HTTPS](https://caddyserver.com/docs/automatic-https), [Cloudflare Full (strict)](https://developers.cloudflare.com/ssl/origin-configuration/ssl-modes/full-strict/).
 
-Only eligible unauthenticated production listing responses may use shared caches, following [LISTING_SEARCH.md](LISTING_SEARCH.md). Auth, contact, authenticated, and all sandbox responses are `no-store` at every layer. Bypass caching for requests carrying session/auth credentials and responses setting cookies; no blanket API or OAuth cache rule.
+Every listing response and fetch retains no-store through Phase 5, including anonymous production browsing. Auth/contact and all sandbox data also bypass shared caches. A future explicitly approved shared-cache policy must define eligibility, deployment/query partitioning, signed-image handling and tested invalidation before enablement.
 
 ### Recruiter isolation
 
-Use a separate frontend deployment/configuration where needed and a separate backend deployment, PostgreSQL instance, Redis instance, credentials, session cookies/stores, OAuth client if enabled, signing keys where used, storage buckets or enforced prefixes, and cache namespaces. Provision separate container networks and prohibit sandbox access to production stores. Prefer separate hosts for the public demo when budget permits; shared-host containers still share a kernel, administrator, and failure domain.
+Use a separate frontend deployment/configuration where needed and a separate backend deployment, PostgreSQL instance, Redis instance, credentials, session cookies/stores, bot credentials, signing keys where used, storage buckets or enforced prefixes, and cache namespaces. Provision separate container networks and prohibit sandbox access to production stores. Prefer separate hosts for the public demo when budget permits; shared-host containers still share a kernel, administrator, and failure domain.
 
 Untrusted headers never select production versus sandbox data. Production disables demo personas, resets, and demo telemetry. Sandbox fixtures are fabricated across Indian cities, with callable contacts disabled. A local Compose profile is not proof of application isolation. Test cross-environment credential, session, reset, and storage access rejection. Do not fit a second backend and datastore pair into the production memory estimate without measuring them separately.
 
@@ -92,7 +92,7 @@ The supplied 350 MB JVM / 512 MB database / 96 MB Redis / 2 GB swap budget is un
 
 | Component | Measure before fixing limits |
 | --- | --- |
-| Spring Boot | Peak RSS during startup, migrations, OIDC, uploads/validation, and concurrent nationwide searches; include heap, metaspace, code cache, direct buffers, and native/thread memory. |
+| Spring Boot | Peak RSS during startup, migrations, Telegram sign-in, uploads/validation, and concurrent nationwide searches; include heap, metaspace, code cache, direct buffers, and native/thread memory. |
 | PostgreSQL/PostGIS | Connections and concurrent sort/hash/spatial queries, autovacuum, indexes, temporary files, and backup activity. `work_mem` can apply to multiple operations per query; it is not a server-wide cap. [PostgreSQL memory settings](https://www.postgresql.org/docs/17/runtime-config-resource.html). |
 | Redis | Dataset plus allocator/buffers and persistence rewrite peaks. Leave memory above `maxmemory`; cap sessions/cache growth with TTLs and bounded writes. |
 | Host and Caddy | OS, Docker, TLS connections, page cache, monitoring, image pulls, and log/disk growth. Reserve measured headroom. |
@@ -101,7 +101,7 @@ Do not adopt `-Xss256k`, a tight metaspace cap, Serial GC, or `TieredStopAtLevel
 
 Use `noeviction` for Redis that holds sessions. `allkeys-lru` can remove authentication state; memory pressure under `noeviction` instead rejects memory-growing writes, which the application must handle with a controlled failure. Keep cache populations bounded or later move evictable cache data to a separate instance. Redis logical databases/namespaces do not isolate memory or eviction. [Redis eviction](https://redis.io/docs/latest/develop/reference/eviction/).
 
-Before exposing authentication publicly, configure edge rate limits for unauthenticated `GET /api/v1/auth/csrf` and `GET /oauth2/authorization/google` before requests reach session creation. Use per-client and aggregate budgets based on measured capacity, prevent direct public access around the edge, and verify excess requests receive 429 without creating Redis sessions. Application session creation is not a rate limiter. No production edge configuration exists yet.
+Before exposing authentication publicly, configure edge rate limits for unauthenticated `GET /api/v1/auth/csrf` and `POST /api/v1/auth/telegram/challenges` before requests reach session creation. Use per-client and aggregate budgets based on measured capacity, prevent direct public access around the edge, and verify excess requests receive 429 without creating Redis sessions. Application session creation is not a rate limiter. No production edge configuration exists yet.
 
 Provision Redis `maxmemory` below both its container memory limit and the host's available memory budget, allowing for allocator/buffer overhead and persistence rewrite peaks. Before launch, configure and exercise alerts for dataset usage against `maxmemory`, Redis RSS/container/host memory pressure, and rejected writes or OOM errors. The local Compose limit of 40 MB under an 80 MB container cap is a development setting, not production capacity or alerting evidence. Production limits, thresholds, and alert delivery remain unconfigured until the host and monitoring service are selected.
 
@@ -117,8 +117,8 @@ Create production artifacts only after application builds and the decisions belo
 2. **Startup checks:** use `service_healthy` for PostgreSQL and Redis, with real healthchecks; `service_Started` from the draft is invalid. PostgreSQL readiness must include `pg_isready -h 127.0.0.1 -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"`. Redis healthchecks must honor its configured authentication. Startup ordering does not handle later outages; application timeouts/retries and readiness still matter. [Compose dependency conditions](https://docs.docker.com/compose/how-tos/startup-order/).
 3. **Database roles:** give the app a restricted runtime role; run Flyway with a separate migration role. Keep Hibernate in validation mode. Reserve connections for migrations/maintenance and size the application pool below database capacity. Do not reuse development superuser credentials.
 4. **Backend image:** build with the Maven wrapper in CI, using Java 25 and a verified target architecture; run tests before publishing. Copy one explicitly identified executable JAR into a minimal non-root runtime, with secrets excluded from layers/build context. Preserve license/source metadata. A Docker build that skips tests is acceptable only after that exact revision passed the test job.
-5. **Proxy configuration:** route the API and OIDC framework paths, implement the chosen certificate setup and trusted forwarding, redact callback query strings, bound request sizes/timeouts, and protect management paths.
-6. **Secrets:** store production secrets in restricted deployment configuration. Reuse documented names from [.env.example](../.env.example), including `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_KEY`, `R2_STAGING_BUCKET`, and `R2_FINAL_BUCKET`. Phase 1.3 maps `DB_*` and `REDIS_*` to primary runtime clients and separate `SANDBOX_*` inputs to sandbox clients; supply production values through the process environment, never the whole development file. Dedicated migration credentials still need explicit mappings when migrations are implemented. New settings must be documented alongside implementation, never inferred from a pasted example.
+5. **Proxy configuration:** route the API and Telegram webhook paths, implement the chosen certificate setup and trusted forwarding, redact private request/query values, bound request sizes/timeouts, and protect management paths.
+6. **Secrets:** store production secrets in restricted deployment configuration. Reuse documented names from [.env.example](../.env.example), including `TELEGRAM_BOT_USERNAME`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_OTP_HMAC_KEY`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_KEY`, `R2_STAGING_BUCKET`, and `R2_FINAL_BUCKET`. Phase 1.3 maps `DB_*` and `REDIS_*` to primary runtime clients and separate `SANDBOX_*` inputs to sandbox clients; supply production values through the process environment, never the whole development file. Dedicated migration credentials still need explicit mappings when migrations are implemented. New settings must be documented alongside implementation, never inferred from a pasted example.
 7. **Authentication configuration:** no `JWT_SECRET`, `OTP_PROVIDER=CONSOLE_DEV`, hardcoded bot number, or implicit WhatsApp activation. Origins/URLs are literal configured URLs, not Markdown links; production origin allowlists exclude localhost and arbitrary previews. Missing required production configuration fails closed.
 
 ### Media and map services
@@ -135,7 +135,7 @@ The public Overpass instance's operator discourages using it as the backend of a
 
 Current foundation CI validates local Compose, datastore startup, distinct network membership/cross-network database reachability, PostGIS/Redis behavior, persistence, and AI-context size. It does not prove application isolation, build an application, or deploy anything.
 
-Phase 6 in the [project plan](PROJECT_PLAN.md#phase-6-task-boundaries) owns deployment and launch readiness after Phase 5. Apply the relevant OAuth, routing, edge rate-limit, Redis capacity/alert, and hosted session checks before any earlier public preview. The sequence below remains planned; provisioning and deployment require separate authorization.
+Phase 6 in the [project plan](PROJECT_PLAN.md#phase-6-task-boundaries) owns deployment and launch readiness after Phase 5. Apply the relevant provider, routing, edge rate-limit, Redis capacity/alert, and hosted session checks before any earlier public preview. The sequence below remains planned; provisioning and deployment require separate authorization.
 
 Planned delivery sequence:
 
@@ -152,9 +152,9 @@ Monitor uptime, HTTP errors/latency, JVM RSS, database pool/query time, Redis wr
 
 - Confirm the AWS account plan, eligible credits/expiry, complete monthly quote, spending alerts, and an acceptable recurring budget.
 - Select an available x86-64 instance/image combination; approve ARM only after native database testing. Benchmark capacity and decide where the separate recruiter deployment will run.
-- Verify control and DNS/TLS for `opennest.co.in`; confirm API/sandbox/media hostnames and same-site routing, or implement and test an equivalent same-origin proxy. Configure exact OAuth redirects and production/sandbox origins.
+- Verify control and DNS/TLS for `opennest.co.in`; confirm API/sandbox/media hostnames and same-site routing, or implement and test an equivalent same-origin proxy. Configure exact production origins and authenticated Telegram HTTPS webhook routing.
 - Review the production Redis version/license and map tile/Overpass provider. Pin supported patches and test upgrades against the chosen images.
-- Complete the existing phone-verification, moderation, privacy, backup/restore, and load-test requirements in the [project plan](PROJECT_PLAN.md). Google login alone cannot unlock owner publication.
+- Complete the existing phone-verification, moderation, privacy, backup/restore, and load-test requirements in the [project plan](PROJECT_PLAN.md). Telegram login never bypasses required images or listing quotas.
 
 Update this document and [ARCHITECTURE_STATE.md](ai-context/ARCHITECTURE_STATE.md) when a proposal becomes a tested deployment decision. Recheck provider terms and prices at provisioning time; the review date above is not a permanent guarantee.
 

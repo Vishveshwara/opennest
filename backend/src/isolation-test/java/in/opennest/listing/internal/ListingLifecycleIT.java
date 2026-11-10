@@ -216,7 +216,7 @@ class ListingLifecycleIT {
         assertThatThrownBy(() -> as(owner(0, false), () -> service().change(id, inventory("ROOM", 0, true), "inventory"))).isInstanceOf(RequestFailure.class);
     }
     @Test void migrationUpgradePreservesOriginalChecksumsAndValidatesMediaMetadata() {
-        assertThat(jdbc(0).queryForList("select version from flyway_schema_history where success order by installed_rank", String.class)).containsExactly("1", "2", "3");
+        assertThat(jdbc(0).queryForList("select version from flyway_schema_history where success order by installed_rank", String.class)).containsExactly("1", "2", "3", "4", "5");
         assertThat(jdbc(0).queryForList("select column_name from information_schema.columns where table_name='listing_owner_profiles'", String.class))
                 .containsExactlyInAnyOrder("id", "full_name", "average_rating", "review_count", "broker_report_count");
         UUID owner = owner(0, false);
@@ -263,7 +263,7 @@ class ListingLifecycleIT {
         assertThat(service().search(query("city", "StandaloneSnapshotCity"), false)).containsEntry("totalElements", 0L);
     }
     @Test void googleDisabledBrowsingHasExactOriginCorsAndNoAuthenticatedRoutes() throws Exception {
-        var configuration = settings(0); configuration.put("OPENNEST_GOOGLE_ENABLED", "false");
+        var configuration = settings(0); configuration.put("OPENNEST_TELEGRAM_AUTH_ENABLED", "false");
         try (var application = new SpringApplication(OpenNestApplication.class).run(configuration.entrySet().stream()
                 .map(entry -> "--" + entry.getKey() + "=" + entry.getValue()).toArray(String[]::new))) {
             String origin = "http://127.0.0.1:" + application.getEnvironment().getProperty("local.server.port");
@@ -434,9 +434,12 @@ class ListingLifecycleIT {
     private Map<String, String> settings(int target) {
         var result = new LinkedHashMap<String, String>();
         result.putAll(Map.of("server.port", "0", "server.address", "127.0.0.1", "OPENNEST_ENVIRONMENT", target == 0 ? "PRODUCTION" : "DEVELOPMENT",
-                "OPENNEST_DATA_MODE", target == 0 ? "PRIMARY" : "SANDBOX", "OPENNEST_GOOGLE_ENABLED", "true", "GOOGLE_CLIENT_ID", "fabricated-primary-client",
-                "SANDBOX_GOOGLE_CLIENT_ID", "fabricated-sandbox-client", "OPENNEST_BACKEND_ORIGIN", "https://api.opennest.example.invalid",
+                "OPENNEST_DATA_MODE", target == 0 ? "PRIMARY" : "SANDBOX", "OPENNEST_TELEGRAM_AUTH_ENABLED", target == 0 ? "true" : "false", "OPENNEST_BACKEND_ORIGIN", "https://api.opennest.example.invalid",
                 "OPENNEST_FRONTEND_ORIGIN", "https://opennest.example.invalid"));
+        result.put("TELEGRAM_BOT_USERNAME", "OpenNestFixtureBot");
+        result.put("TELEGRAM_BOT_TOKEN", "1234567:AAAAAAAAAAAAAAAAAAAAAAAAAA");
+        result.put("TELEGRAM_OTP_HMAC_KEY", "fabricated-listing-hmac-secret-at-least-32");
+        result.put("TELEGRAM_WEBHOOK_SECRET", "fabricated-listing-hook-secret-at-least-32");
         for (int i = 0; i < 2; i++) {
             String prefix = i == 0 ? "" : "SANDBOX_";
             result.put(prefix + "DB_HOST", databases.get(i).getHost()); result.put(prefix + "DB_PORT", databases.get(i).getMappedPort(5432).toString());
@@ -444,7 +447,6 @@ class ListingLifecycleIT {
             result.put(prefix + "DB_PASSWORD", i == target ? databases.get(i).getPassword() : "");
             result.put(prefix + "REDIS_HOST", redis.get(i).getHost()); result.put(prefix + "REDIS_PORT", redis.get(i).getMappedPort(6379).toString());
             result.put(prefix + "REDIS_PASSWORD", i == target ? "fabricated-listing-cache-" + i : "");
-            result.put(prefix + "GOOGLE_CLIENT_SECRET", i == target ? "fabricated-oauth-secret-" + i : "");
         }
         return result;
     }

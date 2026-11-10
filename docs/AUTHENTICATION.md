@@ -1,75 +1,42 @@
 # OpenNest authentication decisions
 
-Status: Phase 2 implements Google OpenID Connect, Redis sessions, CSRF/logout, private profiles, and derived trust badges. Google login is disabled by default until the selected deployment receives credentials and exact origins. The maintainer reported successful local Google sign-in on 3 November 2026. Hosted deployment and manual repeated-login/denial/logout checks remain unverified. WhatsApp and phone verification remain deferred and unavailable.
+On 10 November 2026 the maintainer selected Telegram Bot API as OpenNest's only authentication method, replacing the earlier Google OIDC design. Google routes, OAuth client dependencies, credential configuration, and login handlers are removed. Spring Security and backend-owned Redis sessions remain. [Telegram setup and Postman guide](TELEGRAM_HANDOFF.md) describes the current flow.
 
-With Google disabled, the [restrictive security baseline](BACKEND_HTTP_ERRORS.md) permits public Phase 3 listing reads with exact-origin CORS and exposes no identity routes. Enabling Google replaces that baseline with identity-owned security. Neither mode provides Basic authentication, a generated password, a framework login page, or demo authentication. Configuration and verification commands are in the [Phase 2 handoff](IDENTITY_HANDOFF.md).
+## Login and account identity
 
-## Initial Google login
+1. Fetch `GET /api/v1/auth/csrf` to establish an anonymous browser session and obtain its synchronizer token.
+2. Submit the expected +91 contact to `POST /api/v1/auth/telegram/challenges` with that cookie and CSRF token. A five-minute challenge binds the initiating session, realm, contact, random start-token digest, and bounded attempts/rates. No account or user phone is reserved yet.
+3. Open the returned botUrl and press Start. Only a fresh, unforwarded private message from a non-bot user can bind the first sender. Share the sender's own contact through the native button. Require chat.id=from.id=contact.user_id and the expected +91 number. Missing user_id fails closed.
+4. The bot sends a six-digit OTP to that private chat. Enter it in the initiating browser through `POST /api/v1/auth/telegram/challenges/{id}/complete` with CSRF protection. Neither a bot event nor status polling signs anyone in.
+5. Atomic completion resolves the stable Telegram sender identity, persists verified contact and receipts, rotates the session ID, clears the old CSRF token, and explicitly saves a minimal realm-bound principal. Fetch a fresh CSRF token before subsequent mutations.
 
-- Spring Boot is the authentication authority. Use Spring Security's Google OIDC client and Authorization Code flow with PKCE S256, state, and nonce bound to the initiating browser. Use maintained framework support; do not hand-write token validation or a parallel NextAuth login system.
-- Request only openid/email/profile. Configure exact allowlisted redirect URIs and use HTTPS in production. Validate issuer, audience, signature, expiry, nonce, and authorization response state. Missing or mismatched checks fail closed.
-- Identify the account by the verified issuer and subject (`iss`, `sub`), not email. Store the provider identity separately from the user. Google email and a typed phone number must never trigger automatic account merging. Linking requires an already authenticated, recently reauthenticated account and proof of the new identity.
-- Google signup allows account creation without a phone number. A successful Google login establishes control of a Google account. Indian mobile number and property ownership remain unverified. Return verification state explicitly; never mark a phone verified from a Google profile or reserve a unique user phone from unverified input.
-- Require separately verified +91 contact before an owner publishes a listing or exposes a contact number. Until an approved contact-verification method is implemented, publication will return 403 with a clear next step. Authenticated users may create PAUSED drafts and upload photos without a verified phone. Browsing/account creation do not depend on contact verification.
-- Use backend-owned opaque sessions through Spring Session Redis. Rotate the session ID after login and privilege changes. Initial target: 30-minute inactivity timeout and 24-hour absolute lifetime; enforce both on the server. Logout invalidates the session and expires its cookie.
-- Session cookies are HttpOnly, Secure in production, SameSite=Lax, and host-only, with distinct production/sandbox names. Route browser/API requests through the same site and scope CORS to configured origins. Never put session IDs, provider access/ID/refresh tokens, or client secrets in URLs or browser localStorage. OAuth state/nonce/PKCE challenge parameters may travel in framework authorization URLs; accept the short-lived code only on the configured callback. Never log callback query values or forward them to a frontend URL.
-- Keep transient OAuth authorization state in the initiating server session; add CSRF protection to state-changing application requests and logout. Expose a no-store synchronizer-token endpoint for the frontend. An expired/missing session means reauthentication (401 for protected REST endpoints); unavailable Redis means 503, never a demo bypass.
-- Production and recruiter backends will use separate redirect origins, Redis/session stores, cookie names/hosts, and identities. If Google login is enabled in the recruiter deployment, it must use its own OAuth registration; canned demo personas do not need live Google accounts. A demo session must never be exchangeable for a real session.
-- Trusted sandbox seeding may create fabricated published listings without a real verified phone; this is a sandbox-only fixture exception, not an HTTP publication bypass. Disable sandbox contact actions and use no callable phone numbers. Keep quota/inventory/review fixtures testable without sending real messages.
+The maintainer approved this contact evidence on 9 November 2026 and its use as sole authentication on 10 November. It proves access to the Telegram account associated with the shared number, not fresh SIM possession or property ownership. A six-digit code alone is never a public login bearer: the initiating private browser session and completed self-contact challenge are required. The flow does not claim resistance to active OTP phishing.
 
-This intentionally revises the supplied stateless-JWT browser-auth target. One backend-owned session system reduces duplicate login/account-linking logic. Revisit API bearer tokens only for a concrete client requirement.
+Account identity is issuer https://telegram.org plus the validated Telegram sender ID. Typed phones, display names, usernames, or email never select or merge users. New account names default to OpenNest user. Returning login must match the existing verified contact; contact replacement and identity linking are outside this flow. A phone already held by another account conflicts without disclosing that account.
 
-## Implemented routes when Google is enabled
+## Preserving existing data
 
-| Route | Responsibility |
-| --- | --- |
-| `GET /oauth2/authorization/google` | Spring Security login entry; redirect to Google with browser-bound authorization state. |
-| `GET /login/oauth2/code/google` | Spring Security callback; validate/exchange the code and rotate the session. |
-| `GET /api/v1/auth/csrf` | Return the initiating session's CSRF token; no-store; may create a pre-login session but does not authenticate the caller. |
-| `POST /api/v1/auth/logout` | CSRF-protected session invalidation; expire cookie; return 204. |
-| `GET /api/v1/users/me` | Authenticated account and verification state; no-store; 401 when unauthenticated. |
+V1 through V4 and all existing accounts/listings remain intact. A single existing verified contact receipt for a Telegram sender can establish that user's Telegram identity during successful OTP completion. Ambiguous legacy receipts conflict; an account with only an old provider identity requires a separately reviewed recovery process. There is no email/phone auto-linking or anonymous migration endpoint.
 
-Successful login redirects to the configured frontend origin plus `/`. Failed login redirects to that origin plus `/?login=failed`. Caller-supplied return URLs are ignored. Neither redirect includes provider codes or tokens. Phase 3 listing, draft, and image routes reuse the session and CSRF policy; see [the listing handoff](LISTINGS_HANDOFF.md).
+The Redis namespace changes to opennest:<realm>:telegram-auth:v1:sessions, invalidating old provider sessions. Reverting application code must use its own session namespace and retain V5; rollback must not drop private receipts or restore obsolete authentication as an unreviewed production option.
 
-An invalid callback or replay does not revoke an existing authenticated session. Logout remains a CSRF-protected POST. If account persistence fails after valid provider authentication, the new authentication state is cleared before returning the safe error.
+V5 adds short-lived telegram_login_receipts for safe completion retries while the original challenge remains valid. PostgreSQL advisory locks serialize each challenge and Telegram identity, followed by the user-row lock. User, identity, verified contact, current contact receipt, and login receipt commit together. A database rollback keeps the Redis claim retryable. Committed receipts permit same-session retries after Redis challenge loss. The controller carries private retry binding across session rotation. Expired receipts are ignored immediately and deleted hourly.
 
-`GET /api/v1/auth/csrf` returns `{token, headerName}`. Fetch a fresh token after login because authentication replaces the session and clears the pre-login token. Send the token through the returned header name for logout and future mutations. `GET /api/v1/users/me` returns `id`, `fullName`, `role`, `phoneNumber`, `phoneVerified`, `averageRating`, `reviewCount`, `brokerReportCount`, and `trustBadge`. Only the caller's account is selected. Both routes use `Cache-Control: no-store`.
+## Sessions, authorization, and isolation
 
-The login transaction creates a user and provider identity together. A uniqueness conflict on issuer/subject rolls back the losing transaction and reads the winning account. Email is metadata and never merges users. No account-linking or contact-edit endpoint exists. After login, Redis stores an OpenNest principal containing the user UUID, deployment realm, and authentication time. Provider tokens and authorized clients are discarded. Session expiry requires a new login.
+Sessions are opaque, HttpOnly, host-only, SameSite=Lax, Secure in production or HTTPS development. Idle expiry is 30 minutes; authenticated absolute expiry is 24 hours. Logout is CSRF-protected `POST /api/v1/auth/logout` and invalidates the session. `GET /api/v1/users/me` returns only the caller's authorized profile. Private and authentication responses are no-store.
 
-Trust precedence was approved for Phase 2: reports >= 1 with average < 3 gives `CRITICAL_BROKER_AND_LOW_RATING`; otherwise reports >= 1 gives `BROKERAGE_WARNED`; otherwise reviews >= 2 with average < 3 gives `LOW_RATINGS_BEWARE`; otherwise reviews >= 3 with average >= 4.5 gives `TOP_RATED`; otherwise `STANDARD`. No reviews means `STANDARD` and a NULL average. The calculator does not change listings. Brokerage warnings must describe allegations.
+Telegram authentication requires explicit OPENNEST_TELEGRAM_AUTH_ENABLED=true and is unavailable in the recruiter sandbox. When disabled, anonymous listing browsing remains available with exact-origin CORS while owner/account routes stay denied. Sandbox personas remain a separate future phase. Untrusted headers never select stores or grant access.
 
-The planned public website is `https://opennest.co.in`. The proposed frontend/API domain arrangement, preview restrictions, and host-only cookie implications for server rendering are documented in the [deployment plan](DEPLOYMENT_STACK.md#network-and-browser-session-topology). API and sandbox origins, domain control, DNS/TLS, routing, and Google OAuth registrations remain unverified or undecided; the website choice alone does not configure authentication.
+Publication still requires verified +91 contact, required validated images, ownership, and the transactional five-listing quota. Telegram signup verifies contact before creating an authenticated user, but the publication gate remains necessary for legacy and fabricated test accounts. Browsing needs no login. Owners without Telegram cannot authenticate through this selected method.
 
-## Review of user-sent WhatsApp verification
+Production requires secret-authenticated HTTPS webhooks. Explicit development polling uses one leased consumer and persisted offsets; it refuses an existing webhook and is forbidden in production. Console OTP, password, Basic, automatic webhook login, WhatsApp, SMS, and paid Gateway fallbacks are unavailable. Provider/dependency outages fail closed with fixed safe errors.
 
-The proposed wa.me link/QR and incoming webhook can associate an incoming sender with a challenge, but that alone is not a reviewed browser-login protocol. A forwarded link can trick a phone owner into approving a challenge opened in somebody else's browser. A signed webhook confirms the sender/provider event; it does not prove the sender intended to authorize that browser. This is the reason to begin with standard Google OIDC.
+## Sources and verification
 
-Before any WhatsApp option can be enabled:
+- [Telegram Bot API contact request and Contact fields](https://core.telegram.org/bots/api#keyboardbutton)
+- [Telegram bot deep links](https://core.telegram.org/bots/features#deep-linking)
+- [Spring Security session authentication and explicit context persistence](https://docs.spring.io/spring-security/reference/servlet/authentication/session-management.html)
+- [Current setup, privacy limits, and verification evidence](TELEGRAM_HANDOFF.md)
 
-- Validate real account/number availability, allowed use, production onboarding, test-number restrictions, provider terms, and current rates against Meta's current documentation/account console. A developer test number is not evidence of eligibility for public production authentication.
-- Verify webhook subscription challenges using a separate verification token. Validate POST events with X-Hub-Signature-256 using the Meta app secret and exact raw request bytes before trusting any sender/message fields; compare signatures in constant time. A subscription token does not authenticate POST payloads.
-- Accept only message events for the configured business account/recipient; distinguish delivery/status notifications. Deduplicate provider message IDs, handle retries/out-of-order events, and check expiry server-side. Never trust an unsigned client-submitted `from` field.
-- Use a cryptographically random challenge with at least 128 bits of entropy, TTL at most five minutes, stored hashed and bound to the expected normalized +91 number, initiating server session, and action (login versus linking). A six-digit code cannot be the sole public login bearer token. Enforce attempt/request/poll limits.
-- If polling is retained, use the initiating browser session, no-store responses, a minimum two-second interval, and stop on expiry/completion. A webhook may update challenge state but cannot set a browser session or expose credentials through a public status URL. Completion must be CSRF-protected and atomically single-use with replay/concurrency tests.
-- Explicitly solve the forwarded-link/session-relay threat before allowing authentication or contact linking. Sender equality and high entropy alone do not solve it. Do not enable the proposed automatic-login-on-webhook behavior merely because a matching message arrived.
-- Evaluate provider-delivered WhatsApp authentication templates as the alternative phone-verification path, including template/account requirements and spend limits. Choose and document the reviewed flow before adding live challenge/webhook endpoints.
-- No outbound reply is required by the proposed inbound-only design, but do not turn that into a zero-cost guarantee. Infrastructure, number/provider costs, eligibility, policy changes, and any later outbound messages need separate evaluation. No hardcoded bot number, live message sending, or production credentials in fixtures.
-
-## Provider fact-check and sources
-
-Checked 20 October 2026. Meta's public pricing overview describes charging for delivered business messages and links current rate cards. It does not establish a lifetime-free service or zero-onboarding guarantee for this custom login use case. Some detailed Meta pages required login or returned rate-limit errors during review; exact production test-number eligibility and account requirements remain unverified. Do not encode the claimed INR 0.115 reply price as a constant or publish "free forever" copy.
-
-- [Google OpenID Connect and server-flow validation](https://developers.google.com/identity/openid-connect/openid-connect)
-- [Spring Security Google login configuration](https://docs.spring.io/spring-security/reference/servlet/oauth2/login/core.html)
-- [Meta official webhook signature example](https://github.com/fbsamples/whatsapp-api-examples/blob/main/signature-validation-with-webhooks-payloads/app.py)
-- [WhatsApp official pricing overview and linked rate cards](https://business.whatsapp.com/products/platform-pricing)
-- [Meta WhatsApp production setup documentation](https://developers.facebook.com/documentation/business-messaging/whatsapp/get-started)
-
-## Acceptance criteria for implementation
-
-- Google success, denial, expired/reused code, invalid state/nonce/issuer/audience/signature, unsafe redirect, and PKCE mismatch.
-- Session rotation, idle/absolute expiry, logout, CSRF rejection, unavailable Redis, and production rejection of demo sessions.
-- Separate users for unrelated subjects even if emails collide; account linking requires proof of both identities. Never fabricate a verified phone for Google users.
-- Publication blocked without a verified owner contact; authenticated drafts/uploads and public browsing remain available. Sandbox fixture seeding cannot activate a production bypass. Contact verification has its own tests when a method is selected.
-- Every deferred WhatsApp challenge/webhook/status path remains unavailable until explicitly implemented and enabled after review. Later tests must cover spoofed events, duplicates, mismatched phones/recipients, expiration, racing completions, session relay, and bounded polling.
+Automated checks cover original-session/CSRF enforcement, rotation, old-token rejection, logout, absolute expiry, realm isolation, stable returning identity, concurrent signup/completion, legacy recovery/refusal, phone conflicts and rollback, provider retry, duplicate/untrusted contacts, bounded HTTP calls, and removed-provider route denial. Live bot identity was checked during setup. On 10 November 2026 the maintainer completed a real local self-contact/OTP login in Postman and read the authorized profile with phoneVerified=true. Hosted readiness, live repeated-login/failure/logout and R2 remain separate checks. [API_VERIFICATION.md](API_VERIFICATION.md) records cross-API coverage and OAuth removal.

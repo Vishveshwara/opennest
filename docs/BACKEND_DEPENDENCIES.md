@@ -2,7 +2,7 @@
 
 Checked on 22 October 2026 for Phase 1.1. Java 25 is the maintainer-selected target. The planned public website is `https://opennest.co.in`.
 
-Status: Phase 1.1 complete. Official release/POM evidence, Java 25 wrapper execution, dependency resolution, managed-version checks, and the supplied skeleton's build/test passed. Phase 1.5/1.6 migration/persistence and Phase 1.7 HTTP/security evidence follow below. Session, business service, and provider integration remain later work; Phase 1 is incomplete.
+Historical status at Phase 1.1: complete. Official release/POM evidence, Java 25 wrapper execution, dependency resolution, managed-version checks, and the supplied skeleton's build/test passed. Phase 1.5/1.6 migration/persistence and Phase 1.7 HTTP/security evidence follow below. Those later integrations were not established by the Phase 1.1 snapshot. Current Java 25/Spring dependencies include Telegram-only sessions and listing/media services, with OAuth client dependencies removed; [API_VERIFICATION.md](API_VERIFICATION.md) records the current artifact audit and full gate.
 
 ## Initializr input at Phase 1.1
 
@@ -87,7 +87,7 @@ The [Flyway PostgreSQL guide](https://documentation.red-gate.com/fd/postgresql-d
 ## Remaining implementation checks
 
 - Phase 1.2 reused the supplied skeleton and retained Java 25, Boot 4.1.1, and the verified wrapper. Keep Boot-managed dependencies versionless as later tasks add capabilities.
-- Select only the dependencies needed for the current task. Phase 1 needs web/validation, persistence/Flyway, Redis configuration, baseline security, module verification, and integration-test support. OIDC/session behavior and enrichment remain later phases.
+- Select only the dependencies needed for the current task. Phase 1 needs web/validation, persistence/Flyway, Redis configuration, baseline security, module verification, and integration-test support. At that foundation revision, session/provider behavior and enrichment remained later phases. Current sole Telegram authentication is documented in TELEGRAM_HANDOFF.md.
 - Use Testcontainers 2 coordinates such as `org.testcontainers:testcontainers-postgresql` and `org.testcontainers:testcontainers-junit-jupiter`; verify the resolved graph before implementing tests.
 - Do not enable Modulith JDBC/JPA event-publication stores merely to verify module boundaries; the planned schema does not include an event registry.
 
@@ -112,4 +112,4 @@ java -version
 
 The probe is a packaging-only POM with no Java application sources. It covers planned dependencies without installing them into the backend. Its [settings file](verification/backend-dependencies/settings.xml) mirrors all repositories to Maven Central, excluding credentialed vendor feeds declared by transitive POMs. After the initial download, add `-o` for cached resolution checks. Repeat graph inspection when actual application dependencies change; successful resolution alone does not establish feature-level runtime compatibility.
 
-On 30 October 2026, the review-fix Java 25 build passed all 204 tests using real PostGIS/Redis containers, including 23 isolation tests, with no failures/errors/skips. See the [handoff](BACKEND_HANDOFF.md) for resolved review findings, report/artifact verification, and PR CI checks. Feature service integration, sessions/OIDC, circuit-breaker behavior, release image builds, and deployment remain unverified. No release artifact was published.
+On 30 October 2026, the review-fix Java 25 build passed all 204 tests using real PostGIS/Redis containers, including 23 isolation tests, with no failures/errors/skips. See the [handoff](BACKEND_HANDOFF.md) for resolved review findings, report/artifact verification, and PR CI checks. That historical foundation result did not establish feature/session behavior, circuit breakers, release images or deployment. Current Telegram identity evidence is recorded separately in TELEGRAM_HANDOFF.md. No release artifact was published.
