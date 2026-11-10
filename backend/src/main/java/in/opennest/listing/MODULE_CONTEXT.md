@@ -12,5 +12,8 @@
 - Search filters/count/page/image hydration share REPEATABLE_READ; pagination precedes child hydration. Public DTOs exclude contacts/address/coordinates/distances. Owner-only views include version and private listing fields. Every listing response is no-store.
 - Limits: 20 retained/5 published listings per owner; 12 images/listing; 60 reservations/rolling 24h; 5 MiB and 20 MP; 10-minute PUT/5-minute GET URLs. Completion conditionally reads staging, strips metadata through fresh pixels, and attaches a distinct final object idempotently.
 - Separate private primary/sandbox R2 buckets/credentials; disabled storage fails upload operations with 503, no runtime fake fallback. Hourly cleanup removes old staging/orphan finals, preserves attached objects/drafts, and retains rate-accounting rows seven days.
-- Overpass disabled; no text/price/image edit or listing deletion routes. Phone verification deferred; ordinary Google accounts cannot publish. Test-only fixtures exercise successful publication with fabricated contacts.
+- Overpass disabled; no text/price/image edit or listing deletion routes. Telegram-only login supplies approved verified contact; legacy unverified accounts cannot publish. Test fixtures use fabricated contacts and do not bypass runtime publication gates.
 - Review corrections: body limits use decoded context-relative paths and configured CORS before validation regardless of security-filter order; JPEG finalization applies all EXIF orientations before stripping metadata; staging reads abort the stream at the total deadline.
+
+
+- TelegramContactIT now exercises every listing HTTP route using actual Telegram-flow session cookies in all three rental modes, with controlled test-only storage and genuine image validation. Ownership, CSRF, privacy, stale versions and logout remain enforced; docs/API_VERIFICATION.md. Live R2 remains unverified.

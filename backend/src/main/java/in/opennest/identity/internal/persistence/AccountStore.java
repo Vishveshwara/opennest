@@ -9,53 +9,17 @@ import jakarta.persistence.PersistenceContext;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @Repository
-@ConditionalOnProperty(name = "opennest.identity.google-enabled", havingValue = "true")
+@ConditionalOnProperty(name = "opennest.identity.telegram-enabled", havingValue = "true")
 public class AccountStore {
     @PersistenceContext private EntityManager entityManager;
-    private final TransactionTemplate transaction;
     private final TransactionTemplate readTransaction;
 
     public AccountStore(PlatformTransactionManager manager) {
-        transaction = new TransactionTemplate(manager);
-        transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         readTransaction = new TransactionTemplate(manager);
         readTransaction.setReadOnly(true);
-    }
-
-    public UUID login(String issuer, String subject, String name, String email, boolean emailVerified) {
-        try {
-            return transact(transaction, () -> {
-                var existing = identity(issuer, subject);
-                if (existing != null) {
-                    existing.email = email;
-                    existing.emailVerified = email != null && emailVerified;
-                    return existing.userId;
-                }
-                var user = new UserEntity();
-                user.fullName = name == null || name.isBlank() ? "OpenNest user" : name.strip();
-                entityManager.persist(user);
-                var identity = new AuthIdentityEntity();
-                identity.userId = user.id;
-                identity.issuer = issuer;
-                identity.subject = subject;
-                identity.email = email;
-                identity.emailVerified = email != null && emailVerified;
-                entityManager.persist(identity);
-                entityManager.flush();
-                return user.id;
-            });
-        } catch (RuntimeException failure) {
-            if (!identityConflict(failure)) throw failure;
-            return transact(transaction, () -> {
-                var winner = identity(issuer, subject);
-                if (winner == null) throw failure;
-                return winner.userId;
-            });
-        }
     }
 
     private <T> T transact(TransactionTemplate template, Supplier<T> work) {
@@ -105,16 +69,4 @@ public class AccountStore {
                 .setParameter("id", id).getSingleResultOrNull();
     }
 
-    private AuthIdentityEntity identity(String issuer, String subject) {
-        return entityManager.createQuery("select i from AuthIdentityEntity i where i.issuer = :issuer and i.subject = :subject", AuthIdentityEntity.class)
-                .setParameter("issuer", issuer).setParameter("subject", subject).getResultStream().findFirst().orElse(null);
-    }
-
-    private boolean identityConflict(Throwable failure) {
-        for (Throwable current = failure; current != null; current = current.getCause()) {
-            if (current instanceof org.hibernate.exception.ConstraintViolationException constraint
-                    && "uq_auth_identities_issuer_subject".equals(constraint.getConstraintName())) return true;
-        }
-        return false;
-    }
 }

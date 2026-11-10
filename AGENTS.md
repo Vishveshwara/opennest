@@ -8,14 +8,14 @@
 - Listing search includes server-side pagination, allowlisted sorting, and composable filters from its first implementation. Read `docs/LISTING_SEARCH.md` before editing search; distinguish flat bedrooms/BHK from currently available rooms.
 - Distinguish implemented behavior from proposals. Never describe a planned endpoint or migration as live.
 - Read `docs/DEPLOYMENT_STACK.md` before changing hosting, image architecture, production configuration, or delivery workflows; keep provider assumptions and deployment status explicit.
-- Use full `/api/v1/...` paths for application REST routes in every document; the Google OIDC framework routes are the explicit exception. Keep API/schema indexes aligned with the detailed authentication and search plans.
+- Use full `/api/v1/...` paths for application REST routes in every document; Keep API/schema indexes aligned with the detailed authentication and search plans.
 - Update the relevant context indexes in the same change as database, API, or service changes. Keep each index under 80 lines and use bullets.
 - Add a module-local `MODULE_CONTEXT.md` when creating a Java module; keep it under 50 lines.
 - Do not add inline comments to Java, TypeScript, TSX, or SQL source. Document architectural reasoning in context files.
 - Preserve the requested Java 25/Spring and Next.js stack. Java 25 replaces the earlier Java target by maintainer decision on 22 October 2026. Verify exact release availability and compatibility before initializing each application; do not silently substitute versions.
 - Use Flyway migrations and Hibernate validation. Never use automatic schema updates.
-- Implement Google OpenID Connect login first through Spring Security with backend-owned server sessions; follow `docs/AUTHENTICATION.md`. WhatsApp verification is a later, disabled-by-default option requiring a separate security/readiness review. Development substitutes must be explicitly enabled and unavailable in production.
-- Google sign-in does not verify a phone number. Require a separately verified +91 owner contact before publishing; never auto-link identities by email or an unverified phone number.
+- Telegram Bot API is the sole authentication provider by maintainer decision on 10 November 2026. Use private self-contact +91 matching and an original-session, CSRF-protected OTP completion with backend-owned Redis sessions; follow `docs/AUTHENTICATION.md`. Do not restore Google/OIDC, console OTP, or automatic webhook login. Development polling must be explicitly enabled and unavailable in production.
+- Require verified +91 owner contact before publishing. Approved Telegram self-contact plus original-browser OTP proves Telegram-account contact access, not fresh SIM possession or property ownership. Never auto-link identities by email or a typed/unverified phone. Preserve existing users/listings; recover legacy accounts only from an unambiguous verified Telegram association.
 - Follow `docs/LISTING_MODEL.md`: PG_HOSTEL rent is INR per person/month; FLAT ENTIRE_FLAT is per property/month and FLAT ROOM is per room/month. Derive and display rentBasis with every price; keep whole-flat boolean availability separate from room counters.
 - Owners configure occupancy capacity: maxOccupants for an entire flat, maxSharingPerRoom for rooms. Return/display these limits without deriving them from BHK or multiplying rent by the allowed people.
 - OpenNest is licensed under GNU AGPL version 3 only (`AGPL-3.0-only`); preserve LICENSE and do not add an "or later" grant without maintainer instruction.

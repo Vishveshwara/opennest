@@ -1,12 +1,22 @@
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:781fa2b525ce95ba86872eee3e712414c14f11dea045a996d17f4b9eaa255560 -->
+
+<!-- coderabbit-ai-generated-section:v1:f7e6c0581f50b78c692375b847105c424ae95fcb7d18b0c9641878c38b96d36d -->
+
+<!-- coderabbit-ai-generated-section:v1:eca0aabd9541b302bca250fda3c6a3040e9ba7784a4eaa9f40eb89c9a5187e67 -->
+
+<!-- coderabbit-ai-generated-section:v1:6f92bae5fc72e327b4a25c2739997312246db672a538eb2c13084cc32493811c -->
+
 # OpenNest database schema contract
 
-Status: Phase 1.4 design implemented by Phase 1.5's V1 schema/V2 indexes and Phase 1.6's module-owned mappings/Hibernate validation, verified on isolated PostgreSQL 17/PostGIS 3.5 targets on 22 October 2026. See [migration execution](BACKEND_MIGRATIONS.md) and [persistence evidence](BACKEND_PERSISTENCE.md). Phase 3 adds V3 media metadata and listing services, described below. Hosted databases are not migrated; triggers and interaction APIs remain unimplemented.
+Status: Phase 1.4 design implemented by Phase 1.5's V1 schema/V2 indexes and Phase 1.6's module-owned mappings/Hibernate validation, verified on isolated PostgreSQL 17/PostGIS 3.5 targets on 22 October 2026. See [migration execution](BACKEND_MIGRATIONS.md) and [persistence evidence](BACKEND_PERSISTENCE.md). Phase 3 adds V3 media metadata/listing services, and Phase 3A adds V4 current contact provenance plus V5 expiring login receipts, described below. Current totals are eight application tables/87 columns with six ORM mappings/76 columns. Hosted databases are not migrated; triggers and interaction APIs remain unimplemented.
 
 The [listing model](LISTING_MODEL.md), [search contract](LISTING_SEARCH.md), and [authentication decisions](AUTHENTICATION.md) remain authoritative for feature behavior. Production and sandbox use identical migrations in separate databases. No row-level sandbox flag or request-selected database is introduced.
 
 ## Storage conventions
 
-- Six application tables live in `public`: `users`, `auth_identities`, `properties`, `property_images`, `contact_reveals`, and `owner_reviews`. Flyway's history and PostGIS extension objects are additional infrastructure objects.
+- Eight application tables live in public: users, auth_identities, properties, property_images, contact_reveals, owner_reviews, contact_verifications and telegram_login_receipts. V1 introduced the first six; V4/V5 introduced the receipt tables. Flyway history and PostGIS objects are additional infrastructure.
 - Each table has `id uuid PRIMARY KEY`, NOT NULL, with no database default. The application supplies a random UUID before insertion. IDs never change; fixture IDs may be deterministic only in isolated sandbox/test databases.
 - In the tables below, **required** means `NOT NULL`; **nullable** means SQL NULL is allowed. **None** means no explicit default. Nullable fields omitted on insert become NULL. Generated columns have no separate default and cannot accept a caller's value.
 - Enum-like values use `text` plus named `CHECK` constraints, mapped as strings later. Do not introduce PostgreSQL enum types or ordinal persistence. Every required enum also has `NOT NULL`.
@@ -35,7 +45,7 @@ PostgreSQL accepts a CHECK whose result is NULL; mode/aggregate checks must ther
 | `broker_report_count` | `bigint` | required | `0` | 0..review_count |
 | `created_at` | `timestamptz` | required | `statement_timestamp()` | Account creation instant |
 
-- `ck_users_verified_phone`: `(phone_number IS NULL AND phone_verified_at IS NULL) OR (phone_number IS NOT NULL AND phone_verified_at IS NOT NULL)`. The service stores both only after separate successful verification. A format check and timestamp are not proof of verification; Google login must leave both NULL.
+- `ck_users_verified_phone`: `(phone_number IS NULL AND phone_verified_at IS NULL) OR (phone_number IS NOT NULL AND phone_verified_at IS NOT NULL)`. The service stores both only after separate successful verification. A format check and timestamp are not proof of verification; only approved self-contact plus original-session OTP completion persists them.
 - `uq_users_phone_number` uses ordinary UNIQUE semantics, allowing multiple NULL phones and forbidding duplicate non-NULL contacts. Contact changes, releases, or identity linking by phone are not implemented or authorized by this constraint.
 - `ck_users_rating_state`: `(review_count = 0 AND average_rating IS NULL) OR (review_count > 0 AND average_rating IS NOT NULL AND average_rating BETWEEN 1 AND 5)`. Count/range checks also apply. No default five-star rating.
 - `average_rating` deliberately has no fixed decimal scale. Later writers set it from PostgreSQL `AVG(rating)` in the same transaction as counts; presentation rounding must not overwrite the stored aggregate. Cross-table agreement is a service invariant, not proven by these row checks.
@@ -54,10 +64,10 @@ PostgreSQL accepts a CHECK whose result is NULL; mode/aggregate checks must ther
 | `email_verified` | `boolean` | required | `false` | Cannot be true when email is NULL |
 | `created_at` | `timestamptz` | required | `statement_timestamp()` | Link creation instant |
 
-- `uq_auth_identities_issuer_subject` is UNIQUE(issuer, subject). Store the validated provider issuer and subject without email-based substitution. Phase 2 must validate the accepted Google issuer consistently before lookup/insert; arbitrary issuer strings are not trusted because they fit this table.
-- `ck_auth_identities_email_claim`: `email IS NOT NULL OR email_verified = false`. Missing verification claims remain false. Email is provider metadata, never a unique identity or automatic account-link key. [OpenID Connect claim stability](https://openid.net/specs/openid-connect-core-1_0.html#ClaimStability) defines issuer/subject as the stable identity pair.
+- `uq_auth_identities_issuer_subject` is UNIQUE(issuer, subject). Store the validated provider issuer and subject without email-based substitution. Sole Telegram login uses fixed issuer https://telegram.org plus the validated sender ID; arbitrary issuer strings are not trusted because they fit this table.
+- `ck_auth_identities_email_claim`: `email IS NOT NULL OR email_verified = false`. Retain nullable email metadata for existing private rows; current Telegram authentication writes email=NULL/email_verified=false. Email is never an identity selector or automatic account-link key. Current identity authority is the fixed Telegram issuer and validated sender ID; retained columns do not enable OAuth.
 - One user may have multiple explicitly linked identities. No uniqueness on user_id or user_id/issuer is added. Linking still requires reauthentication and proof of both identities; deleting a link is not exposed yet.
-- Tokens, sessions, OAuth state, and deferred phone challenges do not belong in these tables. Planned sessions/challenges use the deployment's separate Redis instance.
+- Tokens, sessions, and pending Telegram challenges do not belong in these tables. Implemented sessions/challenges use the deployment's separate Redis instance.
 
 ## Listing-owned tables
 
@@ -223,7 +233,7 @@ Do not promise these indexes satisfy every filter/sort combination. Phase 3 reco
 
 | Invariant | V1 database protection | Later service/transaction responsibility |
 | --- | --- | --- |
-| Identity/contact | Unique issuer/subject and non-NULL phones; phone/timestamp shape | OIDC validation, linking proof, actual phone verification, authorized private access |
+| Identity/contact | Unique issuer/subject and non-NULL phones; phone/timestamp shape | Telegram self-contact/OTP proof, explicit recovery/linking, authorized contact verification, authorized private access |
 | Ownership | User FKs; composite property/owner FKs; no self-reveal/review | Authenticated owner/reviewer IDs; immutable property owner/category/mode; no client ID assertions |
 | Draft/publication | Default PAUSED; valid mode/inventory; published status agrees with vacancy | Only draft creation; contact/photos gates and serialized five-listing quota at publish/reactivation |
 | Inventory/version | Nonnegative version; generated totals; row consistency | Exact expected-version conditional update; accepted inventory increments; PAUSED preserved; current-version publish/pause no-op; stale request 409 |
@@ -246,7 +256,7 @@ Phase 1.5's real PostgreSQL 17/PostGIS 3.5 checks cover the following schema acc
 - Verify Kolkata dates around 18:30 UTC and under changed session timezones, including historical fixtures. Verify object expiry and timestamp-order checks.
 - Keep service/transaction behaviors separate from these schema tests. Phase 1.6 now proves Hibernate validation and persistence round trips; publication/reveal quota and review concurrency belong to their feature phases. Broader application isolation and backend CI gates remain later Phase 1 tasks.
 
-Phase 2 approves and implements trust thresholds without changing the schema. Phase 3 implements listing services and the V3 additions below. Phone provider, moderation/appeals, retention/erasure policy, future public map coarsening, and edit/deletion routes remain open. They do not authorize a service bypass or a public launch.
+Phase 2 approves and implements trust thresholds without changing the schema. Phase 3 implements listing services and the V3 additions below. Phase 3A adds the approved Telegram contact provenance through V4 and expiring login receipts through V5. Moderation/appeals, broader retention/erasure policy, future public map coarsening, and edit/deletion routes remain open. They do not authorize a service bypass or a public launch.
 
 ## Phase 3 V3 additions
 
@@ -264,3 +274,33 @@ V3 adds six nullable columns to `property_images`; the six entity mappings now c
 | `height` | integer | Positive; product uses bigint arithmetic |
 
 Constraints are `ck_property_images_declared_metadata` and `ck_property_images_validated_metadata`. Explicit `num_nonnulls` checks reject partial groups rather than allowing SQL NULL to bypass validation. No table, deletion cascade, or extra index is added. Service reservations/finalization, quotas, cleanup and response rules are in [LISTINGS_HANDOFF.md](LISTINGS_HANDOFF.md).
+
+## Phase 3A V4 contact receipt
+
+V4 adds the identity-owned, private `contact_verifications` table. V1/V2/V3 remain unchanged. The seven-column table uses JDBC rather than an additional entity; six existing ORM entities still map 76 columns. At V4 there were seven application tables with 83 columns; current V5 adds the four-column login receipt table, for eight tables and 87 columns.
+
+| Column | Type | Database rules |
+| --- | --- | --- |
+| `id` | uuid | Challenge ID, primary key |
+| `user_id` | uuid | Required, unique, users FK with immediate RESTRICT update/delete |
+| `phone_number` | varchar(13), C collation | Required exact +91 and ten digits |
+| `telegram_user_id` | bigint | Required positive sender ID |
+| `session_digest` | varchar(64), C collation | Required lowercase 64-character hex HMAC |
+| `method` | text | Required, default and check TELEGRAM_ACCOUNT_CONTACT |
+| `verified_at` | timestamptz | Required, defaults to statement_timestamp() |
+
+The service locks the user and writes users.phone_number/phone_verified_at plus the receipt in one transaction. Existing users.phone_number uniqueness prevents account merging. V4 session_digest records provenance only; it does not authorize retries after Redis loss. Database rollback leaves a claimed Redis challenge retryable. A verified contact cannot be replaced through this initial API.
+
+Keep one current receipt for the lifetime of that verified account; no verification history, Telegram username, vCard, or plaintext code is retained. Future contact replacement/account erasure must delete the receipt consistently with private account data. Pending challenges, expected contacts, code HMACs, rates, and update deduplication remain TTL-bounded private Redis data. The maintainer accepts Telegram self-contact plus browser OTP as owner-contact evidence, not proof of fresh SIM possession or property ownership. [TELEGRAM_HANDOFF.md](TELEGRAM_HANDOFF.md) records the flow and recovery tests.
+
+
+## Phase 3A V5 login receipts
+
+V5 adds telegram_login_receipts without changing V1-V4. Its columns are id UUID primary key, user_id required immediate RESTRICT users FK, session_digest required 64-character lowercase-hex HMAC, and expires_at required timestamptz. An expiry index supports hourly deletion. V6 adds the nonunique ix_contact_verifications_telegram_user index on contact_verifications.telegram_user_id for sender lookup; V1–V5 remain unchanged. There are eight application tables and 87 columns; six existing ORM mappings remain at 76 columns.
+
+Each successful anonymous-session OTP completion writes the receipt in the same transaction as account/identity/contact/V4 provenance. Its expiry equals the challenge's original five-minute deadline. After Redis loss, only the V5 login receipt authorizes a retry by validating expiry and session_digest; expired rows cannot authorize a retry even before cleanup. Challenge and Telegram sender advisory locks serialize retries/signup, then user locking preserves contact consistency. A rollback keeps the Redis claim retryable. The controller separately rotates and persists browser authentication.
+
+Telegram account identity uses fixed issuer https://telegram.org and validated sender ID. Exactly one prior contact receipt for that sender may recover an existing account; ambiguous receipts conflict. No phone/email matching merges accounts, and unassociated legacy users remain intact pending explicit recovery. Old provider identity rows are retained privately but have no active authentication route. User/session/contact/login data is never placed in unauthenticated responses.
+
+
+<!-- /coderabbit-ai-generated:v1 -->

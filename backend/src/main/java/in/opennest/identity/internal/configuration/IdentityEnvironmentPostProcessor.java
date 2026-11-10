@@ -25,13 +25,13 @@ public class IdentityEnvironmentPostProcessor implements EnvironmentPostProcesso
         }
         var settings = IdentitySettings.read(environment);
         environment.getPropertySources().addFirst(new MapPropertySource("opennestIdentityPolicy", Map.of(
-                "opennest.identity.google-enabled", settings.googleEnabled(),
-                "spring.session.redis.namespace", "opennest:" + IdentitySettings.realm(environment) + ":sessions",
+                "opennest.identity.telegram-enabled", settings.telegramEnabled(),
+                "spring.session.redis.namespace", "opennest:" + IdentitySettings.realm(environment) + ":telegram-auth:v1:sessions",
                 "spring.session.timeout", "30m",
                 "spring.session.redis.repository-type", "default",
                 "spring.session.redis.flush-mode", "on_save",
                 "server.forward-headers-strategy", "none",
-                "spring.session.store-type", settings.googleEnabled() ? "redis" : "none")));
+                "spring.session.store-type", settings.telegramEnabled() ? "redis" : "none")));
     }
     @Override public int getOrder() { return ConfigDataEnvironmentPostProcessor.ORDER + 2; }
 }

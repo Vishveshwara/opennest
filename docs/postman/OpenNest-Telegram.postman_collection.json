@@ -1,0 +1,216 @@
+{
+  "info": {
+    "name": "OpenNest Telegram login",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Telegram is the only authentication provider. Start OpenNest with local Telegram auth/polling enabled. Keep the localhost cookie jar enabled. No Google login or copied browser cookie is required. Fetch CSRF, set your own +91 phoneNumber privately, create challenge, open botUrl, Start and share your own Telegram contact, then enter the delivered code as local otp and complete in this cookie session. Refresh CSRF after login. Status polling never authenticates. Do not export real contacts, codes, cookies or secrets."
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "phoneNumber",
+      "value": ""
+    },
+    {
+      "key": "otp",
+      "value": ""
+    },
+    {
+      "key": "csrfToken",
+      "value": ""
+    },
+    {
+      "key": "challengeId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Get anonymous CSRF token",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/auth/csrf"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('CSRF token received', () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) pm.collectionVariables.set('csrfToken', pm.response.json().token);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Start Telegram login challenge",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{csrfToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/auth/telegram/challenges",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"phoneNumber\": \"{{phoneNumber}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Challenge created', () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) pm.collectionVariables.set('challengeId', pm.response.json().challengeId);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Check status, at least two seconds apart",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/auth/telegram/challenges/{{challengeId}}"
+      }
+    },
+    {
+      "name": "4. Complete with bot OTP",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{csrfToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/auth/telegram/challenges/{{challengeId}}/complete",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"code\": \"{{otp}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Signed in', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().status).to.eql('AUTHENTICATED'); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Refresh CSRF after session rotation",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/auth/csrf"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('CSRF token received', () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) pm.collectionVariables.set('csrfToken', pm.response.json().token);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Read private verified profile",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/users/me"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Own verified profile', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().phoneVerified).to.eql(true); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Log out with fresh CSRF",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{csrfToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/auth/logout"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Logged out', () => pm.response.to.have.status(204));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. Confirm logged-out profile is denied",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/users/me"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Authentication required', () => pm.response.to.have.status(401));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

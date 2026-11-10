@@ -30,7 +30,7 @@ class OpenNestApplicationTests {
 
     @Autowired private org.springframework.test.web.servlet.MockMvc mvc;
 
-    @Test void googleDisabledBrowsingHasExactOriginCorsAndNoAuthenticatedRoutes() throws Exception {
+    @Test void authenticationDisabledBrowsingHasExactOriginCorsAndNoAuthenticatedRoutes() throws Exception {
         for (var request : java.util.List.of(post("/api/v1/listings"),
                 patch("/api/v1/listings/00000000-0000-0000-0000-000000000001/inventory"))) {
             mvc.perform(request.with(user("fabricated-test-principal")).with(csrf())

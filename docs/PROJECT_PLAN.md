@@ -1,6 +1,16 @@
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:73aa62c003973b47941d1baf6377792a788fe7287a4cf1636c237ee99a88b64c -->
+
+<!-- coderabbit-ai-generated-section:v1:536afc8383bae8d10d25de7f87213b6767c9cccb64c8c2ccfd7d1a2651e06286 -->
+
+<!-- coderabbit-ai-generated-section:v1:e3c2834bfc391f87efc0fc6ef4e42cc0e57085ab9a7c30403bb006f436786664 -->
+
+<!-- coderabbit-ai-generated-section:v1:2700e6ae392db041d474d040f4e13dbe55e795a08acdc57bb3049abba615692c -->
+
 # OpenNest implementation plan
 
-This plan defines OpenNest's proposed India-wide launch. Phase 0 provides documentation and local infrastructure. Phase 1 supplies the Java 25/Spring foundation, guarded stores, Flyway/Hibernate validation, safe errors, and real-store verification. Phase 2 adds opt-in Google OIDC, Redis sessions, CSRF/logout, private profiles, and approved trust rules. Phase 3 implements listing services; Phases 4 and 5 cover interactions and the frontend. Phase 6 covers deployment and launch readiness after Phase 5. Phase 3 verification and remaining readiness gates are recorded in [LISTINGS_HANDOFF.md](LISTINGS_HANDOFF.md); later phases and hosted deployment remain outstanding. Work proceeds one phase per prompt and one reviewable PR per phase. The AI indexes summarize implemented behavior and proposals. [DEPLOYMENT_STACK.md](DEPLOYMENT_STACK.md) records hosting assumptions.
+This plan defines OpenNest's proposed India-wide launch. Phase 0 provides documentation and local infrastructure. Phase 1 supplies the Java 25/Spring foundation, guarded stores, Flyway/Hibernate validation, safe errors, and real-store verification. Phase 2 supplies identity, Redis sessions, CSRF/logout, private profiles, and approved trust rules. The 10 November 2026 maintainer decision replaces the earlier provider with sole Telegram Bot API authentication in Phase 3A. Phase 3 implements listing services; Phases 4 and 5 cover interactions and the frontend. Phase 6 covers deployment and launch readiness after Phase 5. Phase 3 verification and remaining readiness gates are recorded in [LISTINGS_HANDOFF.md](LISTINGS_HANDOFF.md); later phases and hosted deployment remain outstanding. Work proceeds one phase per prompt and one reviewable PR per phase. The AI indexes summarize implemented behavior and proposals. [DEPLOYMENT_STACK.md](DEPLOYMENT_STACK.md) records hosting assumptions.
 
 ## Confirmed product direction
 
@@ -12,8 +22,8 @@ This plan defines OpenNest's proposed India-wide launch. Phase 0 provides docume
 - Java 25 is the backend target, confirmed on 22 October 2026; it supersedes the earlier Java target. The supplied backend POM already requests Java 25.
 - Maximum five ACTIVE/FULL_OCCUPIED listings per owner; PAUSED listings do not count.
 - No chat or WebSockets. Authenticated users may reveal ten distinct listing contacts per India calendar day.
-- Authentication: Google sign-in first through Spring Security OIDC, with backend-owned server sessions. WhatsApp verification is a later option, disabled until its flow and production readiness are reviewed. See [Authentication decisions](AUTHENTICATION.md).
-- Google signup allows account creation without phone verification. Owners must separately verify a +91 contact before Phase 3 publication. Publishing remains unavailable until a verification method is ready. Planned PAUSED drafts and photo uploads require authentication but no verified phone.
+- Authentication: Telegram Bot API is the only login method by maintainer decision on 10 November 2026. A native private self-contact +91 match and OTP entered in the initiating browser establish the backend-owned session. This evidence was approved on 9 November; it does not prove fresh SIM possession or property ownership. No Google login, console provider, or webhook-only approval. See [Authentication decisions](AUTHENTICATION.md) and [Telegram setup](TELEGRAM_HANDOFF.md).
+- Successful Telegram OTP completion atomically creates/resolves the account and verified contact. Browsing remains public. PAUSED drafts/uploads require authentication; publication separately enforces contact, required images, ownership, and quota. Accounts without Telegram cannot authenticate through this selected method.
 - PG_HOSTEL rent is INR per person/month; FLAT supports ENTIRE_FLAT at a per-property quote and ROOM at a per-room quote. Individual flat rooms and per-room pricing were confirmed on 22 October 2026. Whole-flat availability uses a boolean; ROOM/PG inventory counts rooms, not beds or people. See [listing modes and inventory](LISTING_MODEL.md).
 - Owners set the number of people allowed: maxOccupants for an entire flat, maxSharingPerRoom for each offered room. Display capacity alongside price; changing capacity must not multiply a flat-room quote or change vacancy automatically.
 - License: GNU Affero General Public License version 3 only (`AGPL-3.0-only`), included in the root LICENSE file.
@@ -25,7 +35,7 @@ This plan defines OpenNest's proposed India-wide launch. Phase 0 provides docume
 
 ## Corrections to the original constitution
 
-1. **Sandbox security:** an untrusted header cannot select production versus demo data. Use separate backend deployments/configuration, database credentials, Redis/session stores, cookie names/hosts, storage prefixes or buckets, cache namespaces, and separate OAuth clients/signing keys where used. Production disables demo operations entirely. The local Compose profile provisions separate data stores; it is not proof of application isolation.
+1. **Sandbox security:** an untrusted header cannot select production versus demo data. Use separate backend deployments/configuration, database credentials, Redis/session stores, cookie names/hosts, storage prefixes or buckets, cache namespaces, and separate bot secrets/signing keys where used. Production disables demo operations entirely. The local Compose profile provisions separate data stores; it is not proof of application isolation.
 2. **Trust rules:** Phase 2 approval confirms this canonical precedence: >=1 report and average <3 -> CRITICAL_BROKER_AND_LOW_RATING; else >=1 report -> BROKERAGE_WARNED; else >=2 reviews and average <3 -> LOW_RATINGS_BEWARE; else >=3 reviews and average >=4.5 -> TOP_RATED; otherwise STANDARD. No reviews means STANDARD with a NULL numeric rating. Phase 2 calculates profile badges; Phase 3 must reuse the calculator for listing responses. Do not label an owner VERIFIED merely because nobody reported them.
 3. **Reports:** require prior contact reveal and forbid self-reporting. Each reviewer/property pair has one unique review with an immutable UUID. The first report creates that review or converts it in place to one star / ASKED_BROKERAGE / report flag, preserving existing text, UUID, and creation time. Show the allegation notice separately from preserved text. Repeated reports are no-ops. Ordinary review creation conflicts on an existing pair and cannot clear a report; ASKED_BROKERAGE uses the report endpoint. Serialize all review/report writers on the owner row and update the review and owner aggregates in one transaction, counting each row and report once. Provide an appeal/correction path. Warnings should say “brokerage reported,” not assert proven misconduct.
 4. **Atomic limits:** serialize owner quota changes and daily contact-ledger writes in PostgreSQL. Redis is an accelerator, not the sole quota ledger. Lost cache entries must never reset the daily allowance.
@@ -42,11 +52,12 @@ This plan defines OpenNest's proposed India-wide launch. Phase 0 provides docume
 | --- | --- | --- |
 | 0: foundation | Instructions, context indexes, local persistent stores, review configuration, CI | Compose parses; both store pairs start on distinct networks; PostGIS works; data survives container replacement |
 | 1: backend | Java 25/Spring bootstrap, Flyway schema including rental modes, applicable inventory, flat bedrooms and search indexes, common errors, deployment modes | Migrations on real PostGIS; schema validation; production rejects demo mode; module boundaries |
-| 2: identity | Google OIDC, backend sessions, CSRF/logout, user profile, trust calculator | State/nonce/PKCE and ID-token checks; session rotation/expiry; CSRF; safe account linking; production rejects demo auth; trust thresholds; phone-unverified owners cannot publish |
+| 2: identity | Backend sessions, CSRF/logout, private profile, trust calculator, transactional identity persistence | Rotation/expiry, CSRF, authorized profile, isolation, approved trust thresholds; provider login superseded by Phase 3A |
 | 3: listings | PAUSED drafts, image upload/finalization, explicit publish/pause, owner quota, versioned mode-aware inventory, nationwide search, R2 URLs, optional approved Overpass | Draft-upload-publish flow works for all modes; invalid photos/contact cannot publish; LISTING_MODEL.md and LISTING_SEARCH.md cases pass; concurrent sixth publication rejected; stale writes rejected; PAUSED preserved; unauthorized edits denied; real geo queries; enrichment disabled/outage fallback |
+| 3A: Telegram-only authentication | Anonymous-session challenges, private self-contact matching, original-browser OTP, stable Telegram identity, verified contact, durable retries | Rotation/CSRF/logout/expiry, removed-provider denial, original-session/realm binding, contact rejection, duplicate/replay/rate/outage handling, concurrent signup and receipt recovery; local login/profile confirmed; hosted readiness and live storage/failure/logout remain separate checks |
 | 4: interaction/demo | Contact ledger, ratings/reports, multi-city demo seeding/reset/personas | Fabricated listings cover multiple Indian cities; concurrent eleventh reveal rejected; retries free; Kolkata midnight; reports deduplicated; reset cannot touch real data |
 | 5: frontend | India-wide public portal, recruiter UI, URL-backed search filters/sorting/pagination, semantic theme, maps, image compression | Nationwide initial search; search links/back navigation/page reset work; accessible mobile flows; upload/reveal/report end-to-end; private responses absent from public caches |
-| 6: deployment and launch readiness | Hosting, DNS/TLS, production/sandbox OAuth, release delivery, edge rate limits, Redis capacity/alerts, recovery, and hosted verification | Exact OAuth callbacks and browser routing verified; rate limits block excess requests before session creation; Redis headroom and alert delivery tested; hosted smoke, isolation, load, restore, and rollback checks pass before approved public release |
+| 6: deployment and launch readiness | Hosting, DNS/TLS, production Telegram webhooks, delivery, edge rate limits, Redis capacity/alerts, recovery | Exact routing/secrets and browser sessions, pre-session limits, hosted smoke/isolation/load/restore/rollback before approved public release |
 
 Phase 1 should finalize schema semantics before creating V1. Each later feature updates its module context and API/schema indexes in the same PR.
 
@@ -76,29 +87,17 @@ One requested subtask is implemented at a time within the scoped Phase 1 change.
 | 1.4: schema contract | Complete | Six-table specification, constraints/deletion/indexes and enforcement ownership; documentation/link/consistency checks, no migration |
 | 1.5: Flyway schema | Complete | V1/PostGIS and V2 contract indexes; 25 real database checks across two modes, matching checksums/schema and no fixtures; Docker/hosted execution not claimed |
 | 1.6: persistence mappings | Complete | Six internal mappings with read-only generated values/@Version; forced Hibernate validate; 57 unit/module and 49 database checks, including stale writes and schema drift |
-| 1.7: HTTP/errors/security baseline | Complete | Safe Problem Details/logs, known versus unexpected classification, deny-all security without login/password access; 114 unit/HTTP and 49 database checks; Google login remains Phase 2 |
+| 1.7: HTTP/errors/security baseline | Complete | Safe Problem Details/logs, known versus unexpected classification, deny-all security without login/password access; 114 unit/HTTP and 49 database checks; identity follows Phase 2 |
 | 1.8: datastore isolation | Complete locally | Review-fix Java 25/Linux amd64 Docker build passed 130 default, 51 schema/persistence, and 23 isolation tests on 30 October 2026, with no failures/errors/skips. See [isolation proof](BACKEND_ISOLATION.md) |
 | 1.9: CI/handoff | Implemented; inspect PR checks | Java 25 backend CI runs both real-store profiles and verifies wrapper/reports/artifact boundaries; the local review-fix suite totals 204 passing tests and Foundation is unchanged. [Handoff commands and results](BACKEND_HANDOFF.md); PR #2 contains review corrections; no merge/deploy |
 
 The 30 October verification closes the local Docker gate. The return-value ConstraintViolationException finding is fixed and covered by a real validation regression. Review corrections also cover Security delegation, HTTP status preservation, redacted diagnostic levels, Boot SPI registration, and timestamp clamping. The [handoff](BACKEND_HANDOFF.md) records the 204-test result; inspect completed PR CI separately before declaring the phase complete.
 
-### Phase 2 task boundaries
+### Phase 2 identity foundation
 
-Implementation and verification are documented in the [Phase 2 handoff](IDENTITY_HANDOFF.md). Google is disabled until explicitly configured. These tasks do not enable contact verification, account linking, sandbox personas, or listing publication.
+Phase 2 established account persistence, Redis sessions, session rotation/expiry, CSRF/logout/CORS, private profiles, and trust thresholds. Its original provider integration and credentials were superseded on 10 November 2026. Current authentication is entirely defined by Phase 3A below and [AUTHENTICATION.md](AUTHENTICATION.md). The earlier 298-test evidence is historical and does not establish the current change's result.
 
-| Task | Deliverable and completion gate |
-| --- | --- |
-| 2.1: dependencies/configuration | Boot-managed OAuth2/Session dependencies, exact origins, selected secrets, canonical flags, production guards; Java 25 and unsafe-config tests |
-| 2.2: account persistence | Transactional issuer/subject lookup/signup, unique-race recovery, no email merging or phone reservation; repeated/concurrent signup tests |
-| 2.3: Redis sessions | Login rotation, 30-minute idle/24-hour authenticated absolute expiry, isolated cookies/stores/realms; expiry/replay/outage tests |
-| 2.4: Google OIDC | Framework code flow with PKCE/state/nonce and signed-token validation; controlled-provider success/failure/replay tests |
-| 2.5: CSRF/logout/CORS | Session synchronizer token, protected POST logout, fixed REST errors, exact origins; browser HTTP and CORS tests |
-| 2.6: trust | Approved pure badge calculator; threshold/count/precedence tests, no listing visibility mutation |
-| 2.7: private profile | Caller-only no-store profile, verified-contact boolean contract for Phase 3; anonymous/contact-state tests |
-| 2.8: integrated security | Controlled OIDC server and two real PostGIS/Redis pairs; concurrency, isolation, dependency outages, and leak checks |
-| 2.9: CI/handoff | Required-suite discovery, packaged fixture exclusion, context/doc alignment; full local gate and separately inspected PR checks |
-
-Tasks 2.1 through 2.9 are implemented and locally verified on 1 November 2026. The complete Java 25/Docker gate passed 298 tests: 205 default, 51 schema/persistence, 23 datastore-isolation, and 19 identity integration cases. Six Python report-gate tests, context/wrapper limits, and packaged fixture checks passed. On 3 November, the maintainer reported successful local Google sign-in with the real OAuth client. Manual repeated-login/denial/logout checks and hosted routing remain unverified. Inspect current PR checks separately for CI results.
+Preserve the foundation's 30-minute idle/24-hour authenticated lifetime, exact origin policy, realm/store isolation, transactional private profile access, and generic safe errors. Provider identity writes now belong to atomic Telegram completion. No phone/email account auto-linking, anonymous migration, or production demo fallback is permitted.
 
 ### Phase 3 task boundaries
 
@@ -112,39 +111,51 @@ Phase 3 implementation is described in [the listing handoff](LISTINGS_HANDOFF.md
 | 3.4: image lifecycle | Reservation limits, content validation/fresh-pixel finalization, retries, cleanup; malformed/expired/concurrent/storage failure tests |
 | 3.5: lifecycle | Owner-row serialization, five published/20 retained caps, exact versions, PAUSED preservation; concurrency tests |
 | 3.6: search | All filters/sorts/pagination, matching snapshot counts, real geo queries, safe batched DTOs; representative multi-city query plans |
-| 3.7: integration | Google-enabled/disabled security and exact CORS, no-store/private media, sandbox isolation; HTTP/session/privacy regressions |
+| 3.7: integration | authentication-enabled/disabled security and exact CORS, no-store/private media, sandbox isolation; HTTP/session/privacy regressions |
 | 3.8: handoff | Required suite/artifact gates, aligned context/docs/configuration; complete Java 25/Docker local gate and separately inspected CI |
 
-The clean local Java 25/Linux amd64 Docker gate passed 450 tests after review corrections on 9 November 2026, with no failures/errors/skips. Report/artifact checks, six Python checks, context limits and whitespace checks passed. Current-change CI, live R2/CORS, and manual real-Google repeated-login/denial/logout remain unverified.
+The clean local Java 25/Linux amd64 Docker gate passed 450 tests after review corrections on 9 November 2026, with no failures/errors/skips. Report/artifact checks, six Python checks, context limits and whitespace checks passed. Current-change CI, live R2/CORS, and manual real-provider login/logout remain unverified.
 
 The agreed limits are 20 retained listings per owner, 12 images per listing, 60 image reservations per owner per rolling 24 hours, 5 MiB/20 MP images, ten-minute upload URLs, and five-minute private read URLs. Cleanup runs hourly with a 24-hour object grace period and seven-day rejected-reservation retention. No draft is automatically deleted. Text/price edits, image replacement/removal, listing deletion, phone verification, frontend work, interactions, and recruiter personas remain outside Phase 3.
 
+### Phase 3A Telegram-only authentication
+
+The maintainer selected Telegram Bot API as the only authentication system on 10 November 2026. The private local bot token is configured; getMe/getWebhookInfo checks passed, explicit local polling is enabled, and old provider settings were removed. No live message, OTP login, webhook registration, tunnel, or hosted deployment was performed.
+
+An anonymous browser fetches CSRF, starts a session-bound +91 challenge, opens the bot and shares its own contact, then enters the OTP in the original browser. Only successful CSRF-protected completion authenticates, rotates the session, clears the old CSRF token, and saves the realm-bound principal. The frontend must fetch a fresh CSRF token. Status polling alone never authenticates. Telegram Gateway, WhatsApp/SMS, and console providers remain unselected.
+
+Stable account identity uses the Telegram sender, never typed phone/email. Existing users/listings and V1-V4 remain intact. An unambiguous prior verified Telegram receipt can recover its existing account; other legacy accounts require explicit recovery. Changing the Redis session namespace invalidates old provider sessions. No automatic linking/merging is introduced.
+
+V5 adds four-column expiring login receipts. Challenge/identity advisory locks and user-row locking atomically commit account/identity/contact/current provenance/login receipt. Database rollback leaves the Redis claim retryable; committed receipts recover same-session retries while the original challenge remains valid. Expired login receipts are ignored and deleted hourly. Current contact provenance remains one receipt for the verified account's lifetime; future replacement/erasure must remove dependent private data.
+
+Production requires secret-authenticated HTTPS webhooks; explicit development polling is leased and persists acknowledged offsets. Recruiter contact actions stay disabled. Existing image, publication and listing quota gates remain. [Setup/Postman flow](TELEGRAM_HANDOFF.md) and [verification contract](TELEGRAM_CONTACT_VERIFICATION.md) record limits and current evidence. The revised clean Java 25/Linux amd64 Docker gate passed 553 tests on 10 November 2026, with no failures/errors/skips. Six Python checks, report/artifact validation, wrapper/context limits and removed-OAuth-library checks passed. The maintainer confirmed real local Telegram contact/OTP login and the private verified profile on 10 November. CI, hosted readiness and live listing/storage/failure/logout checks remain unverified. [API_VERIFICATION.md](API_VERIFICATION.md) records the expanded cross-API gate; [POSTMAN_API_GUIDE.md](POSTMAN_API_GUIDE.md) covers manual testing.
+
 ### Phase 6 task boundaries
 
-Phase 6 is planned after Phase 5. It owns deployment and launch readiness under [DEPLOYMENT_STACK.md](DEPLOYMENT_STACK.md). No hosting, production OAuth registration, edge configuration, or monitoring is implemented by this plan update.
+Phase 6 is planned after Phase 5. It owns deployment and launch readiness under [DEPLOYMENT_STACK.md](DEPLOYMENT_STACK.md). No hosting, production Telegram webhook registration, edge configuration, or monitoring is implemented by this plan update.
 
 | Task | Deliverable and completion gate |
 | --- | --- |
 | 6.1: deployment decisions | Confirm budget, providers, target architecture, domain control, production/sandbox hostnames, and remaining launch decisions before provisioning |
 | 6.2: hosting and delivery | Create tested images and release workflows, DNS/TLS and browser routing, isolated stores, restricted database roles, and deployment secrets; verify readiness and prevent public access to backend/store ports around the edge |
-| 6.3: production/sandbox OAuth | Configure distinct Google clients where Google login is enabled, exact registered callbacks and origins, and protected secrets; verify each enabled hosted deployment independently |
-| 6.4: edge rate limits | Limit unauthenticated GET /api/v1/auth/csrf and GET /oauth2/authorization/google with measured per-client and aggregate budgets; verify 429 responses before Redis session creation and prevent edge bypass |
+| 6.3: production Telegram setup | Configure distinct bots/secrets and exact HTTPS webhook/origins, allowed message updates, verify provider header, reject development polling and sandbox credentials |
+| 6.4: edge rate limits | Limit unauthenticated GET /api/v1/auth/csrf and POST /api/v1/auth/telegram/challenges with measured per-client/aggregate budgets; verify 429 before Redis session creation and prevent edge bypass |
 | 6.5: Redis capacity and alerts | Set measured maxmemory below container and host budgets with persistence/allocator headroom and noeviction; exercise memory-pressure, rejected-write/OOM alerts, and alert delivery |
-| 6.6: launch verification and recovery | Run hosted Google success/repeated-login/denial/CSRF-protected logout checks, browser/session isolation and application smoke tests; prove load capacity, backup restore, and compatible rollback, then obtain explicit approval before public release |
+| 6.6: launch verification and recovery | Hosted Telegram login/repeated-login/failure/CSRF logout, browser/session isolation and smoke tests; load, restore and compatible rollback before release approval |
 
-The remaining local Google repeated-login, denial, and CSRF-protected logout checks can run now with configured local credentials. Record manual evidence separately from controlled-provider CI. Repeat the checks through the completed frontend in Phase 5 and against each enabled hosted deployment in Phase 6.
+Run the real local Telegram contact/OTP login and CSRF-protected logout with the configured bot. Keep manual evidence separate from controlled-provider tests; repeat through Phase 5 UI and each enabled hosted deployment in Phase 6.
 
-Any earlier public preview must satisfy the applicable OAuth, routing, edge rate-limit, Redis capacity/alert, and hosted session checks before exposure. Phase 6's position after Phase 5 does not postpone those controls for an earlier preview. Purchases, provisioning, and deployment require separate authorization.
+Any earlier public preview must satisfy the applicable provider, routing, edge rate-limit, Redis capacity/alert, and hosted session checks before exposure. Phase 6's position after Phase 5 does not postpone those controls for an earlier preview. Purchases, provisioning, and deployment require separate authorization.
 
 ## Technical implementation notes for later phases
 
 - Backend module declarations now exist: common, identity, listing, interaction, sandbox under `in.opennest`. Keep nested implementation packages internal and types package-private where possible. Introduce explicit public contracts and allowed dependencies together; no cross-module edges are allowed at bootstrap. Modulith tests verify module discovery and boundaries.
-- Route references are fully qualified: application REST under `/api/v1`, with only `/oauth2/authorization/google` and `/login/oauth2/code/google` using Spring Security framework paths. Align the route table and API index; a documentation prefix correction alone does not introduce a database migration.
+- Application routes use full /api/v1 paths. There are no provider redirect/callback exceptions. Align API indexes and the Telegram authentication contract.
 - Planned listing lifecycle: `POST /api/v1/listings` creates a PAUSED draft; presign uploads against that existing ID, complete/validate each image, then `POST /api/v1/listings/{id}/publish` checks verified contact, required image segments, and owner quota. `POST /api/v1/listings/{id}/pause` preserves content and releases the slot. Inventory cannot reactivate a paused draft.
 - Presign will reserve a PENDING image and return imageId/objectKey/uploadUrl/expiresAt. `POST /api/v1/listings/{id}/images/complete` will validate it and finalize an object that a still-valid staging PUT URL cannot overwrite. Publication counts only VALIDATED images. Test completion retries and post-validation overwrite attempts before enabling uploads.
-- Authentication follows `docs/AUTHENTICATION.md`. Spring Security owns Google OIDC and Spring Session Redis owns browser sessions; Next.js renders the login UI without running a second NextAuth identity/session system. This deliberately replaces the original stateless-JWT target for the initial browser app.
-- WhatsApp is deferred: the proposed user-sent code flow needs signed webhook validation, session/phone binding, high-entropy single-use challenges, replay/rate limits, and an explicit defense against forwarded-link approval of another browser. No claim of free-forever pricing, universal test-number access, or zero onboarding is established.
-- Provider-delivered WhatsApp authentication templates remain an alternative to evaluate for phone verification. Check official policy/eligibility/current rates before implementing either option. Do not send messages, enroll accounts, or incur provider charges during foundation setup; secrets stay in deployment configuration.
+- Authentication follows docs/AUTHENTICATION.md. Spring Security and Spring Session Redis own browser authentication/session persistence; Next.js renders the Telegram start/contact/OTP flow without a parallel identity system.
+- WhatsApp is an unselected alternative, not a pending implementation phase; Telegram remains the sole selected provider: the proposed user-sent code flow needs signed webhook validation, session/phone binding, high-entropy single-use challenges, replay/rate limits, and an explicit defense against forwarded-link approval of another browser. No claim of free-forever pricing, universal test-number access, or zero onboarding is established.
+- Provider-delivered WhatsApp authentication templates remain an unselected alternative for phone verification. Check official policy/eligibility/current rates before implementing either option. Do not send messages, enroll accounts, or incur provider charges during foundation setup; secrets stay in deployment configuration.
 - Search follows `docs/LISTING_SEARCH.md`: database-side filters/order/pagination, bounded page sizes/offsets, matching counts, and deterministic ties. City is optional for search and explicitly required for listing creation, with no database default or fixed city allowlist. Normalize cities consistently; do not assume every locality fits a fixed catalog. Cache keys include every normalized filter, sort, page, size, and deployment; nationwide queries remain distinct.
 - Overpass lookup uses an HTTP interface, a 2500 ms timeout, circuit breaker, and empty-result fallback for HOSPITAL/SCHOOL/SHOP within 2.5 km. A remote outage must not prevent saving a listing. Public deployment needs an operator-approved provider or separately budgeted self-hosted service; otherwise enrichment stays disabled. Map tiles/styles and geocoding are separate provider decisions; see the [deployment plan](DEPLOYMENT_STACK.md).
 - Phase 5 retains Phase 3's no-store policy for every listing response and request, including anonymous production browsing. Next.js must not override it with force-cache, revalidation, or shared listing caches. Listing/status/inventory/review writes are observed through fresh reads; no shared listing cache exists to invalidate. A future explicitly approved API/cache-policy change must define eligible anonymous production responses, deployment/query keys, signed-image URL handling, and tested invalidation for every affected listing/owner/search before enabling caching. Authenticated, sandbox, contact, and auth responses remain no-store. Enable cacheComponents/reactCompiler only after compatibility checks and without weakening this policy.
@@ -158,14 +169,14 @@ Any earlier public preview must satisfy the applicable OAuth, routing, edge rate
 ## Open decisions and setup dependencies
 
 - Phase 6.1 owns hosting decisions: personal/non-commercial start with minimal cost; no AWS account or credits exist yet. The planned website is `https://opennest.co.in`; confirm domain control, DNS/TLS, budget, image architecture, same-site session routing, map providers, and Redis version/license before public deployment; see [deployment decisions](DEPLOYMENT_STACK.md#decisions-before-public-deployment).
-- Phase 6.3 owns production Google OAuth setup and exact redirect registration. If Google is also enabled in the sandbox, use a separate client and redirect origin; demo personas do not require Google accounts. Use deployment secrets, never chat or Git, for credentials.
-- Choose an approved owner-phone verification method before publishing becomes available; WhatsApp production eligibility, flow approval, provider selection, and any spend limit remain pending.
+- Phase 6.3 owns production Telegram HTTPS webhook readiness and separate deployment bot/secrets. Recruiter contact actions stay disabled; credentials remain private deployment configuration.
+- Phase 3A implements approved Telegram self-contact plus original-session OTP contact evidence. An arbitrary Telegram-chat OTP never verifies a typed phone. Local bot setup and maintainer-reported OTP/profile verification passed. Privacy/erasure operations, live repeated-login/failure/logout and production HTTPS/webhook readiness remain deployment gates. WhatsApp and paid Gateway/SMS alternatives remain unselected; owners without Telegram need a separately approved option. See TELEGRAM_HANDOFF.md.
 - Trust precedence is approved and implemented in Phase 2. Phase 3 listing responses must reuse it; Phase 4 review/report writers maintain aggregates transactionally.
 - Decide a manual moderation/appeal policy and retention/deletion requirements before collecting real personal data.
 - Decide a documented public map coarsening/precision policy before Phase 3 response DTOs; until then omit coordinates. Public search/detail responses must never expose precise coordinates, private address, or owner phone. Geo queries may use exact stored coordinates internally.
 - Phase 3 draft/upload limits and cleanup are selected and implemented in LISTINGS_HANDOFF.md. Text/price/image edit and deletion routes still require explicit contracts before exposure; the 20-retained-listing cap does not delete old drafts. The proposed rental-mode field and inventory constraints are defined in [LISTING_MODEL.md](LISTING_MODEL.md).
 
-These remaining items stay open deliberately. Do not silently choose a phone provider, enable deferred WhatsApp, or declare a public launch ready while owner contact verification is unavailable. Trust thresholds are approved for Phase 2.
+Telegram is already the approved sole provider and local OTP/profile behavior is confirmed. Keep the remaining hosted/privacy/operations decisions explicit; do not enable an alternative provider or declare a public launch ready from local evidence. Trust thresholds remain approved.
 
 ## Source checks
 
@@ -173,9 +184,10 @@ These remaining items stay open deliberately. Do not silently choose a phone pro
 - [Next.js 16 architecture and caching](https://nextjs.org/blog/next-16)
 - [PostGIS Docker image and supported tags](https://github.com/postgis/docker-postgis)
 - [Redis persistence and durability tradeoffs](https://redis.io/docs/latest/management/persistence/)
-- [Meta WhatsApp authentication template example](https://www.postman.com/meta/whatsapp-business-platform/request/6vkv46u/create-authentication-template-w-otp-copy-code-button)
-- [Google OpenID Connect](https://developers.google.com/identity/openid-connect/openid-connect)
-- [Spring Security Google login](https://docs.spring.io/spring-security/reference/servlet/oauth2/login/core.html)
+- [Unselected alternative: Meta WhatsApp authentication template example](https://www.postman.com/meta/whatsapp-business-platform/request/6vkv46u/create-authentication-template-w-otp-copy-code-button)
 - [WhatsApp official pricing overview](https://business.whatsapp.com/products/platform-pricing)
 - [GNU AGPL version 3](https://www.gnu.org/licenses/agpl-3.0.html)
 - [CodeRabbit path instructions](https://kb.coderabbit.ai/articles/1134523355-configure-path-instructions)
+
+
+<!-- /coderabbit-ai-generated:v1 -->

@@ -5,10 +5,9 @@ $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $settingsPath = Join-Path $projectRoot '.env'
 $jarPath = Join-Path $projectRoot 'backend/target/opennest-backend-0.0.1-SNAPSHOT.jar'
-$previousGoogleSecret = [Environment]::GetEnvironmentVariable('GOOGLE_CLIENT_SECRET', 'Process')
 
 if (-not (Test-Path -LiteralPath $settingsPath)) {
-    throw 'Create a private .env from .env.example and configure the database passwords and Google client ID first.'
+    throw 'Create a private .env from .env.example and configure database passwords and Telegram authentication first.'
 }
 
 Push-Location -LiteralPath $projectRoot
@@ -35,6 +34,9 @@ try {
     if ([string]::IsNullOrWhiteSpace($env:DB_PASSWORD) -or [string]::IsNullOrWhiteSpace($env:SANDBOX_DB_PASSWORD)) {
         throw 'Set distinct DB_PASSWORD and SANDBOX_DB_PASSWORD values in the private .env file. Preserve passwords for existing volumes.'
     }
+    if ($env:OPENNEST_TELEGRAM_AUTH_ENABLED -ne 'true' -or [string]::IsNullOrWhiteSpace($env:TELEGRAM_BOT_TOKEN)) {
+        throw 'Run scripts/setup-telegram-local.ps1 to configure Telegram authentication before starting OpenNest.'
+    }
 
     $javaExecutable = 'java'
     if (-not [string]::IsNullOrWhiteSpace($env:JAVA_HOME)) {
@@ -55,26 +57,10 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'The Java build failed.' }
     }
 
-    if ($env:OPENNEST_GOOGLE_ENABLED -eq 'true') {
-        if ([string]::IsNullOrWhiteSpace($env:GOOGLE_CLIENT_ID)) { throw 'Set GOOGLE_CLIENT_ID in the private .env file.' }
-        if ([string]::IsNullOrWhiteSpace($env:GOOGLE_CLIENT_SECRET)) {
-            $secureSecret = Read-Host 'Google client secret (hidden input)' -AsSecureString
-            $secretPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureSecret)
-            try {
-                $env:GOOGLE_CLIENT_SECRET = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($secretPointer)
-            } finally {
-                [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($secretPointer)
-                $secureSecret.Dispose()
-            }
-        }
-        if ([string]::IsNullOrWhiteSpace($env:GOOGLE_CLIENT_SECRET)) { throw 'A Google client secret is required.' }
-    }
-
-    Write-Host 'Starting OpenNest. Open http://localhost:8080/oauth2/authorization/google to sign in.'
-    Write-Host 'After sign-in, open http://localhost:8080/api/v1/users/me in the same browser. Stop Java with Ctrl+C.'
+    Write-Host 'Starting OpenNest. Begin Telegram login with GET http://localhost:8080/api/v1/auth/csrf.'
+    Write-Host 'Follow the Postman login flow in docs/TELEGRAM_HANDOFF.md. Stop Java with Ctrl+C.'
     & $javaExecutable -jar $jarPath
     if ($LASTEXITCODE -ne 0) { throw 'OpenNest stopped with an error. Confirm the selected database credentials and local settings.' }
 } finally {
-    [Environment]::SetEnvironmentVariable('GOOGLE_CLIENT_SECRET', $previousGoogleSecret, 'Process')
     Pop-Location
 }

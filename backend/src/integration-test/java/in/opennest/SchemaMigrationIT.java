@@ -52,7 +52,7 @@ class SchemaMigrationIT {
             for (var database : databases) {
                 try (var connection = database.connect()) {
                     assertThat(value(connection, "SHOW server_version_num").toString()).startsWith("17");
-                    assertThat(value(connection, "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('users','auth_identities','properties','property_images','contact_reveals','owner_reviews')"))
+                    assertThat(value(connection, "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('users','auth_identities','properties','property_images','contact_reveals','owner_reviews','contact_verifications','telegram_login_receipts')"))
                             .as("Integration databases must be fresh; this suite never cleans or drops a schema").isEqualTo(0L);
                 }
                 var application = new SpringApplication(OpenNestApplication.class);
@@ -77,7 +77,7 @@ class SchemaMigrationIT {
                     var context = application.run(arguments.toArray(String[]::new));
                     contexts.add(context);
                     var flyway = context.getBean(Flyway.class);
-                    assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("3");
+                    assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("6");
                     assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
                     assertThat(flyway.migrate().migrationsExecuted).isZero();
                     assertThat(flyway.getConfiguration().isCleanDisabled()).isTrue();
@@ -135,7 +135,7 @@ class SchemaMigrationIT {
             try (var connection = database.connect()) {
                 assertThat(value(connection, "SELECT public.PostGIS_Lib_Version()").toString()).startsWith("3.5.");
                 var tables = strings(connection, "SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE' AND table_name <> 'spatial_ref_sys' ORDER BY table_name");
-                assertThat(tables).containsExactly("auth_identities", "contact_reveals", "flyway_schema_history", "owner_reviews", "properties", "property_images", "users");
+                assertThat(tables).containsExactly("auth_identities", "contact_reveals", "contact_verifications", "flyway_schema_history", "owner_reviews", "properties", "property_images", "telegram_login_receipts", "users");
                 for (String table : tables) {
                     if (!table.equals("flyway_schema_history")) {
                         assertThat(value(connection, "SELECT count(*) FROM public." + table)).isEqualTo(0L);
@@ -147,23 +147,23 @@ class SchemaMigrationIT {
                         FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid
                         JOIN pg_namespace n ON n.oid=c.relnamespace
                         LEFT JOIN pg_attrdef d ON d.adrelid=c.oid AND d.adnum=a.attnum
-                        WHERE n.nspname='public' AND c.relname IN ('users','auth_identities','properties','property_images','contact_reveals','owner_reviews')
+                        WHERE n.nspname='public' AND c.relname IN ('users','auth_identities','properties','property_images','contact_reveals','owner_reviews','contact_verifications','telegram_login_receipts')
                             AND a.attnum>0 AND NOT a.attisdropped ORDER BY c.relname,a.attnum
                         """));
                 current += String.join("\n", strings(connection, "SELECT conrelid::regclass::text || ':' || conname || ':' || pg_get_constraintdef(oid) FROM pg_constraint WHERE connamespace='public'::regnamespace AND conname ~ '^(pk_|uq_|fk_|ck_)' ORDER BY conname"));
                 current += String.join("\n", strings(connection, "SELECT indexdef FROM pg_indexes WHERE schemaname='public' AND indexname LIKE 'ix_%' ORDER BY indexname"));
                 current += "\n" + ownerProfileViewFingerprint(connection);
                 var currentHistory = strings(connection, "SELECT version || ':' || checksum || ':' || success FROM public.flyway_schema_history WHERE version IS NOT NULL ORDER BY installed_rank");
-                assertThat(currentHistory).hasSize(3);
+                assertThat(currentHistory).hasSize(6);
                 if (fingerprint != null) {
                     assertThat(current).isEqualTo(fingerprint);
                     assertThat(currentHistory).isEqualTo(history);
                 }
                 fingerprint = current;
                 history = currentHistory;
-                assertThat(value(connection, "SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name IN ('users','auth_identities','properties','property_images','contact_reveals','owner_reviews')")).isEqualTo(76L);
+                assertThat(value(connection, "SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name IN ('users','auth_identities','properties','property_images','contact_reveals','owner_reviews','contact_verifications','telegram_login_receipts')")).isEqualTo(87L);
                 assertThat(value(connection, "SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND is_generated='ALWAYS'")).isEqualTo(3L);
-                assertThat(value(connection, "SELECT count(*) FROM pg_constraint WHERE connamespace='public'::regnamespace AND contype='f' AND confdeltype='r' AND confupdtype='r' AND NOT condeferrable")).isEqualTo(7L);
+                assertThat(value(connection, "SELECT count(*) FROM pg_constraint WHERE connamespace='public'::regnamespace AND contype='f' AND confdeltype='r' AND confupdtype='r' AND NOT condeferrable")).isEqualTo(9L);
             }
         }
     }
@@ -383,8 +383,10 @@ class SchemaMigrationIT {
     void installsAllDocumentedIndexesWithMixedSortDirections(int target) throws Exception {
         try (var connection = databases.get(target).connect()) {
             assertThat(strings(connection, "SELECT indexname FROM pg_indexes WHERE schemaname='public' AND indexname LIKE 'ix_%' ORDER BY indexname")).containsExactly(
-                    "ix_auth_identities_user", "ix_contact_reveals_property_owner", "ix_contact_reveals_tenant_day", "ix_owner_reviews_owner", "ix_owner_reviews_property_owner", "ix_properties_city_filters", "ix_properties_city_newest", "ix_properties_city_rent_asc", "ix_properties_city_rent_desc", "ix_properties_location", "ix_properties_newest", "ix_properties_owner_status", "ix_properties_rent_asc", "ix_properties_rent_desc", "ix_property_images_property_order");
+                    "ix_auth_identities_user", "ix_contact_reveals_property_owner", "ix_contact_reveals_tenant_day", "ix_contact_verifications_telegram_user", "ix_owner_reviews_owner", "ix_owner_reviews_property_owner", "ix_properties_city_filters", "ix_properties_city_newest", "ix_properties_city_rent_asc", "ix_properties_city_rent_desc", "ix_properties_location", "ix_properties_newest", "ix_properties_owner_status", "ix_properties_rent_asc", "ix_properties_rent_desc", "ix_property_images_property_order", "ix_telegram_login_receipts_expiry");
             assertThat(value(connection, "SELECT indexdef FROM pg_indexes WHERE schemaname='public' AND indexname='ix_properties_location'").toString()).contains("USING gist (location)");
+            assertThat(value(connection, "SELECT indexdef FROM pg_indexes WHERE schemaname='public' AND indexname='ix_contact_verifications_telegram_user'").toString())
+                    .contains("USING btree (telegram_user_id)");
             for (String prefix : List.of("ix_properties_", "ix_properties_city_")) {
                 String city = prefix.contains("city_") ? "city, " : "";
                 for (var sort : Map.of("newest", "created_at DESC", "rent_asc", "monthly_rent", "rent_desc", "monthly_rent DESC").entrySet()) {

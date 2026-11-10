@@ -1,6 +1,6 @@
 # OpenNest backend configuration
 
-Phase 1 supplies guarded stores, Flyway, Hibernate validation, and safe HTTP errors. Phase 2 adds opt-in identity configuration and authentication through the [identity handoff](IDENTITY_HANDOFF.md). Google-disabled mode retains deny-all security. Demo operations, listing/interaction routes, and diagnostic endpoints remain unavailable.
+Phase 1 supplies guarded stores, Flyway, Hibernate validation, and safe HTTP errors. Current Telegram-only identity configuration is in the [setup guide](TELEGRAM_HANDOFF.md). Authentication-disabled mode permits public listing reads and denies protected routes. Phase 3 listings exist; demo/interaction operations and diagnostic endpoints remain unavailable.
 
 ## Deployment selection
 
