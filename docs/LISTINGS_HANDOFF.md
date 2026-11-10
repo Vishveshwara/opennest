@@ -1,10 +1,18 @@
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:b811d06fd7613c4b65533f220e42a2ded5df74b0a632c2083fdd6f31254c7d0b -->
+
+<!-- coderabbit-ai-generated-section:v1:b0606461f1e73389535d36a358a41492243f551ace7676033aec9a29822fb87e -->
+
+<!-- coderabbit-ai-generated-section:v1:248c0c97374831f2326ae9b6156ee4318f1b4156f74348e73339412575ff36fb -->
+
 # OpenNest Phase 3 listing handoff
 
 Phase 3 implements listing drafts, owner retrieval, direct image uploads, explicit publication/pause, mode-aware inventory, and nationwide search. Java 25, Spring Boot 4.1.1, Spring Modulith 2.1.1, PostgreSQL/PostGIS, and backend-owned sessions remain the stack. Hosting and live R2 readiness are not established by this implementation.
 
 ## Routes and visibility
 
-All listing responses use `Cache-Control: no-store`. Phase 5 retains no-store for every listing fetch and response; shared listing caching needs a separate approved policy and invalidation change. authentication-disabled deployments permit public listing reads and exact-origin public-read CORS. Authentication and owner mutations still require configured Telegram login. Unknown routes remain denied.
+All listing responses use `Cache-Control: no-store`. Phase 5 retains no-store for every listing fetch and response; shared listing caching needs a separate approved policy and invalidation change. Authentication-disabled deployments permit public listing reads and exact-origin public-read CORS. Authentication and owner mutations still require configured Telegram login. Unknown routes remain denied.
 
 | Route | Behavior |
 | --- | --- |
@@ -96,8 +104,9 @@ Review regressions verify every documented listing path/method, reject an added 
 
 A further test-only review update on 9 November 2026 passed 75 focused cases: 21 image, 29 storage, and 25 datastore-isolation tests, with no failures/errors/skips. The route allowlist now inspects listing paths from every handler and rejects a SafeErrorController diagnostic mapping. EXIF fixtures cover orientation after a valid preceding IFD0 entry in both byte orders while retaining first-entry coverage. Delayed GET headers must fail within the remaining total storage budget and before the fixture client timeout. The full local suite was not rerun for this test-only update; inspect its PR checks separately.
 
-
 Phase 3A now implements sole Telegram authentication with approved self-contact matching and original-session OTP entry. The publication contact/image/quota gates remain in force. [Telegram setup](TELEGRAM_HANDOFF.md) records configuration and confirmed local login/profile. [API_VERIFICATION.md](API_VERIFICATION.md) covers every listing route through a Telegram-created session, and [POSTMAN_API_GUIDE.md](POSTMAN_API_GUIDE.md) provides listing/image steps. Live R2/hosted checks remain separate.
 
-
 On 10 November, the expanded Telegram/session gate passed 553 Java tests, including 31 Telegram cases with three complete mode-specific listing HTTP lifecycles. Six Python checks and 20 isolated launcher regressions also passed. OAuth/OIDC application classes/libraries and test fixtures are absent from the packaged JAR. This supersedes the earlier local counts for the current revision; CI and live R2/hosted checks remain unverified. The extra live anonymous smoke could not run because the local backend was stopped; no private session/account was used.
+
+
+<!-- /coderabbit-ai-generated:v1 -->

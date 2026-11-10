@@ -1,3 +1,13 @@
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:73aa62c003973b47941d1baf6377792a788fe7287a4cf1636c237ee99a88b64c -->
+
+<!-- coderabbit-ai-generated-section:v1:536afc8383bae8d10d25de7f87213b6767c9cccb64c8c2ccfd7d1a2651e06286 -->
+
+<!-- coderabbit-ai-generated-section:v1:e3c2834bfc391f87efc0fc6ef4e42cc0e57085ab9a7c30403bb006f436786664 -->
+
+<!-- coderabbit-ai-generated-section:v1:2700e6ae392db041d474d040f4e13dbe55e795a08acdc57bb3049abba615692c -->
+
 # OpenNest implementation plan
 
 This plan defines OpenNest's proposed India-wide launch. Phase 0 provides documentation and local infrastructure. Phase 1 supplies the Java 25/Spring foundation, guarded stores, Flyway/Hibernate validation, safe errors, and real-store verification. Phase 2 supplies identity, Redis sessions, CSRF/logout, private profiles, and approved trust rules. The 10 November 2026 maintainer decision replaces the earlier provider with sole Telegram Bot API authentication in Phase 3A. Phase 3 implements listing services; Phases 4 and 5 cover interactions and the frontend. Phase 6 covers deployment and launch readiness after Phase 5. Phase 3 verification and remaining readiness gates are recorded in [LISTINGS_HANDOFF.md](LISTINGS_HANDOFF.md); later phases and hosted deployment remain outstanding. Work proceeds one phase per prompt and one reviewable PR per phase. The AI indexes summarize implemented behavior and proposals. [DEPLOYMENT_STACK.md](DEPLOYMENT_STACK.md) records hosting assumptions.
@@ -144,8 +154,8 @@ Any earlier public preview must satisfy the applicable provider, routing, edge r
 - Planned listing lifecycle: `POST /api/v1/listings` creates a PAUSED draft; presign uploads against that existing ID, complete/validate each image, then `POST /api/v1/listings/{id}/publish` checks verified contact, required image segments, and owner quota. `POST /api/v1/listings/{id}/pause` preserves content and releases the slot. Inventory cannot reactivate a paused draft.
 - Presign will reserve a PENDING image and return imageId/objectKey/uploadUrl/expiresAt. `POST /api/v1/listings/{id}/images/complete` will validate it and finalize an object that a still-valid staging PUT URL cannot overwrite. Publication counts only VALIDATED images. Test completion retries and post-validation overwrite attempts before enabling uploads.
 - Authentication follows docs/AUTHENTICATION.md. Spring Security and Spring Session Redis own browser authentication/session persistence; Next.js renders the Telegram start/contact/OTP flow without a parallel identity system.
-- WhatsApp is deferred: the proposed user-sent code flow needs signed webhook validation, session/phone binding, high-entropy single-use challenges, replay/rate limits, and an explicit defense against forwarded-link approval of another browser. No claim of free-forever pricing, universal test-number access, or zero onboarding is established.
-- Provider-delivered WhatsApp authentication templates remain an alternative to evaluate for phone verification. Check official policy/eligibility/current rates before implementing either option. Do not send messages, enroll accounts, or incur provider charges during foundation setup; secrets stay in deployment configuration.
+- WhatsApp is an unselected alternative, not a pending implementation phase; Telegram remains the sole selected provider: the proposed user-sent code flow needs signed webhook validation, session/phone binding, high-entropy single-use challenges, replay/rate limits, and an explicit defense against forwarded-link approval of another browser. No claim of free-forever pricing, universal test-number access, or zero onboarding is established.
+- Provider-delivered WhatsApp authentication templates remain an unselected alternative for phone verification. Check official policy/eligibility/current rates before implementing either option. Do not send messages, enroll accounts, or incur provider charges during foundation setup; secrets stay in deployment configuration.
 - Search follows `docs/LISTING_SEARCH.md`: database-side filters/order/pagination, bounded page sizes/offsets, matching counts, and deterministic ties. City is optional for search and explicitly required for listing creation, with no database default or fixed city allowlist. Normalize cities consistently; do not assume every locality fits a fixed catalog. Cache keys include every normalized filter, sort, page, size, and deployment; nationwide queries remain distinct.
 - Overpass lookup uses an HTTP interface, a 2500 ms timeout, circuit breaker, and empty-result fallback for HOSPITAL/SCHOOL/SHOP within 2.5 km. A remote outage must not prevent saving a listing. Public deployment needs an operator-approved provider or separately budgeted self-hosted service; otherwise enrichment stays disabled. Map tiles/styles and geocoding are separate provider decisions; see the [deployment plan](DEPLOYMENT_STACK.md).
 - Phase 5 retains Phase 3's no-store policy for every listing response and request, including anonymous production browsing. Next.js must not override it with force-cache, revalidation, or shared listing caches. Listing/status/inventory/review writes are observed through fresh reads; no shared listing cache exists to invalidate. A future explicitly approved API/cache-policy change must define eligible anonymous production responses, deployment/query keys, signed-image URL handling, and tested invalidation for every affected listing/owner/search before enabling caching. Authenticated, sandbox, contact, and auth responses remain no-store. Enable cacheComponents/reactCompiler only after compatibility checks and without weakening this policy.
@@ -174,9 +184,10 @@ Telegram is already the approved sole provider and local OTP/profile behavior is
 - [Next.js 16 architecture and caching](https://nextjs.org/blog/next-16)
 - [PostGIS Docker image and supported tags](https://github.com/postgis/docker-postgis)
 - [Redis persistence and durability tradeoffs](https://redis.io/docs/latest/management/persistence/)
-- [Meta WhatsApp authentication template example](https://www.postman.com/meta/whatsapp-business-platform/request/6vkv46u/create-authentication-template-w-otp-copy-code-button)
-
-
+- [Unselected alternative: Meta WhatsApp authentication template example](https://www.postman.com/meta/whatsapp-business-platform/request/6vkv46u/create-authentication-template-w-otp-copy-code-button)
 - [WhatsApp official pricing overview](https://business.whatsapp.com/products/platform-pricing)
 - [GNU AGPL version 3](https://www.gnu.org/licenses/agpl-3.0.html)
 - [CodeRabbit path instructions](https://kb.coderabbit.ai/articles/1134523355-configure-path-instructions)
+
+
+<!-- /coderabbit-ai-generated:v1 -->

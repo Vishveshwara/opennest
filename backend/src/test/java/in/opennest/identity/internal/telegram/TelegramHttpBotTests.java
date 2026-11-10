@@ -167,6 +167,25 @@ class TelegramHttpBotTests {
         }
     }
 
+    @ParameterizedTest
+    @ValueSource(longs = {-10_000_000_000L, Long.MAX_VALUE - 500_000_000L})
+    void retryDeadlineAllowsInitialCallsAndExpiresAcrossOverflow(long initial) throws Exception {
+        try (var fixture = new BotFixture()) {
+            var time = new java.util.concurrent.atomic.AtomicLong(initial);
+            try (var bot = new TelegramHttpBot(fixture.settings, URI.create("http://127.0.0.1:" + fixture.server.getAddress().getPort() + "/"), HttpClient.newHttpClient(), time::get)) {
+                fixture.reply("sendMessage", 429, "{\"ok\":false,\"parameters\":{\"retry_after\":1}}");
+                unavailable(() -> bot.code(123456789L, CODE));
+                time.addAndGet(999_999_999L);
+                unavailable(() -> bot.code(123456789L, CODE));
+                assertThat(fixture.requests).hasSize(1);
+                time.incrementAndGet();
+                fixture.reply("sendMessage", 200, "{\"ok\":true,\"result\":{}}");
+                bot.code(123456789L, CODE);
+                assertThat(fixture.requests).hasSize(2);
+            }
+        }
+    }
+
     @Test
     void hidesConnectionErrorsIncludingTheTokenBearingRequestUrl() throws Exception {
         try (var fixture = new BotFixture()) {
@@ -194,12 +213,13 @@ class TelegramHttpBotTests {
         private final BlockingQueue<Recorded> requests = new LinkedBlockingQueue<>();
         private final Map<String, Reply> replies = new ConcurrentHashMap<>();
         private final TelegramHttpBot bot;
+        private final TelegramSettings settings;
 
         private BotFixture() throws IOException {
             server.createContext("/", this::serve);
             server.setExecutor(executor);
             server.start();
-            var settings = new TelegramSettings(new MockEnvironment()
+            settings = new TelegramSettings(new MockEnvironment()
                     .withProperty("opennest.identity.telegram-enabled", "true")
                     .withProperty("opennest.identity.google-enabled", "true")
                     .withProperty("OPENNEST_TELEGRAM_POLLING_ENABLED", "true")

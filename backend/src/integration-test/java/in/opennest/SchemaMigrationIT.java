@@ -77,7 +77,7 @@ class SchemaMigrationIT {
                     var context = application.run(arguments.toArray(String[]::new));
                     contexts.add(context);
                     var flyway = context.getBean(Flyway.class);
-                    assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("5");
+                    assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("6");
                     assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
                     assertThat(flyway.migrate().migrationsExecuted).isZero();
                     assertThat(flyway.getConfiguration().isCleanDisabled()).isTrue();
@@ -154,7 +154,7 @@ class SchemaMigrationIT {
                 current += String.join("\n", strings(connection, "SELECT indexdef FROM pg_indexes WHERE schemaname='public' AND indexname LIKE 'ix_%' ORDER BY indexname"));
                 current += "\n" + ownerProfileViewFingerprint(connection);
                 var currentHistory = strings(connection, "SELECT version || ':' || checksum || ':' || success FROM public.flyway_schema_history WHERE version IS NOT NULL ORDER BY installed_rank");
-                assertThat(currentHistory).hasSize(5);
+                assertThat(currentHistory).hasSize(6);
                 if (fingerprint != null) {
                     assertThat(current).isEqualTo(fingerprint);
                     assertThat(currentHistory).isEqualTo(history);
@@ -383,8 +383,10 @@ class SchemaMigrationIT {
     void installsAllDocumentedIndexesWithMixedSortDirections(int target) throws Exception {
         try (var connection = databases.get(target).connect()) {
             assertThat(strings(connection, "SELECT indexname FROM pg_indexes WHERE schemaname='public' AND indexname LIKE 'ix_%' ORDER BY indexname")).containsExactly(
-                    "ix_auth_identities_user", "ix_contact_reveals_property_owner", "ix_contact_reveals_tenant_day", "ix_owner_reviews_owner", "ix_owner_reviews_property_owner", "ix_properties_city_filters", "ix_properties_city_newest", "ix_properties_city_rent_asc", "ix_properties_city_rent_desc", "ix_properties_location", "ix_properties_newest", "ix_properties_owner_status", "ix_properties_rent_asc", "ix_properties_rent_desc", "ix_property_images_property_order", "ix_telegram_login_receipts_expiry");
+                    "ix_auth_identities_user", "ix_contact_reveals_property_owner", "ix_contact_reveals_tenant_day", "ix_contact_verifications_telegram_user", "ix_owner_reviews_owner", "ix_owner_reviews_property_owner", "ix_properties_city_filters", "ix_properties_city_newest", "ix_properties_city_rent_asc", "ix_properties_city_rent_desc", "ix_properties_location", "ix_properties_newest", "ix_properties_owner_status", "ix_properties_rent_asc", "ix_properties_rent_desc", "ix_property_images_property_order", "ix_telegram_login_receipts_expiry");
             assertThat(value(connection, "SELECT indexdef FROM pg_indexes WHERE schemaname='public' AND indexname='ix_properties_location'").toString()).contains("USING gist (location)");
+            assertThat(value(connection, "SELECT indexdef FROM pg_indexes WHERE schemaname='public' AND indexname='ix_contact_verifications_telegram_user'").toString())
+                    .contains("USING btree (telegram_user_id)");
             for (String prefix : List.of("ix_properties_", "ix_properties_city_")) {
                 String city = prefix.contains("city_") ? "city, " : "";
                 for (var sort : Map.of("newest", "created_at DESC", "rent_asc", "monthly_rent", "rent_desc", "monthly_rent DESC").entrySet()) {

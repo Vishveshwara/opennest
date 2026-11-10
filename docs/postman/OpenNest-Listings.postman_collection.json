@@ -2,7 +2,7 @@
   "info": {
     "name": "OpenNest listing APIs with Telegram session",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "Manual local testing only. First finish Telegram login in the OpenNest Telegram login collection, keep the localhost cookie jar enabled, and postpone logout. This collection refreshes its own CSRF variable using that session. Requests create a real retained PAUSED draft; deletion is not implemented. Send requests individually and reuse listingId instead of repeatedly creating drafts. Media requires explicitly configured R2, actual file bytes and both ROOM/BATHROOM segments for this PG example. Storage disabled ->503; publish without required photos ->409. Do not export cookies, contacts, codes or signed URLs."
+    "description": "Manual local testing only. First finish Telegram login in the OpenNest Telegram login collection, keep the localhost cookie jar enabled, and postpone logout. This collection refreshes its own CSRF variable using that session. Requests create a real retained PAUSED draft; deletion is not implemented. Send requests individually and reuse listingId instead of repeatedly creating drafts. Media requires explicitly configured R2, actual file bytes and both ROOM/BATHROOM segments for this PG example. Storage disabled ->503; publish without required photos ->409; publish without verified contact ->403. Do not export cookies, contacts, codes or signed URLs."
   },
   "auth": {
     "type": "noauth"
@@ -281,7 +281,7 @@
           }
         ],
         "url": "{{baseUrl}}/api/v1/listings/{{listingId}}/publish",
-        "description": "Requires verified contact, required images and an available publication quota. For this PG example, first complete ROOM and BATHROOM. A missing prerequisite returns409; do not bypass it.",
+        "description": "Requires verified contact, required images and an available publication quota. For this PG example, first complete ROOM and BATHROOM. Missing images or an exhausted quota returns 409; missing verified contact returns 403; do not bypass these checks.",
         "body": {
           "mode": "raw",
           "raw": "{\n  \"version\": {{version}}\n}",
@@ -357,7 +357,7 @@
           }
         ],
         "url": "{{baseUrl}}/api/v1/listings/{{listingId}}/pause",
-        "description": "Returns PAUSED and updates version. Public search excludes it and anonymous detail returns404. The draft stays retained.",
+        "description": "Returns PAUSED and updates version. Public search excludes it and anonymous detail returns 404. The draft stays retained.",
         "body": {
           "mode": "raw",
           "raw": "{\n  \"version\": {{version}}\n}",

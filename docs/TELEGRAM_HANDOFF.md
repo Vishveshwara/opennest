@@ -1,3 +1,9 @@
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:f30797d7ad434f726a828a020ee91687c1b97311e1ea5a8dc3e2191e17786cf1 -->
+
+<!-- coderabbit-ai-generated-section:v1:ecfcef91dc56fa90b4f9f2a8e4d72096c55198c6a0f112792567c60deccea56f -->
+
 # OpenNest Telegram login setup
 
 Telegram Bot API is OpenNest's only authentication provider by maintainer decision on 10 November 2026. The existing bot token is stored only in the Git-ignored local .env. The setup helper successfully checked getMe/getWebhookInfo, discovered the bot username, generated private webhook/HMAC keys, enabled explicit local polling, and removed old provider settings. It sent no message and changed no webhook.
@@ -30,8 +36,8 @@ Do not share Postman exports containing real contacts, codes, cookies, or secret
 
 | Setting | Behavior |
 | --- | --- |
-| OPENNEST_TELEGRAM_AUTH_ENABLED=false | Explicit sole-provider opt-in, PRIMARY only |
-| OPENNEST_TELEGRAM_POLLING_ENABLED=false | Explicit development polling; false selects webhooks |
+| OPENNEST_TELEGRAM_AUTH_ENABLED | Default false; set true to enable. Explicit sole-provider opt-in, PRIMARY only |
+| OPENNEST_TELEGRAM_POLLING_ENABLED | Default false; set true to enable. Explicit development polling; false selects webhooks |
 | TELEGRAM_BOT_USERNAME | Bot username discovered by setup |
 | TELEGRAM_BOT_TOKEN | Private BotFather token |
 | TELEGRAM_WEBHOOK_SECRET | Independent 32 to 256 safe-character secret |
@@ -64,3 +70,6 @@ The approved evidence is access to the Telegram account associated with its own 
 ## Verification status
 
 On 10 November 2026, the clean Java 25/Linux amd64 Docker gate passed all 553 tests: 427 default, 53 schema/persistence, 25 datastore isolation, 17 listing and 31 Telegram authentication integration cases. There were no failures, errors or skips. Six Python report-gate tests, 20 isolated launcher regressions, wrapper/context checks, packaged boundaries, OAuth/OIDC artifact absence and whitespace validation passed. The three added all-mode cases exercise every listing HTTP route through Telegram-created cookies, with actual image validation and controlled storage. Real-store tests include session rotation/CSRF/logout/expiry, concurrent signup, returning identity, legacy recovery/refusal, and database/Redis outage rejection. Setup syntax and fake-provider safety checks pass. The live token's bot identity and empty webhook state were checked successfully on 10 November without messages. The maintainer subsequently completed real local self-contact/OTP authentication and confirmed the private profile with phoneVerified=true on 10 November. That manual evidence does not include live listing writes, repeated login/failure/logout or R2. Hosted HTTPS webhooks, CI, deployment and production readiness remain unverified. [The expanded API verification record](API_VERIFICATION.md) records current cross-API evidence.
+
+
+<!-- /coderabbit-ai-generated:v1 -->

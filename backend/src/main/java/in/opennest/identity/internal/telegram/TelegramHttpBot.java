@@ -19,13 +19,18 @@ class TelegramHttpBot implements TelegramBot, AutoCloseable {
     private final TelegramSettings settings;
     private final HttpClient http;
     private final URI endpoint;
-    private final java.util.concurrent.atomic.AtomicLong retryAt = new java.util.concurrent.atomic.AtomicLong();
+    private final java.util.function.LongSupplier nanoTime;
+    private final java.util.concurrent.atomic.AtomicLong retryAt;
     private final JsonMapper json = new JsonMapper();
     @org.springframework.beans.factory.annotation.Autowired
     TelegramHttpBot(TelegramSettings settings) {
         this(settings, URI.create("https://api.telegram.org/"), HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).followRedirects(HttpClient.Redirect.NEVER).build());
     }
-    TelegramHttpBot(TelegramSettings settings, URI endpoint, HttpClient http) { this.settings = settings; this.endpoint = endpoint; this.http = http; }
+    TelegramHttpBot(TelegramSettings settings, URI endpoint, HttpClient http) { this(settings, endpoint, http, System::nanoTime); }
+    TelegramHttpBot(TelegramSettings settings, URI endpoint, HttpClient http, java.util.function.LongSupplier nanoTime) {
+        this.settings = settings; this.endpoint = endpoint; this.http = http; this.nanoTime = nanoTime;
+        this.retryAt = new java.util.concurrent.atomic.AtomicLong(nanoTime.getAsLong());
+    }
     @Override public void contact(long chat) {
         call("sendMessage", Map.of("chat_id", chat, "text", "OpenNest sign-in. Share your own +91 Telegram contact, then enter the code only in the browser where you started. Sharing contact alone does not sign you in.",
                 "reply_markup", Map.of("keyboard", List.of(List.of(Map.of("text", "Share my contact", "request_contact", true))), "resize_keyboard", true, "one_time_keyboard", true)), Duration.ofSeconds(5));
@@ -45,7 +50,7 @@ class TelegramHttpBot implements TelegramBot, AutoCloseable {
         return call("getUpdates", Map.of("offset", offset, "limit", 1, "timeout", 10, "allowed_updates", List.of("message")), Duration.ofSeconds(15));
     }
     private JsonNode call(String method, Object body, Duration timeout) {
-        if (System.nanoTime() < retryAt.get()) throw unavailable();
+        if (nanoTime.getAsLong() - retryAt.get() < 0) throw unavailable();
         java.util.concurrent.CompletableFuture<HttpResponse<byte[]>> pending = null;
         try {
             var request = HttpRequest.newBuilder(endpoint.resolve("./bot" + settings.token() + "/" + method)).timeout(timeout)
@@ -55,7 +60,7 @@ class TelegramHttpBot implements TelegramBot, AutoCloseable {
             var result = json.readTree(response.body());
             if (response.statusCode() == 429) {
                 long seconds = Math.clamp(result.path("parameters").path("retry_after").asLong(1), 1, 3600);
-                retryAt.set(System.nanoTime() + Duration.ofSeconds(seconds).toNanos());
+                retryAt.set(nanoTime.getAsLong() + Duration.ofSeconds(seconds).toNanos());
             }
             if (response.statusCode() != 200 || !result.path("ok").asBoolean(false) || !result.has("result")) throw unavailable();
             return result.get("result");

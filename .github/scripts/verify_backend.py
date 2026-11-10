@@ -55,7 +55,7 @@ def verify_inputs():
     for path in (ROOT / "docs/ai-context").glob("*.md"):
         lines = path.read_text(encoding="utf-8").splitlines()
         require(len(lines) < 80, f"Context index must stay below 80 lines: {path.name}")
-        require(all(not line.strip() or line.startswith("- ") for line in lines), f"Context index must use bullets: {path.name}")
+        require(all(not line.strip() or line.startswith("- ") or re.fullmatch(r"<!-- /?coderabbit-ai-generated:v1 -->|<!-- coderabbit-ai-generated-section:v1:[0-9a-f]{64} -->", line) for line in lines), f"Context index must use bullets: {path.name}")
     for path in (BACKEND / "src/main/java").rglob("MODULE_CONTEXT.md"):
         require(len(path.read_text(encoding="utf-8").splitlines()) < 50, f"Module context must stay below 50 lines: {path}")
     print("Verified Java 25 target, Apache Maven Wrapper scripts/distribution pin, and context limits.")
@@ -95,6 +95,7 @@ def verify_reports():
             "BOOT-INF/classes/db/migration/V3__listing_media_contract.sql",
             "BOOT-INF/classes/db/migration/V4__telegram_contact_receipts.sql",
             "BOOT-INF/classes/db/migration/V5__telegram_login_receipts.sql",
+            "BOOT-INF/classes/db/migration/V6__telegram_contact_sender_index.sql",
         }, "Packaged migrations differ from the Phase 1 handoff")
     version = subprocess.run(["java", "--version"], capture_output=True, text=True, check=True).stdout.strip()
     require(re.search(r"(?:openjdk|java) 25[.\s]", version), "Verification must run on Java 25")

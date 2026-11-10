@@ -1,3 +1,7 @@
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:badda97792b45758f96da912dd2beafdf02802f62b33e59cb4923ca91e3a0b9e -->
+
 # OpenNest deployment and infrastructure plan
 
 Telegram Bot API is the sole authentication provider by maintainer decision on 10 November 2026. Local bot identity/webhook-state checks passed, and the maintainer confirmed real local OTP authentication plus the verified private profile on 10 November. Production HTTPS webhook routing, hosted browser behavior, and deployment remain unverified. See [Telegram setup](TELEGRAM_HANDOFF.md). No infrastructure is provisioned by this change.
@@ -154,8 +158,11 @@ Monitor uptime, HTTP errors/latency, JVM RSS, database pool/query time, Redis wr
 - Select an available x86-64 instance/image combination; approve ARM only after native database testing. Benchmark capacity and decide where the separate recruiter deployment will run.
 - Verify control and DNS/TLS for `opennest.co.in`; confirm API/sandbox/media hostnames and same-site routing, or implement and test an equivalent same-origin proxy. Configure exact production origins and authenticated Telegram HTTPS webhook routing.
 - Review the production Redis version/license and map tile/Overpass provider. Pin supported patches and test upgrades against the chosen images.
-- Complete the existing phone-verification, moderation, privacy, backup/restore, and load-test requirements in the [project plan](PROJECT_PLAN.md). Telegram login never bypasses required images or listing quotas.
+- Complete the remaining Telegram hosted-webhook and repeated-login verification, moderation, privacy, backup/restore, and load-test requirements in the [project plan](PROJECT_PLAN.md). Telegram login never bypasses required images or listing quotas.
 
 Update this document and [ARCHITECTURE_STATE.md](ai-context/ARCHITECTURE_STATE.md) when a proposal becomes a tested deployment decision. Recheck provider terms and prices at provisioning time; the review date above is not a permanent guarantee.
 
 Phase 3 implements the opt-in R2 adapter and private staging/final lifecycle; [LISTINGS_HANDOFF.md](LISTINGS_HANDOFF.md) defines configuration, separation, limits, and local verification. No R2 resources, bucket CORS, public media host, or live provider readiness were provisioned. All media remains private with short-lived signed GET URLs. Hosting and production configuration above remain proposals.
+
+
+<!-- /coderabbit-ai-generated:v1 -->

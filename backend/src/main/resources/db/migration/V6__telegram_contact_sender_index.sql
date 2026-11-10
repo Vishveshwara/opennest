@@ -1,0 +1,1 @@
+CREATE INDEX ix_contact_verifications_telegram_user ON contact_verifications (telegram_user_id);

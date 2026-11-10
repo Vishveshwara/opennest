@@ -216,7 +216,7 @@ class ListingLifecycleIT {
         assertThatThrownBy(() -> as(owner(0, false), () -> service().change(id, inventory("ROOM", 0, true), "inventory"))).isInstanceOf(RequestFailure.class);
     }
     @Test void migrationUpgradePreservesOriginalChecksumsAndValidatesMediaMetadata() {
-        assertThat(jdbc(0).queryForList("select version from flyway_schema_history where success order by installed_rank", String.class)).containsExactly("1", "2", "3", "4", "5");
+        assertThat(jdbc(0).queryForList("select version from flyway_schema_history where success order by installed_rank", String.class)).containsExactly("1", "2", "3", "4", "5", "6");
         assertThat(jdbc(0).queryForList("select column_name from information_schema.columns where table_name='listing_owner_profiles'", String.class))
                 .containsExactlyInAnyOrder("id", "full_name", "average_rating", "review_count", "broker_report_count");
         UUID owner = owner(0, false);

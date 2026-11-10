@@ -1,6 +1,14 @@
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:04cb043bc4f6f8d4b09082a7a4e4178bbbcff1ebac9cb46fec1a2b46b7b20c37 -->
+
+<!-- coderabbit-ai-generated-section:v1:db5fbd41474b86c43a5feea8c86646f782118827508ccc95a56fe97a589f1e9a -->
+
+<!-- coderabbit-ai-generated-section:v1:0fd4407d375ca3133ea47196c13e0cc66df47a59af4e0e8c2b285c1a8c43eeff -->
+
 # OpenNest Flyway migrations
 
-Current schema: V1/V2 foundation, V3 listing metadata/owner projection, V4 private contact provenance and V5 expiring Telegram login receipts. Earlier migration contents remain unchanged. This Phase 1 execution record is historical; [SCHEMA_CONTRACT.md](SCHEMA_CONTRACT.md) gives current totals, and [API_VERIFICATION.md](API_VERIFICATION.md) records the current full gate.
+Current schema: V1/V2 foundation, V3 listing metadata/owner projection, V4 private contact provenance, V5 expiring Telegram login receipts and V6 contact sender index. Earlier migration contents remain unchanged. This Phase 1 execution record is historical; [SCHEMA_CONTRACT.md](SCHEMA_CONTRACT.md) gives current totals, and [API_VERIFICATION.md](API_VERIFICATION.md) records the current full gate.
 
 Phase 1.5 implements schema/indexes; Phase 1.6 adds [mappings/Hibernate validation](BACKEND_PERSISTENCE.md). Phase 1.7 adds [HTTP errors and restrictive security](BACKEND_HTTP_ERRORS.md), without changing V1/V2. Business services/endpoints and publication/quota transactions remain later work. The [schema contract](SCHEMA_CONTRACT.md) defines storage semantics; its service invariants are not database authorization.
 
@@ -12,6 +20,10 @@ The application includes one shared `classpath:db/migration` directory:
 | --- | --- | --- |
 | 1 | `V1__create_application_schema.sql` | Enable PostGIS in public; create six application tables, generated geography/room totals/Kolkata dates, checks, unique keys, and immediate RESTRICT foreign keys |
 | 2 | `V2__create_application_indexes.sql` | Create 15 nonunique indexes, including GiST geography, owner/status and city filters, plus nationwide/city newest and both rent directions with id ASC ties |
+| 3 | `V3__listing_media_contract.sql` | Add image reservation/validation metadata and the private-field-free listing_owner_profiles view |
+| 4 | `V4__telegram_contact_receipts.sql` | Create private current contact provenance receipts |
+| 5 | `V5__telegram_login_receipts.sql` | Create expiring original-session Telegram login receipts and expiry index |
+| 6 | `V6__telegram_contact_sender_index.sql` | Index contact_verifications.telegram_user_id for sender lookup |
 
 Primary and sandbox processes run these exact resources against their separately selected databases. A process migrates only its own selected datasource; it never connects to the other database to run a second migration. There are no environment-specific SQL branches, demo inserts, application fixtures, or row-level sandbox flags. PostGIS's reference data is extension infrastructure.
 
@@ -77,3 +89,6 @@ At Phase 1.5 on 22 October 2026, the clean Java 25 build passed 52 unit/context/
 - Catalog checks confirmed seven immediate RESTRICT foreign keys, three stored generated columns, all 15 indexes, and newest/rent direction plus UUID tie-breaker definitions.
 
 Temporary database binaries/data are under `%TEMP%/opennest-phase-1-5`; test servers were reused for isolated Phase 1.6 databases and stopped after verification. Local logs are under ignored `target/phase-1.5/` and `target/phase-1.6/`. Existing system PostgreSQL 18 data was not used. No hosted production/recruiter database or Compose volume was migrated. Docker/Compose execution, Redis isolation, feature service/quota concurrency, application CI, and deployment remain unverified; Hibernate validation and overlapping stale ORM writes are proven by Phase 1.6.
+
+
+<!-- /coderabbit-ai-generated:v1 -->

@@ -94,8 +94,12 @@ class TelegramSettingsTests {
         var polling = configured().withProperty("OPENNEST_TELEGRAM_POLLING_ENABLED", "true")
                 .withProperty("TELEGRAM_WEBHOOK_SECRET", "");
         assertThat(new TelegramSettings(polling).polling()).isTrue();
-        assertRejected(polling.withProperty("opennest.deployment.environment", "PRODUCTION"));
-        assertRejected(polling.withProperty("opennest.identity.telegram-enabled", "false"));
+        assertRejected(configured().withProperty("OPENNEST_TELEGRAM_POLLING_ENABLED", "true")
+                .withProperty("opennest.deployment.environment", "PRODUCTION"));
+        var disabled = new TelegramSettings(configured().withProperty("OPENNEST_TELEGRAM_POLLING_ENABLED", "true")
+                .withProperty("opennest.identity.telegram-enabled", "false"));
+        assertThat(disabled.enabled()).isFalse();
+        assertThat(disabled.polling()).isTrue();
     }
 
     @Test

@@ -1,3 +1,13 @@
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:781fa2b525ce95ba86872eee3e712414c14f11dea045a996d17f4b9eaa255560 -->
+
+<!-- coderabbit-ai-generated-section:v1:f7e6c0581f50b78c692375b847105c424ae95fcb7d18b0c9641878c38b96d36d -->
+
+<!-- coderabbit-ai-generated-section:v1:eca0aabd9541b302bca250fda3c6a3040e9ba7784a4eaa9f40eb89c9a5187e67 -->
+
+<!-- coderabbit-ai-generated-section:v1:6f92bae5fc72e327b4a25c2739997312246db672a538eb2c13084cc32493811c -->
+
 # OpenNest database schema contract
 
 Status: Phase 1.4 design implemented by Phase 1.5's V1 schema/V2 indexes and Phase 1.6's module-owned mappings/Hibernate validation, verified on isolated PostgreSQL 17/PostGIS 3.5 targets on 22 October 2026. See [migration execution](BACKEND_MIGRATIONS.md) and [persistence evidence](BACKEND_PERSISTENCE.md). Phase 3 adds V3 media metadata/listing services, and Phase 3A adds V4 current contact provenance plus V5 expiring login receipts, described below. Current totals are eight application tables/87 columns with six ORM mappings/76 columns. Hosted databases are not migrated; triggers and interaction APIs remain unimplemented.
@@ -246,7 +256,7 @@ Phase 1.5's real PostgreSQL 17/PostGIS 3.5 checks cover the following schema acc
 - Verify Kolkata dates around 18:30 UTC and under changed session timezones, including historical fixtures. Verify object expiry and timestamp-order checks.
 - Keep service/transaction behaviors separate from these schema tests. Phase 1.6 now proves Hibernate validation and persistence round trips; publication/reveal quota and review concurrency belong to their feature phases. Broader application isolation and backend CI gates remain later Phase 1 tasks.
 
-Phase 2 approves and implements trust thresholds without changing the schema. Phase 3 implements listing services and the V3 additions below. Phase 3A adds the approved Telegram contact receipt through V4. Moderation/appeals, broader retention/erasure policy, future public map coarsening, and edit/deletion routes remain open. They do not authorize a service bypass or a public launch.
+Phase 2 approves and implements trust thresholds without changing the schema. Phase 3 implements listing services and the V3 additions below. Phase 3A adds the approved Telegram contact provenance through V4 and expiring login receipts through V5. Moderation/appeals, broader retention/erasure policy, future public map coarsening, and edit/deletion routes remain open. They do not authorize a service bypass or a public launch.
 
 ## Phase 3 V3 additions
 
@@ -279,15 +289,18 @@ V4 adds the identity-owned, private `contact_verifications` table. V1/V2/V3 rema
 | `method` | text | Required, default and check TELEGRAM_ACCOUNT_CONTACT |
 | `verified_at` | timestamptz | Required, defaults to statement_timestamp() |
 
-The service locks the user and writes users.phone_number/phone_verified_at plus the receipt in one transaction. Existing users.phone_number uniqueness prevents account merging. Only the initiating account/session can retry a committed receipt, including after Redis loss. Database rollback leaves a claimed Redis challenge retryable. A verified contact cannot be replaced through this initial API.
+The service locks the user and writes users.phone_number/phone_verified_at plus the receipt in one transaction. Existing users.phone_number uniqueness prevents account merging. V4 session_digest records provenance only; it does not authorize retries after Redis loss. Database rollback leaves a claimed Redis challenge retryable. A verified contact cannot be replaced through this initial API.
 
 Keep one current receipt for the lifetime of that verified account; no verification history, Telegram username, vCard, or plaintext code is retained. Future contact replacement/account erasure must delete the receipt consistently with private account data. Pending challenges, expected contacts, code HMACs, rates, and update deduplication remain TTL-bounded private Redis data. The maintainer accepts Telegram self-contact plus browser OTP as owner-contact evidence, not proof of fresh SIM possession or property ownership. [TELEGRAM_HANDOFF.md](TELEGRAM_HANDOFF.md) records the flow and recovery tests.
 
 
 ## Phase 3A V5 login receipts
 
-V5 adds telegram_login_receipts without changing V1-V4. Its columns are id UUID primary key, user_id required immediate RESTRICT users FK, session_digest required 64-character lowercase-hex HMAC, and expires_at required timestamptz. An expiry index supports hourly deletion. There are eight application tables and 87 columns; six existing ORM mappings remain at 76 columns.
+V5 adds telegram_login_receipts without changing V1-V4. Its columns are id UUID primary key, user_id required immediate RESTRICT users FK, session_digest required 64-character lowercase-hex HMAC, and expires_at required timestamptz. An expiry index supports hourly deletion. V6 adds the nonunique ix_contact_verifications_telegram_user index on contact_verifications.telegram_user_id for sender lookup; V1–V5 remain unchanged. There are eight application tables and 87 columns; six existing ORM mappings remain at 76 columns.
 
-Each successful anonymous-session OTP completion writes the receipt in the same transaction as account/identity/contact/V4 provenance. Its expiry equals the challenge's original five-minute deadline; expired rows cannot authorize a retry even before cleanup. Challenge and Telegram sender advisory locks serialize retries/signup, then user locking preserves contact consistency. A rollback keeps the Redis claim retryable. The controller separately rotates and persists browser authentication.
+Each successful anonymous-session OTP completion writes the receipt in the same transaction as account/identity/contact/V4 provenance. Its expiry equals the challenge's original five-minute deadline. After Redis loss, only the V5 login receipt authorizes a retry by validating expiry and session_digest; expired rows cannot authorize a retry even before cleanup. Challenge and Telegram sender advisory locks serialize retries/signup, then user locking preserves contact consistency. A rollback keeps the Redis claim retryable. The controller separately rotates and persists browser authentication.
 
 Telegram account identity uses fixed issuer https://telegram.org and validated sender ID. Exactly one prior contact receipt for that sender may recover an existing account; ambiguous receipts conflict. No phone/email matching merges accounts, and unassociated legacy users remain intact pending explicit recovery. Old provider identity rows are retained privately but have no active authentication route. User/session/contact/login data is never placed in unauthenticated responses.
+
+
+<!-- /coderabbit-ai-generated:v1 -->

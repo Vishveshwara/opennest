@@ -27,10 +27,8 @@ class TelegramChallenges {
         var id = UUID.randomUUID(); long now = Instant.now().getEpochSecond();
         String result = script("""
                 if redis.call('EXISTS',KEYS[4]) == 1 then return 'RATE' end
-                for i=5,6 do
-                    redis.call('ZREMRANGEBYSCORE',KEYS[i],'-inf',ARGV[5]-3600)
-                    if redis.call('ZCARD',KEYS[i]) >= 5 then return 'RATE' end
-                end
+                redis.call('ZREMRANGEBYSCORE',KEYS[5],'-inf',ARGV[5]-3600)
+                if redis.call('ZCARD',KEYS[5]) >= 5 then return 'RATE' end
                 local old=redis.call('GET',KEYS[2])
                 if old and redis.call('EXISTS',ARGV[8]..'challenge:'..old)==1 then redis.call('HSET',ARGV[8]..'challenge:'..old,'state','CANCELLED') end
                 redis.call('HSET',KEYS[1],'id',ARGV[1],'user',ARGV[2],'session',ARGV[3],'phone',ARGV[4],
@@ -39,10 +37,10 @@ class TelegramChallenges {
                 redis.call('SET',KEYS[2],ARGV[1],'EX',300)
                 redis.call('SET',KEYS[3],ARGV[1],'EX',300)
                 redis.call('SET',KEYS[4],'1','EX',60)
-                for i=5,6 do redis.call('ZADD',KEYS[i],ARGV[5],ARGV[1]); redis.call('EXPIRE',KEYS[i],3600) end
+                redis.call('ZADD',KEYS[5],ARGV[5],ARGV[1]); redis.call('EXPIRE',KEYS[5],3600)
                 return 'OK'
                 """, List.of(key(id), prefix + "account:" + user, prefix + "link:" + crypto.digest(token), prefix + "cooldown:" + user,
-                prefix + "rate:user:" + user, prefix + "rate:phone:" + crypto.hmac("phone", phone)),
+                prefix + "rate:user:" + user),
                 id.toString(), user.toString(), session, phone, Long.toString(now), crypto.token(), "", prefix);
         if (!"OK".equals(result)) throw new RequestFailure(RequestFailure.Kind.RATE_LIMITED);
         return id;
@@ -85,9 +83,13 @@ class TelegramChallenges {
                 local state=redis.call('HGET',KEYS[1],'state')
                 if redis.call('GET',KEYS[2])~=ARGV[1] or redis.call('HGET',KEYS[1],'chat')~=ARGV[2] then return 'NO' end
                 if state~='WAITING_CONTACT' and state~='CODE_READY' then return 'NO' end
+                redis.call('ZREMRANGEBYSCORE',KEYS[3],'-inf',ARGV[4]-3600)
+                if not redis.call('ZSCORE',KEYS[3],ARGV[1]) and redis.call('ZCARD',KEYS[3]) >= 5 then return 'NO' end
+                redis.call('ZADD',KEYS[3],ARGV[4],ARGV[1])
+                redis.call('EXPIRE',KEYS[3],3600)
                 redis.call('HSET',KEYS[1],'state','CODE_READY','code',ARGV[3])
                 return 'OK'
-                """, List.of(key(challenge.id()), prefix + "account:" + challenge.user()), challenge.id().toString(), Long.toString(chat), crypto.hmac("otp", challenge.id() + ":" + code)));
+                """, List.of(key(challenge.id()), prefix + "account:" + challenge.user(), prefix + "rate:phone:" + crypto.hmac("phone", challenge.phone())), challenge.id().toString(), Long.toString(chat), crypto.hmac("otp", challenge.id() + ":" + code), Long.toString(Instant.now().getEpochSecond())));
     }
     void sent(UUID id) { script("if redis.call('HGET',KEYS[1],'state')=='CODE_READY' then redis.call('HSET',KEYS[1],'state','CODE_SENT') end return 'OK'", List.of(key(id))); }
     boolean claim(UUID id, UUID user, String session, String code) {

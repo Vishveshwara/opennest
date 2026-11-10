@@ -395,8 +395,29 @@ class TelegramContactIT {
         assertThat(challenges().find((UUID) first.get("challengeId")).state()).isEqualTo("CANCELLED");
         challenges().redis.delete(challenges().prefix + "cooldown:" + initiator);
         assertThatThrownBy(() -> contacts().create(session, number)).isInstanceOf(RequestFailure.class);
-        assertThatThrownBy(() -> contacts().create(contacts().session("different-rate-session"), number))
-                .isInstanceOfSatisfying(RequestFailure.class, failure -> assertThat(failure.kind()).isEqualTo(RequestFailure.Kind.RATE_LIMITED));
+        assertThat(contacts().create(contacts().session("different-rate-session"), number)).containsKey("challengeId");
+    }
+
+    @Test void onlyMatchedContactsConsumeTheAtomicPhoneBudget() throws Exception {
+        String number = phone();
+        var flows = new ArrayList<Flow>();
+        for (int index = 0; index < 6; index++) flows.add(begin(number));
+        String rate = challenges().prefix + "rate:phone:" + apps.getFirst().getBean(TelegramCrypto.class).hmac("phone", number);
+        receiver().accept(contact(flows.getFirst().chat(), phone()));
+        assertThat(challenges().redis.opsForZSet().zCard(rate)).isZero();
+        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            var tasks = flows.stream().map(flow -> executor.submit(() -> challenges().prepare(challenges().find(flow.id()), flow.chat(), "004217"))).toList();
+            int accepted = 0;
+            for (var task : tasks) if (task.get()) accepted++;
+            assertThat(accepted).isEqualTo(5);
+        }
+        assertThat(challenges().redis.opsForZSet().zCard(rate)).isEqualTo(5);
+        var prepared = flows.stream().filter(flow -> "CODE_READY".equals(challenges().find(flow.id()).state())).findFirst().orElseThrow();
+        assertThat(challenges().prepare(challenges().find(prepared.id()), prepared.chat(), "004217")).isTrue();
+        assertThat(challenges().redis.opsForZSet().zCard(rate)).isEqualTo(5);
+        var blocked = flows.stream().filter(flow -> "WAITING_CONTACT".equals(challenges().find(flow.id()).state())).findFirst().orElseThrow();
+        receiver().accept(contact(blocked.chat(), number));
+        assertThat(bot().codes).doesNotContainKey(blocked.chat());
     }
 
     @Test void webhookSecretAndDeploymentIsolationRejectReplay() throws Exception {

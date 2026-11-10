@@ -1,3 +1,7 @@
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:d06a4694b15da0de740b6d38f7ea65facf326f5263f0936814a05af4108913df -->
+
 - Project: OpenNest, independent zero-brokerage flats/PG platform across India from launch; no city default/allowlist. Search without city is nationwide.
 - Stack: Java 25, Spring Boot 4.1.1, Modulith 2.1.1; future Next.js 16.4/React 19.3/TypeScript with semantic TweakCN theme, verify releases before frontend initialization.
 - Planned website https://opennest.co.in; domain control, DNS/TLS, API/sandbox hosts and hosted deployment remain unverified. Deployment proposal: docs/DEPLOYMENT_STACK.md; no provisioning/merge/deployment authorized.
@@ -10,7 +14,7 @@
 - Redis namespace opennest:<realm>:telegram-auth:v1:sessions invalidates old provider sessions. Cookies host-only/HttpOnly/SameSite=Lax, Secure in production/HTTPS; 30-minute idle/24-hour authenticated expiry. Realm/store separation rejects replay; outages fail closed.
 - Telegram defaults disabled, PRIMARY only; OPENNEST_TELEGRAM_AUTH_ENABLED explicit. Production secret-authenticated HTTPS webhooks; explicit development polling refuses registered webhooks, uses one leased consumer and persisted offsets, forbidden in production. Sandbox contact actions stay disabled.
 - Private local .env now holds the supplied bot token and generated secrets. Live getMe/getWebhookInfo checks passed on 10 November; setup changed no webhook and exposed no tunnel. The maintainer subsequently completed real self-contact/OTP login and authorized private profile with phoneVerified=true; no real contact/token/code is recorded here. Token/private contacts/codes never enter Git/logs/shared exports. Setup/Postman: docs/TELEGRAM_HANDOFF.md.
-- V1-V4 unchanged. V3 adds six media metadata columns and private-field-free listing_owner_profiles. V4 stores current contact provenance; V5 adds four-column expiring login receipts. Eight application tables/87 columns, six ORM mappings/76 columns, Flyway/Hibernate validate only.
+- V1-V4 unchanged. V3 adds six media metadata columns and private-field-free listing_owner_profiles. V4 stores current contact provenance; V5 adds four-column expiring login receipts; V6 indexes contact receipt sender lookup. Eight application tables/87 columns, six ORM mappings/76 columns, Flyway/Hibernate validate only.
 - Telegram completion advisory-locks challenge and sender, then locks user; account/identity/contact/provenance/login receipt commit together. Phone conflicts never merge accounts. Rollback keeps Redis claim retryable; committed receipts survive Redis challenge loss within original five-minute TTL. Expired login receipts ignored/deleted hourly.
 - Current V4 contact receipt retained for verified account lifetime; no history, vCard, username/plaintext OTP retained. Future replacement/erasure must remove dependent private receipts. Signup display name defaults OpenNest user.
 - Identity public contracts CurrentAccount, IdentityAccounts and TrustBadge; listing depends only on public common/identity contracts. Identity owns user locking, verified-contact checks, private profile, sessions and owner projection.
@@ -26,3 +30,6 @@
 - Future Phase 6: hosting/DNS/TLS, production bot/webhook setup, delivery, edge rate limits before session creation, Redis capacity/alerts, hosted smoke/isolation/load/restore/rollback. Applicable controls precede any earlier preview.
 - API verification: docs/API_VERIFICATION.md records every listing route exercised through Telegram-created sessions across three modes, owner/anonymous/CSRF/privacy checks, actual image validation with isolated controlled storage, and absent OAuth wiring/libraries. docs/POSTMAN_API_GUIDE.md and separate auth/listing collections support manual testing.
 - Open decisions: hosting/budget/architecture/providers, moderation/appeals, broader privacy/erasure and legacy account recovery, hosted manual checks. Full decisions: docs/PROJECT_PLAN.md.
+
+
+<!-- /coderabbit-ai-generated:v1 -->
