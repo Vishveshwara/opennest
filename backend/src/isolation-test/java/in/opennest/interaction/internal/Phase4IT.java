@@ -46,6 +46,9 @@ class Phase4IT {
     private final JsonMapper json = new JsonMapper();
     private final HttpClient http = HttpClient.newHttpClient();
 
+    /**
+     * Starts independent real PostGIS/Redis pairs and applications, closing partial fixtures on startup failure.
+     */
     @BeforeAll void start() {
         try {
             for (int i = 0; i < 2; i++) {
@@ -67,6 +70,9 @@ class Phase4IT {
     }
     @BeforeEach void freshSandbox() { reset(true); }
 
+    /**
+     * Proves competing reveals admit exactly ten listings and retries stay free after Redis state is cleared.
+     */
     @Test void concurrentDistinctRevealsPermitTenAndRetriesRemainFreeAfterRedisLoss() throws Exception {
         UUID seeker = user(false), owner = user(true);
         var listings = new ArrayList<UUID>();
@@ -138,6 +144,9 @@ class Phase4IT {
         failure(RequestFailure.Kind.NOT_FOUND, () -> service().reviews(id, new LinkedMultiValueMap<>()));
     }
 
+    /**
+     * Races review creation and repeated reports, then checks one row per pair and exact owner aggregates.
+     */
     @Test void concurrentReportsAndReviewsKeepOneRowAndExactOwnerAggregates() throws Exception {
         UUID owner = user(true), id = property(owner, true);
         var seekers = java.util.stream.IntStream.range(0, 10).mapToObj(i -> user(false)).toList();
@@ -181,6 +190,9 @@ class Phase4IT {
         assertAggregates(first, 1, 1); assertAggregates(second, 1, 1);
     }
 
+    /**
+     * Proves a snapshot captured before reset cannot authorize a subsequent sandbox operation.
+     */
     @Test void oldRepeatableReadSnapshotCannotPassGenerationCheckAfterReset() {
         var transaction = new TransactionTemplate(apps.get(1).getBean(PlatformTransactionManager.class));
         transaction.setIsolationLevel(org.springframework.transaction.TransactionDefinition.ISOLATION_REPEATABLE_READ);
@@ -260,6 +272,9 @@ class Phase4IT {
         assertThat(browser.call("POST", "/api/v1/listings/" + paused + "/publish", "{\"version\":1}").statusCode()).isEqualTo(403);
     }
 
+    /**
+     * Checks reset waits for active writes, expires old sessions, preserves primary data and deduplicates scheduled intervals.
+     */
     @Test void resetWaitsForWritesInvalidatesOldSessionsAndDoesNotTouchPrimary() throws Exception {
         var browser = new Browser(1); browser.csrf();
         browser.call("POST", "/api/v1/sandbox/personas/select", "{\"personaKey\":\"seeker-new\"}"); browser.csrf();
@@ -288,6 +303,9 @@ class Phase4IT {
         assertThat(jdbc(1).queryForObject("select count(*) from owner_reviews", Long.class)).isEqualTo(10);
     }
 
+    /**
+     * Runs both operator commands without HTTP and verifies context shutdown, reset generation and safe telemetry fields.
+     */
     @Test void operatorCommandsRunWithoutHttpAndExitWithOnlyAggregateTelemetry() {
         long generation = jdbc(1).queryForObject("select generation from sandbox_state", Long.class);
         for (String command : List.of("telemetry", "reset")) {
@@ -339,6 +357,9 @@ class Phase4IT {
     private JdbcTemplate jdbc(int target) { return apps.get(target).getBean(JdbcTemplate.class); }
     private InteractionService service() { return apps.getFirst().getBean(InteractionService.class); }
     private JsonNode node(String body) { return json.readTree(body); }
+    /**
+     * Creates a fabricated account and optionally assigns a synthetic non-callable contact for reveal tests.
+     */
     private UUID user(boolean verified) {
         UUID id = UUID.randomUUID();
         jdbc(0).update("insert into users (id, full_name) values (?, 'Fabricated Phase 4 account')", id);
@@ -346,6 +367,9 @@ class Phase4IT {
                 "+910" + String.format("%09d", jdbc(0).queryForObject("select count(*) from users", Long.class)), id);
         return id;
     }
+    /**
+     * Creates a fabricated entire-flat listing with the requested publication visibility for interaction tests.
+     */
     private UUID property(UUID owner, boolean published) {
         UUID id = UUID.randomUUID();
         jdbc(0).update("insert into properties (id, owner_id, title, description, category, flat_rental_mode, status, city, locality, private_address, latitude, longitude, monthly_rent, security_deposit, bedrooms, whole_flat_available, max_occupants) values (?,?,'Fabricated Phase 4 listing','Fabricated test listing','FLAT','ENTIRE_FLAT',?,'pune','test locality','Private fabricated address',18.52,73.86,25000,50000,2,true,4)", id, owner, published ? "ACTIVE" : "PAUSED");
@@ -368,6 +392,9 @@ class Phase4IT {
     private void failure(RequestFailure.Kind kind, Supplier<?> work) {
         assertThatThrownBy(work::get).isInstanceOfSatisfying(RequestFailure.class, failure -> assertThat(failure.kind()).isEqualTo(kind));
     }
+    /**
+     * Releases coordinated virtual-thread tasks together and returns their results within bounded deadlines.
+     */
     private List<Boolean> race(List<Callable<Boolean>> work) throws Exception {
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
             var start = new CountDownLatch(1); var futures = new ArrayList<Future<Boolean>>();
@@ -387,6 +414,9 @@ class Phase4IT {
         repository.save(session);
         return "OPENNEST_SESSION=" + Base64.getEncoder().encodeToString(session.getId().getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
+    /**
+     * Sends a bounded test HTTP request with optional body, session cookie and CSRF token.
+     */
     private HttpResponse<String> send(int target, String method, String path, String body, String cookie, String csrf) throws Exception {
         var request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + apps.get(target).getEnvironment().getProperty("local.server.port") + path)).timeout(Duration.ofSeconds(20));
         if (cookie != null) request.header("Cookie", cookie);
@@ -405,6 +435,9 @@ class Phase4IT {
         }
         void csrf() throws Exception { csrf = node(call("GET", "/api/v1/auth/csrf", null).body()).get("token").stringValue(); }
     }
+    /**
+     * Builds explicit fabricated store, provider and feature settings for the selected isolated application.
+     */
     private Map<String, String> settings(int target) {
         var result = new LinkedHashMap<String, String>();
         result.putAll(Map.of("server.port", "0", "server.address", "127.0.0.1", "OPENNEST_ENVIRONMENT", "DEVELOPMENT",
@@ -432,6 +465,9 @@ class Phase4IT {
         final AtomicReference<Instant> now = new AtomicReference<>();
         final AtomicReference<CountDownLatch> captured = new AtomicReference<>();
         ClockJdbc(javax.sql.DataSource dataSource) { super(dataSource); }
+        /**
+         * Substitutes only the controlled quota-clock query and delegates every other query to the real database.
+         */
         @Override public <T> T queryForObject(String sql, RowMapper<T> mapper) {
             if (sql.equals("select clock_timestamp()") && now.get() != null) {
                 Instant instant = now.get();

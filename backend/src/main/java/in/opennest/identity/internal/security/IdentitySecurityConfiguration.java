@@ -69,6 +69,9 @@ class IdentitySecurityConfiguration {
         source.registerCorsConfiguration("/api/v1/**", cors);
         return source;
     }
+    /**
+     * Configures route authorization, CSRF, isolated sessions and fixed safe errors for the selected identity mode.
+     */
     @Bean SecurityFilterChain identitySecurity(HttpSecurity http, Environment environment, HttpFailureResponse errors,
             Clock clock, CorsConfigurationSource identityCors, org.springframework.beans.factory.ObjectProvider<TelegramSettings> telegramProvider,
             SandboxBoundary boundary,

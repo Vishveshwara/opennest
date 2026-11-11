@@ -42,6 +42,9 @@ class SchemaMigrationIT {
     private final List<ConfigurableApplicationContext> contexts = new ArrayList<>();
     private final List<String[]> startupArguments = new ArrayList<>();
 
+    /**
+     * Starts fresh isolated primary and sandbox stores, applies Flyway, and checks Hibernate validation.
+     */
     @BeforeAll
     void migrateBothDeploymentTargetsThroughApplicationStartup() throws Exception {
         try {
@@ -127,6 +130,9 @@ class SchemaMigrationIT {
         }
     }
 
+    /**
+     * Compares both migrated schemas and checksums while proving migrations create no application fixtures.
+     */
     @Test
     void installsIdenticalSchemaAndChecksumsWithoutApplicationFixtures() throws Exception {
         String fingerprint = null;
@@ -320,11 +326,14 @@ class SchemaMigrationIT {
         });
     }
 
+    /**
+     * Checks singleton, positive version/generation, interval, timestamp and uniqueness constraints on both targets.
+     */
     @ParameterizedTest
     @ValueSource(ints = {0, 1})
     void enforcesSandboxResetMetadataShapeWithoutSeedingApplicationData(int target) throws Exception {
         fixture(target, f -> {
-            insert(f.db(), "sandbox_state", row("id", 1, "seed_version", 1, "generation", 1L, "reset_interval", 0L, "reset_at", OffsetDateTime.now()));
+            insert(f.db(), "sandbox_state", row("id", 1, "seed_version", 1, "generation", 1L, "reset_interval", 0L, "reset_at", OffsetDateTime.parse("2026-10-21T18:30:00Z")));
             for (String change : List.of("id=2", "seed_version=0", "generation=0", "reset_interval=-1"))
                 reject(f.db(), "23514", "UPDATE sandbox_state SET " + change + " WHERE id=1");
             reject(f.db(), "23502", "UPDATE sandbox_state SET reset_at=NULL WHERE id=1");

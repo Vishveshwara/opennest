@@ -10,14 +10,14 @@
 
 # OpenNest database schema contract
 
-Status: Phase 1.4 design implemented by Phase 1.5's V1 schema/V2 indexes and Phase 1.6's module-owned mappings/Hibernate validation, verified on isolated PostgreSQL 17/PostGIS 3.5 targets on 22 October 2026. See [migration execution](BACKEND_MIGRATIONS.md) and [persistence evidence](BACKEND_PERSISTENCE.md). Phase 3 adds V3 media metadata/listing services, and Phase 3A adds V4 current contact provenance plus V5 expiring login receipts, described below. Current totals are eight application tables/87 columns with six ORM mappings/76 columns. Hosted databases are not migrated; triggers and interaction APIs remain unimplemented.
+Status: Phase 1.4 design implemented by Phase 1.5's V1 schema/V2 indexes and Phase 1.6's module-owned mappings/Hibernate validation, verified on isolated PostgreSQL 17/PostGIS 3.5 targets on 22 October 2026. See [migration execution](BACKEND_MIGRATIONS.md) and [persistence evidence](BACKEND_PERSISTENCE.md). Phase 3 adds V3 media metadata/listing services, and Phase 3A adds V4 current contact provenance plus V5 expiring login receipts, described below. Phase 4 adds V7 sandbox reset metadata and implements interaction APIs. Current totals are nine application tables/92 columns with six ORM mappings/76 columns. Hosted databases are not migrated; update triggers remain unimplemented.
 
 The [listing model](LISTING_MODEL.md), [search contract](LISTING_SEARCH.md), and [authentication decisions](AUTHENTICATION.md) remain authoritative for feature behavior. Production and sandbox use identical migrations in separate databases. No row-level sandbox flag or request-selected database is introduced.
 
 ## Storage conventions
 
-- Nine application tables live in public: users, auth_identities, properties, property_images, contact_reveals, owner_reviews, contact_verifications , telegram_login_receipts and sandbox_state. V1 introduced the first six; V4/V5 introduced the receipt tables. Flyway history and PostGIS objects are additional infrastructure.
-- Each application-domain table has `id uuid PRIMARY KEY`; sandbox_state instead has a singleton smallint key. Domain tables have, NOT NULL, with no database default. The application supplies a random UUID before insertion. IDs never change; fixture IDs may be deterministic only in isolated sandbox/test databases.
+- Nine application tables live in public: users, auth_identities, properties, property_images, contact_reveals, owner_reviews, contact_verifications, telegram_login_receipts and sandbox_state. V1 introduced the first six; V4/V5 introduced the receipt tables. Flyway history and PostGIS objects are additional infrastructure.
+- Each domain table has an `id uuid PRIMARY KEY` that is `NOT NULL` with no database default; sandbox_state instead has a singleton smallint key. The application supplies a random UUID before insertion. IDs never change; fixture IDs may be deterministic only in isolated sandbox/test databases.
 - In the tables below, **required** means `NOT NULL`; **nullable** means SQL NULL is allowed. **None** means no explicit default. Nullable fields omitted on insert become NULL. Generated columns have no separate default and cannot accept a caller's value.
 - Enum-like values use `text` plus named `CHECK` constraints, mapped as strings later. Do not introduce PostgreSQL enum types or ordinal persistence. Every required enum also has `NOT NULL`.
 - Required free text has `CHECK (length(btrim(column)) > 0)`. Nullable text, when present, has the same nonblank check. This rejects empty/ASCII-space-only values; Unicode whitespace handling and future content/length limits belong to request validation. Technical keys are opaque, case-sensitive, and never silently trimmed or case-folded.
@@ -277,7 +277,7 @@ Constraints are `ck_property_images_declared_metadata` and `ck_property_images_v
 
 ## Phase 3A V4 contact receipt
 
-V4 adds the identity-owned, private `contact_verifications` table. V1/V2/V3 remain unchanged. The seven-column table uses JDBC rather than an additional entity; six existing ORM entities still map 76 columns. At V4 there were seven application tables with 83 columns; current V5 adds the four-column login receipt table, for eight tables and 87 columns.
+V4 adds the identity-owned, private `contact_verifications` table. V1/V2/V3 remain unchanged. The seven-column table uses JDBC rather than an additional entity; six existing ORM entities still map 76 columns. At V4 there were seven application tables with 83 columns; V5 added the four-column login receipt table, reaching eight tables and 87 columns at that checkpoint.
 
 | Column | Type | Database rules |
 | --- | --- | --- |
@@ -296,21 +296,12 @@ Keep one current receipt for the lifetime of that verified account; no verificat
 
 ## Phase 3A V5 login receipts
 
-V5 adds telegram_login_receipts without changing V1-V4. Its columns are id UUID primary key, user_id required immediate RESTRICT users FK, session_digest required 64-character lowercase-hex HMAC, and expires_at required timestamptz. An expiry index supports hourly deletion. V6 adds the nonunique ix_contact_verifications_telegram_user index on contact_verifications.telegram_user_id for sender lookup; V1–V5 remain unchanged. There are eight application tables and 87 columns; six existing ORM mappings remain at 76 columns.
+V5 adds telegram_login_receipts without changing V1-V4. Its columns are id UUID primary key, user_id required immediate RESTRICT users FK, session_digest required 64-character lowercase-hex HMAC, and expires_at required timestamptz. An expiry index supports hourly deletion. V6 adds the nonunique ix_contact_verifications_telegram_user index on contact_verifications.telegram_user_id for sender lookup; V1–V5 remain unchanged. At V6 there were eight application tables and 87 columns; six existing ORM mappings remain at 76 columns.
 
 Each successful anonymous-session OTP completion writes the receipt in the same transaction as account/identity/contact/V4 provenance. Its expiry equals the challenge's original five-minute deadline. After Redis loss, only the V5 login receipt authorizes a retry by validating expiry and session_digest; expired rows cannot authorize a retry even before cleanup. Challenge and Telegram sender advisory locks serialize retries/signup, then user locking preserves contact consistency. A rollback keeps the Redis claim retryable. The controller separately rotates and persists browser authentication.
 
 Telegram account identity uses fixed issuer https://telegram.org and validated sender ID. Exactly one prior contact receipt for that sender may recover an existing account; ambiguous receipts conflict. No phone/email matching merges accounts, and unassociated legacy users remain intact pending explicit recovery. Old provider identity rows are retained privately but have no active authentication route. User/session/contact/login data is never placed in unauthenticated responses.
 
-
-<!-- /coderabbit-ai-generated:v1 -->
-## Phase 4 reset metadata
-
-V7 adds sandbox_state through Flyway; V1-V6 are unchanged. It has id smallint primary key constrained to 1, seed_version integer >0, generation bigint >0, reset_interval bigint >=0, and reset_at timestamptz. All five columns are required and have no defaults. The migration inserts no rows in either database. Current totals are nine application tables and 92 columns; the six entity mappings remain unchanged at 76 columns.
-
-Sandbox tooling alone initializes the metadata alongside fabricated fixtures. Reset takes the exclusive advisory lock, deletes child rows before parent rows, reseeds, and increments generation in one transaction. Scheduled interval values use Kolkata six-hour boundaries. Normal sandbox transactions take the shared advisory lock. Snapshot reads also lock the metadata row, rejecting pre-reset repeatable-read snapshots rather than accepting an old generation.
-
-Phase 4 account locks use FOR NO KEY UPDATE for reveals and review writers. This preserves writer serialization while allowing foreign-key KEY SHARE checks for reciprocal interactions. The capture-after-quota-lock and historical-eligibility rules above remain authoritative.
 
 ## Phase 4 reset metadata
 
@@ -319,3 +310,5 @@ V7 adds sandbox_state through Flyway; V1-V6 are unchanged. It has id smallint pr
 Sandbox tooling alone initializes metadata alongside fabricated fixtures. Reset takes the exclusive advisory lock, deletes child rows before parent rows, reseeds, and increments generation in one transaction. Scheduled interval values use Kolkata six-hour boundaries. Normal sandbox transactions take the shared advisory lock. Snapshot reads also lock the metadata row, rejecting pre-reset repeatable-read snapshots rather than accepting an old generation.
 
 Phase 4 account locks use FOR NO KEY UPDATE for reveals and review writers. This preserves writer serialization while allowing foreign-key KEY SHARE checks for reciprocal interactions. The capture-after-quota-lock and historical-eligibility rules above remain authoritative.
+
+<!-- /coderabbit-ai-generated:v1 -->

@@ -23,10 +23,13 @@ public class SandboxBoundary {
 
     public boolean sandbox() { return sandbox; }
 
+    /**
+     * Holds the shared reset lock and rejects obsolete snapshots or request-session generations inside the transaction.
+     */
     @Transactional(propagation = Propagation.MANDATORY)
     public void lock() {
         if (!sandbox) return;
-        jdbc.execute("select pg_advisory_xact_lock_shared(" + LOCK_KEY + ")");
+        jdbc.query("select pg_advisory_xact_lock_shared(?)", row -> {}, LOCK_KEY);
         java.util.List<Long> generations;
         try { generations = jdbc.queryForList("select generation from sandbox_state where id = 1 for share", Long.class); }
         catch (org.springframework.dao.ConcurrencyFailureException failure) { throw new RequestFailure(RequestFailure.Kind.UNAVAILABLE); }
@@ -38,13 +41,19 @@ public class SandboxBoundary {
         }
     }
 
+    /**
+     * Validates a session generation against committed metadata while holding a shared reset lock.
+     */
     @Transactional(readOnly = true)
     public void validateGeneration(Object expected) {
         if (!sandbox) return;
-        jdbc.execute("select pg_advisory_xact_lock_shared(" + LOCK_KEY + ")");
+        jdbc.query("select pg_advisory_xact_lock_shared(?)", row -> {}, LOCK_KEY);
         if (!Objects.equals(expected, generation())) throw new RequestFailure(RequestFailure.Kind.UNAUTHENTICATED);
     }
 
+    /**
+     * Reads the initialized sandbox generation or fails closed when reset metadata is absent.
+     */
     @Transactional(propagation = Propagation.MANDATORY)
     public long generation() {
         var rows = jdbc.queryForList("select generation from sandbox_state where id = 1", Long.class);
@@ -52,9 +61,12 @@ public class SandboxBoundary {
         return rows.getFirst();
     }
 
+    /**
+     * Takes the transaction-scoped exclusive reset lock and forbids using it on a primary backend.
+     */
     @Transactional(propagation = Propagation.MANDATORY)
     public void exclusive() {
         if (!sandbox) throw new RequestFailure(RequestFailure.Kind.FORBIDDEN);
-        jdbc.execute("select pg_advisory_xact_lock(" + LOCK_KEY + ")");
+        jdbc.query("select pg_advisory_xact_lock(?)", row -> {}, LOCK_KEY);
     }
 }

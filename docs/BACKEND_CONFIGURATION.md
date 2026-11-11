@@ -26,7 +26,7 @@ The root [.env.example](../.env.example) is a development template. Docker Compo
 | `OPENNEST_ENVIRONMENT` | `DEVELOPMENT`; accepts DEVELOPMENT or PRODUCTION. Set PRODUCTION explicitly for the real-data production backend. |
 | `OPENNEST_DATA_MODE` | `PRIMARY`; accepts PRIMARY or SANDBOX. |
 | `OPENNEST_DEVELOPMENT_AUTH` | false; true is allowed only in DEVELOPMENT. This reserves policy for later substitutes; it does not implement authentication. |
-| `OPENNEST_PERSONA_SWITCHING`, `OPENNEST_DEMO_RESET`, `OPENNEST_DEMO_TELEMETRY` | false; true requires SANDBOX and is forbidden in PRODUCTION. No corresponding operations exist yet. |
+| `OPENNEST_PERSONA_SWITCHING`, `OPENNEST_DEMO_RESET`, `OPENNEST_DEMO_TELEMETRY` | false; true requires SANDBOX and is forbidden in PRODUCTION. Respectively enable persona APIs, scheduled/operator CLI resets, and operator CLI telemetry; reset and telemetry have no HTTP routes. |
 | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Primary PostgreSQL; defaults `127.0.0.1`, 5432, `opennest`, `opennest`, blank password. |
 | `REDIS_HOST`, `REDIS_PORT`, `REDIS_USER`, `REDIS_PASSWORD` | Primary Redis; defaults `127.0.0.1`, 6379, blank ACL username/password. Production requires a password; an optional username requires a password in every environment. |
 | `SANDBOX_DB_HOST`, `SANDBOX_DB_PORT`, `SANDBOX_DB_NAME`, `SANDBOX_DB_USER`, `SANDBOX_DB_PASSWORD` | Sandbox PostgreSQL; defaults `127.0.0.1`, 5433, `opennest_sandbox`, `opennest_sandbox`, blank password. |
@@ -63,7 +63,7 @@ Phase 1.5 passed 52 unit/context/module and 25 database tests; Phase 1.6 passed 
 
 Phase 1.8's [container-only isolation suite](BACKEND_ISOLATION.md) passed all 23 isolation tests on Linux amd64 Docker on 30 October 2026. It exercises actual PostgreSQL/Redis reads/writes, credential rejection, header handling, production guards, and migration/dependency failures. Redis still connects lazily, so unavailable Redis or a wrong password fails on use rather than necessarily preventing startup.
 
-Deployed network rejection, restricted server privileges, session/cookie isolation, storage/cache isolation, and demo operations remain later tasks. The local Compose stores are development-only; production credentials, image architecture, runtime TLS options, and public routing require the separate [deployment plan](DEPLOYMENT_STACK.md).
+Deployed network rejection and restricted server privileges remain deployment tasks. Phase 4 implements sandbox session/cookie separation and demo operations; hosted storage/network isolation still requires deployment verification. The local Compose stores are development-only; production credentials, image architecture, runtime TLS options, and public routing require the separate [deployment plan](DEPLOYMENT_STACK.md).
 
 Framework references: [externalized configuration](https://docs.spring.io/spring-boot/reference/features/external-config.html), [config-data processing order](https://docs.spring.io/spring-boot/api/java/org/springframework/boot/context/config/ConfigDataEnvironmentPostProcessor.html), and [common application properties](https://docs.spring.io/spring-boot/appendix/application-properties/index.html). The checked backend uses Boot 4.1.1.
 

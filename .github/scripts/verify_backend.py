@@ -35,11 +35,13 @@ INTEGRATION_SUITES = {"in.opennest.SchemaMigrationIT", "in.opennest.BackendIsola
 
 
 def require(condition, message):
+    """Reject a failed verification condition with a fixed actionable message."""
     if not condition:
         raise ValueError(message)
 
 
 def verify_inputs():
+    """Check pinned build inputs, wrapper integrity and repository context limits."""
     namespace = {"m": "http://maven.apache.org/POM/4.0.0"}
     pom = ET.parse(BACKEND / "pom.xml").getroot()
     require(pom.findtext("m:properties/m:java.version", namespaces=namespace) == "25", "Java target must remain 25")
@@ -63,6 +65,7 @@ def verify_inputs():
 
 
 def read_reports(directory, expected):
+    """Require complete nonempty passing suites and return their measured counts."""
     suites = {}
     for path in sorted(directory.glob("TEST-*.xml")):
         suite = ET.parse(path).getroot()
@@ -77,6 +80,7 @@ def read_reports(directory, expected):
 
 
 def verify_reports():
+    """Validate every required test report and packaged boundary before writing aggregate evidence."""
     target = BACKEND / "target"
     unit = read_reports(target / "surefire-reports", UNIT_SUITES)
     integration = read_reports(target / "failsafe-reports", INTEGRATION_SUITES)

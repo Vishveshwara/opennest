@@ -32,6 +32,9 @@ class SandboxController {
                 .map(persona -> Map.of("key", persona.key(), "displayName", persona.displayName())).toList()));
     }
 
+    /**
+     * Validates the allowlisted persona and holds one reset guard through generation lookup and session installation.
+     */
     @PostMapping("/personas/select") @Transactional
     public ResponseEntity<?> select(@RequestBody JsonNode body, HttpServletRequest request, HttpServletResponse response) {
         if (body == null || !body.isObject() || body.size() != 1 || !body.has("personaKey") || !body.get("personaKey").isString())
@@ -43,6 +46,9 @@ class SandboxController {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(Map.of("status", "AUTHENTICATED", "personaKey", persona.key()));
     }
 
+    /**
+     * Serves only allowlisted bundled illustrative PNG fixtures with no-store responses.
+     */
     @GetMapping("/images/{segment}.png")
     ResponseEntity<?> image(@PathVariable String segment) {
         if (!SandboxFixtures.SEGMENTS.contains(segment)) throw new RequestFailure(RequestFailure.Kind.NOT_FOUND);

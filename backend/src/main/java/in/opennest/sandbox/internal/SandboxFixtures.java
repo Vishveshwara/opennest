@@ -25,6 +25,9 @@ final class SandboxFixtures {
     static UUID id(String value) { return UUID.nameUUIDFromBytes(("opennest:sandbox:v1:" + value).getBytes(StandardCharsets.UTF_8)); }
     private static Persona persona(String key, String name) { return new Persona(key, name, id(key)); }
 
+    /**
+     * Creates deterministic multi-city listings, illustrative images and historical review eligibility without callable contacts.
+     */
     void seed(Instant now) {
         PERSONAS.forEach(persona -> jdbc.update("insert into users (id, full_name) values (?,?)", persona.userId(), persona.displayName()));
         var cities = List.of("DELHI", "BENGALURU", "MUMBAI", "PUNE", "HYDERABAD");
@@ -52,7 +55,7 @@ final class SandboxFixtures {
                 for (String segment : segments) {
                     int bytes;
                     try { bytes = new ClassPathResource("sandbox/images/" + segment + ".png").getContentAsByteArray().length; }
-                    catch (java.io.IOException failure) { throw new IllegalStateException("OpenNest sandbox fixture is unavailable"); }
+                    catch (java.io.IOException failure) { throw new IllegalStateException("OpenNest sandbox fixture is unavailable", failure); }
                     jdbc.update("insert into property_images (id, property_id, upload_object_key, object_key, segment, display_order, upload_expires_at, validation_state, declared_content_type, declared_byte_size, content_type, byte_size, width, height) values (?,?,?,?,?,?,current_timestamp + interval '10 minutes','VALIDATED','image/png',?,'image/png',?,320,240)",
                             id("image-" + owner + "-" + mode + "-" + segment), property, "sandbox-staging/" + property + "/" + segment,
                             "sandbox-fixtures/" + id("image-" + owner + "-" + mode + "-" + segment) + "/" + segment + ".png", segment, displayOrder++, bytes, bytes);
@@ -71,6 +74,9 @@ final class SandboxFixtures {
         jdbc.update("update users u set average_rating = r.average, review_count = r.reviews, broker_report_count = r.reports from (select owner_id, avg(rating) average, count(*) reviews, count(*) filter (where is_auto_broker_report) reports from owner_reviews group by owner_id) r where u.id = r.owner_id");
     }
 
+    /**
+     * Creates one fabricated ordinary review or brokerage allegation with the corresponding constrained database shape.
+     */
     private void review(int owner, int seeker, int rating, boolean report) {
         jdbc.update("insert into owner_reviews (id, property_id, owner_id, reviewer_id, rating, issue_tag, comment_text, is_auto_broker_report) values (?,?,?,?,?,?,?,?)",
                 id("review-" + owner + "-" + seeker), id("listing-" + owner + "-0"), PERSONAS.get(owner).userId(),

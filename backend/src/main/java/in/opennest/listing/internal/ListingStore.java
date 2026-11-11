@@ -43,6 +43,9 @@ class ListingStore {
     JdbcTemplate jdbc() { return jdbc; }
     boolean sandbox() { return boundary.sandbox(); }
     <T> T read(Supplier<T> operation) { return execute(reads, operation); }
+    /**
+     * Runs listing work under the sandbox reset guard and preserves the initial failure if rollback fails.
+     */
     private <T> T execute(TransactionTemplate template, Supplier<T> operation) {
         var original = new RuntimeException[1];
         try {

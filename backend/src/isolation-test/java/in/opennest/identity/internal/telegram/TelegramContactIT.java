@@ -118,6 +118,9 @@ class TelegramContactIT {
         assertThat(browser.send("GET", LOGIN + "/" + id, null, false).body()).doesNotContain(number, Long.toString(chat), code);
     }
 
+    /**
+     * Exercises interaction authorization, privacy and report conversion using controlled Telegram-created browser sessions.
+     */
     @Test void telegramSessionsAuthorizeInteractionsWithoutExposingContactsOrDuplicatingReports() throws Exception {
         var owner = loginBrowser();
         var seeker = loginBrowser();

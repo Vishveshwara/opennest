@@ -22,3 +22,5 @@
 - Phase 4 adds public InteractionAccounts and PersonaSessions. Private contact DTOs redact toString; review aggregates are assigned within the interaction-owned owner-locked transaction.
 - Shared sessions/profile/CSRF/logout activate for Telegram PRIMARY or explicit DEVELOPMENT/SANDBOX personas. Telegram challenges/transport remain PRIMARY-only. Sandbox uses personas:v1 Redis namespace, allowlisted selection and generation-bound sessions.
 - Sandbox profile/session reads coordinate through SandboxBoundary; schema/application failures retain safe error classification. Phase 4 does not add any PRIMARY login alternative.
+
+- PersonaSessions requires the caller to hold the shared reset lock while reading generation and installing the session; SandboxController is the sole caller and owns that lock.

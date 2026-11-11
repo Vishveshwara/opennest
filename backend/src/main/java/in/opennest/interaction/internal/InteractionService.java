@@ -31,6 +31,9 @@ class InteractionService {
     }
     private UUID caller() { return current.id().orElseThrow(() -> new RequestFailure(RequestFailure.Kind.UNAUTHENTICATED)); }
 
+    /**
+     * Reveals a published verified contact after a caller-row-serialized Kolkata quota check; same-day retries are free.
+     */
     Map<String, Object> reveal(UUID id, JsonNode body) {
         UUID caller = caller(); InteractionInput.empty(body);
         if (boundary.sandbox()) throw new RequestFailure(RequestFailure.Kind.FORBIDDEN);
@@ -53,6 +56,9 @@ class InteractionService {
         });
     }
 
+    /**
+     * Creates a historically authorized review or converts it to an idempotent allegation while updating owner aggregates atomically.
+     */
     Map<String, Object> writeReview(UUID id, JsonNode body, boolean report) {
         UUID caller = caller();
         var input = report ? null : InteractionInput.review(body);
@@ -80,6 +86,9 @@ class InteractionService {
         });
     }
 
+    /**
+     * Reads one deterministic page of published-listing reviews and matching totals from the same snapshot.
+     */
     Map<String, Object> reviews(UUID id, MultiValueMap<String, String> query) {
         var page = InteractionInput.page(query);
         return store.read(() -> {
@@ -93,6 +102,9 @@ class InteractionService {
         });
     }
 
+    /**
+     * Returns only the caller's reveal quota, review and eligibility state, preserving authorized history after pause.
+     */
     Map<String, Object> state(UUID id) {
         UUID caller = caller();
         return store.read(() -> {

@@ -32,7 +32,8 @@
 - Open decisions: hosting/budget/architecture/providers, moderation/appeals, broader privacy/erasure and legacy account recovery, hosted manual checks. Full decisions: docs/PROJECT_PLAN.md.
 
 
-<!-- /coderabbit-ai-generated:v1 -->
-- Phase 4 session infrastructure supports explicit sandbox personas without Telegram; PRIMARY login remains Telegram-only. Sandbox cookies/realm/Redis namespace and persistent generation reject replay after reset; shared transaction guards serialize against exclusive reset.
+- Phase 4 session infrastructure supports explicit sandbox personas without Telegram; PRIMARY login remains Telegram-only. Sandbox cookies/realm/Redis namespace and persistent generation reject replay after reset; shared transaction guards serialize against exclusive reset. Persona selection holds one controller-owned guard through generation read/session installation; operator commands emit a documented JSON stdout record.
 
-- Phase 4 local proof on 11 November 2026: Windows Java 25.0.5.0.2 with Linux Docker stores; 596 Java tests passed across final reports, including 450 default/55 schema/25 isolation/33 Telegram/16 Phase 4/17 listing. Six Python checks and packaged/context gates passed. A stale V6 assertion was corrected and isolation rerun; CI/live R2/hosted checks remain unverified.
+- Phase 4 local proof on 11 November 2026: Windows Java 25.0.5.0.2 with Linux Docker stores; 596 Java tests passed across final reports, including 450 default/55 schema/25 isolation/33 Telegram/16 Phase 4/17 listing. Six Python checks and packaged/context gates passed. The initial gate corrected a stale V6 assertion and reran isolation; the review follow-up passed the complete 596-test combined-profile verify run. Follow-up CI/live R2/hosted checks remain unverified.
+
+<!-- /coderabbit-ai-generated:v1 -->

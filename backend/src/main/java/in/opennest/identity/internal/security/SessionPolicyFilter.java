@@ -26,6 +26,9 @@ final class SessionPolicyFilter extends OncePerRequestFilter {
         this.boundary = boundary;
     }
 
+    /**
+     * Rejects invalid realms, expired authentication and stale sandbox generations before dispatching the request.
+     */
     @Override protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
         response.setHeader("Cache-Control", "no-store");

@@ -114,6 +114,9 @@ class BackendIsolationIT {
         }
     }
 
+    /**
+     * Checks matching migration histories and confirms each application uses only its configured store clients.
+     */
     @Test
     @Order(1)
     void installsIdenticalMigrationsAndConnectsOnlyConfiguredClients() {

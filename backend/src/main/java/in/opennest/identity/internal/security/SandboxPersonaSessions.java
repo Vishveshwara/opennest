@@ -34,10 +34,12 @@ class SandboxPersonaSessions implements PersonaSessions {
         this.environment = environment; this.contexts = contexts; this.clock = clock; this.boundary = boundary;
     }
 
+    /**
+     * Installs the persona session under the caller-held reset lock, checking generation and rotating the session and CSRF token.
+     */
     @Override @Transactional(propagation = Propagation.MANDATORY)
     public void select(UUID id, long generation, HttpServletRequest request, HttpServletResponse response) {
         if (!IdentitySettings.sandboxSessions(environment)) throw new RequestFailure(RequestFailure.Kind.FORBIDDEN);
-        boundary.lock();
         if (boundary.generation() != generation) throw new RequestFailure(RequestFailure.Kind.UNAUTHENTICATED);
         var authentication = UsernamePasswordAuthenticationToken.authenticated(
                 new SessionPrincipal(id, IdentitySettings.realm(environment), clock.instant()), null,

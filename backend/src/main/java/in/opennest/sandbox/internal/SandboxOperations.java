@@ -34,12 +34,15 @@ class SandboxOperations implements ApplicationRunner {
         transactions = new TransactionTemplate(manager);
     }
 
+    /**
+     * Executes an authorized operator command and emits its JSON stdout result, or initializes enabled sandbox fixtures.
+     */
     @Override public void run(ApplicationArguments arguments) {
         String command = environment.getProperty("opennest.sandbox.command", "");
         if (!command.isEmpty()) {
             if (!java.util.Set.of("reset", "telemetry").contains(command)) throw new IllegalStateException("Invalid OpenNest sandbox command");
-            if (command.equals("reset")) { requireFeature("demo-reset"); reset(true); }
-            requireFeature(command.equals("telemetry") ? "demo-telemetry" : "demo-reset");
+            if (command.equals("reset")) reset(true);
+            else requireFeature("demo-telemetry");
             System.out.println(JsonMapper.builder().build().writeValueAsString(telemetry()));
             SpringApplication.exit(context);
             return;
@@ -47,6 +50,9 @@ class SandboxOperations implements ApplicationRunner {
         if (feature("persona-switching") || feature("demo-reset")) initialize();
     }
 
+    /**
+     * Seeds an empty dedicated sandbox once and rejects an incompatible existing fixture version.
+     */
     void initialize() {
         transactions.executeWithoutResult(status -> {
             boundary.exclusive();
@@ -56,9 +62,15 @@ class SandboxOperations implements ApplicationRunner {
         });
     }
 
+    /**
+     * Attempts the scheduled interval reset only while the sandbox reset feature is enabled.
+     */
     @Scheduled(cron = "0 0 */6 * * *", zone = "Asia/Kolkata")
     void scheduledReset() { if (feature("demo-reset")) reset(false); }
 
+    /**
+     * Checks reset authorization and atomically reseeds under an exclusive lock, deduplicating non-forced interval retries.
+     */
     void reset(boolean force) {
         requireFeature("demo-reset");
         transactions.executeWithoutResult(status -> {
@@ -70,6 +82,9 @@ class SandboxOperations implements ApplicationRunner {
         });
     }
 
+    /**
+     * Replaces recognized sandbox fixtures in foreign-key order and advances their generation in the same transaction.
+     */
     private void seed(Instant now) {
         var previous = jdbc.queryForList("select generation from sandbox_state where id = 1", Long.class);
         if (previous.isEmpty() && jdbc.queryForObject("select count(*) from users", Long.class) != 0)
@@ -82,6 +97,9 @@ class SandboxOperations implements ApplicationRunner {
                 SandboxFixtures.VERSION, generation, interval(now), Timestamp.from(now));
     }
 
+    /**
+     * Reads aggregate fixture counts and reset metadata under the shared reset guard without exposing private values.
+     */
     Map<String, Object> telemetry() {
         return transactions.execute(status -> {
             boundary.lock();
@@ -100,6 +118,9 @@ class SandboxOperations implements ApplicationRunner {
     }
 
     private boolean feature(String name) { return environment.getProperty("opennest.deployment.features." + name, Boolean.class, false); }
+    /**
+     * Rejects operator work unless both the dedicated sandbox mode and its required feature flag are active.
+     */
     private void requireFeature(String name) { if (!boundary.sandbox() || !feature(name)) throw new RequestFailure(RequestFailure.Kind.FORBIDDEN); }
     private static long interval(Instant now) { return (now.getEpochSecond() + 19800) / 21600; }
 }

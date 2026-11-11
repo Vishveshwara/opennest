@@ -24,6 +24,9 @@ class BaselineSecurityConfiguration {
         };
     }
 
+    /**
+     * Builds exact-origin CORS rules for public reads while authentication is disabled.
+     */
     @Bean({"baselineCors", "applicationCors"})
     org.springframework.web.cors.CorsConfigurationSource baselineCors(org.springframework.core.env.Environment environment) {
         String mode = environment.getProperty("opennest.deployment.data-mode", "PRIMARY");

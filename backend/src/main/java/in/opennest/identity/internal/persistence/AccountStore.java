@@ -25,6 +25,9 @@ public class AccountStore {
         readTransaction.setReadOnly(!boundary.sandbox());
     }
 
+    /**
+     * Runs a reset-guarded account read and preserves its original failure if transaction rollback also fails.
+     */
     private <T> T transact(TransactionTemplate template, Supplier<T> work) {
         class ApplicationFailure { RuntimeException cause; }
         var application = new ApplicationFailure();

@@ -31,6 +31,9 @@ class InteractionStore {
     <T> T write(Supplier<T> work) { return execute(writes, work); }
     JdbcTemplate jdbc() { return jdbc; }
     <T> T read(Supplier<T> work) { return execute(reads, work); }
+    /**
+     * Runs a reset-guarded interaction transaction and retains the original application failure when rollback also fails.
+     */
     private <T> T execute(TransactionTemplate template, Supplier<T> work) {
         var original = new RuntimeException[1];
         try {
@@ -48,10 +51,16 @@ class InteractionStore {
     boolean historical(UUID caller, UUID listing, UUID owner) {
         return Boolean.TRUE.equals(jdbc.queryForObject("select exists(select 1 from contact_reveals where tenant_id = ? and property_id = ? and owner_id = ?)", Boolean.class, caller, listing, owner));
     }
+    /**
+     * Finds the caller/listing review and returns its safe response projection, or null when absent.
+     */
     Map<String, Object> review(UUID caller, UUID listing) {
         var rows = jdbc.queryForList("select id, rating, issue_tag, comment_text, is_auto_broker_report, created_at from owner_reviews where reviewer_id = ? and property_id = ?", caller, listing);
         return rows.isEmpty() ? null : response(rows.getFirst());
     }
+    /**
+     * Projects public review fields and a separate allegation notice without exposing private account identifiers.
+     */
     static Map<String, Object> response(Map<String, Object> row) {
         var result = new LinkedHashMap<String, Object>();
         result.put("id", row.get("id")); result.put("rating", row.get("rating")); result.put("issueTag", row.get("issue_tag"));

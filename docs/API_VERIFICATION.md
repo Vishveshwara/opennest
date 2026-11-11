@@ -1,6 +1,6 @@
 # OpenNest API verification with Telegram sessions
 
-This record covers the implemented authentication and listing APIs after the sole-Telegram change. Contact reveals, reviews/reports, recruiter personas/resets/telemetry and the frontend remain future phases. They are not available APIs to test today.
+This record covers the implemented authentication, listing, contact reveal, review/report and recruiter persona APIs. Phase 4 also implements sandbox image reads and operator CLI reset/telemetry, with no reset or telemetry HTTP routes. Frontend and deployment remain future work. Current local verification is recorded in [the Phase 4 handoff](PHASE4_HANDOFF.md).
 
 On 10 November 2026 the maintainer completed a real local Telegram self-contact/OTP login in Postman and read the private profile with phoneVerified=true. The phone, account ID, cookies and code are deliberately absent from this record. This confirms local login/profile behavior; it does not establish hosted readiness or a live storage upload.
 
@@ -60,7 +60,7 @@ Use [the Postman guide](POSTMAN_API_GUIDE.md) and [Telegram setup](TELEGRAM_HAND
 
 Live R2 credentials, bucket CORS, direct signed upload/read and deployed provider behavior remain unverified. Storage-disabled upload endpoints intentionally return 503. Publication without required validated images returns 409. These responses do not indicate an authentication failure. Hosted HTTPS webhooks, live failure/logout/repeated-login checks, CI, production readiness and deployment remain separate gates.
 
-On 10 November 2026, the clean Java 25/Linux amd64 Docker gate passed 553 tests: 427 default, 53 schema/persistence, 25 datastore isolation, 17 listing lifecycle and 31 Telegram authentication/API integration cases. No failures, errors or skips occurred. Report/artifact validation, six Python checks, 20 isolated PowerShell launcher regressions, context limits and whitespace checks passed. Both Postman collections passed JSON, embedded-script syntax and substituted-request-body validation. The packaged artifact contains neither test fixtures nor OAuth/OIDC application classes/libraries. Current-branch CI was not run by this local verification.
+The Phase 3A result on 10 November 2026 was a clean Java 25/Linux amd64 Docker gate with 553 passing tests: 427 default, 53 schema/persistence, 25 datastore isolation, 17 listing lifecycle and 31 Telegram authentication/API integration cases. No failures, errors or skips occurred. Report/artifact validation, six Python checks, 20 isolated PowerShell launcher regressions, context limits and whitespace checks passed. Both Postman collections passed JSON, embedded-script syntax and substituted-request-body validation. The packaged artifact contains neither test fixtures nor OAuth/OIDC application classes/libraries. Current-branch CI was not run by this local verification.
 
 ## Phase 4 interaction verification
 

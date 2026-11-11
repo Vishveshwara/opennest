@@ -53,7 +53,7 @@ java -jar backend/target/opennest-backend-0.0.1-SNAPSHOT.jar --spring.main.web-a
 java -jar backend/target/opennest-backend-0.0.1-SNAPSHOT.jar --spring.main.web-application-type=none --opennest.sandbox.command=reset
 ```
 
-Commands close their application context after completion. Reset requires OPENNEST_DEMO_RESET=true; telemetry requires OPENNEST_DEMO_TELEMETRY=true. No visitor reset or telemetry HTTP route exists. Output contains only fixture counts, initialization status, seed version, generation and reset time.
+Commands close their application context after completion. Reset requires OPENNEST_DEMO_RESET=true; telemetry requires OPENNEST_DEMO_TELEMETRY=true. No visitor reset or telemetry HTTP route exists. After normal application startup output, each command writes one JSON object to stdout containing only fixture counts, initialization status, seed version, generation and reset time. This stdout record is the operator command output contract; it is not a request or diagnostic log.
 
 With reset enabled, scheduling runs at 00:00, 06:00, 12:00 and 18:00 Asia/Kolkata. Multiple instances use the same interval marker, so retries in one interval do nothing. A manual reset is forced and increments generation each time.
 
@@ -78,6 +78,8 @@ The combined clean run executed every suite. One remaining isolation assertion s
 ```powershell
 .\backend\mvnw.cmd --batch-mode --no-transfer-progress --settings docs/verification/backend-dependencies/settings.xml --global-settings docs/verification/backend-dependencies/settings.xml --file backend/pom.xml '-Pschema-integration,isolation-integration' '-Dtest=OpenNestApplicationTests' '-Dit.test=BackendIsolationIT' verify
 ```
+
+The review follow-up on 11 November reran the complete combined-profile verify command successfully: all 596 Java tests and six Python checks passed, including the parameterized advisory locks and single-owner persona guard. The local compiler-based documentation audit confirmed Javadocs on all 60 targeted complex Java methods and docstrings on all four Python verification functions. CodeRabbit documentation coverage must be rerun remotely for the follow-up commit.
 
 Raw local results are in backend/target/backend-verification.json and the Surefire/Failsafe reports. These are generated artifacts, not committed evidence. Controlled-provider tests do not establish live Telegram, R2 or hosted readiness. CI was not run or claimed; inspect it separately before release.
 

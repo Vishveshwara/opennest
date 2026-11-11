@@ -9,7 +9,9 @@
 - First initialization requires an empty dedicated database. Startup never wipes an unrecognized populated database. Existing seed versions require an explicit operator reset when incompatible.
 - Shared transaction-scoped advisory locks coordinate listing/interaction/persona/profile operations; reset takes the exclusive lock and deletes children before parents in one transaction. Storage objects are never deleted by reset.
 - Reset increments generation, invalidating previous persona sessions. Scheduled resets use Kolkata six-hour intervals and are idempotent per interval; forced operator resets increment each time.
-- Operator commands use opennest.sandbox.command=reset or telemetry with explicit feature flags and web-application-type=none. No reset/telemetry HTTP routes exist; telemetry returns only counts/version/generation/reset time.
+- Operator commands use opennest.sandbox.command=reset or telemetry with explicit feature flags and web-application-type=none. No reset/telemetry HTTP routes exist; commands emit one JSON stdout record with counts/version/generation/reset time after startup output.
 - Production rejects sandbox mode/secrets/demo flags; PRIMARY rejects operator commands and sandbox sessions. Headers never select a store or grant privileges.
 - Callable contact actions remain disabled. Normal listing publication still requires verified contact, images and quota; trusted seeds do not create a runtime bypass.
 - Configuration, manual instructions, appeal/retention gates and verification: docs/PHASE4_HANDOFF.md.
+
+- Review follow-up: the persona selection controller owns the shared reset lock and generation read; Identity installs the session inside that guarded transaction. CLI reset enforces its feature flag once before work; telemetry checks its own flag before reading counts.

@@ -31,6 +31,9 @@ class ListingRequestLimit extends OncePerRequestFilter {
             }
         };
     }
+    /**
+     * Applies exact-origin CORS and bounded duplicate-free JSON parsing to decoded listing, interaction and sandbox paths.
+     */
     @Override protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain) throws IOException, ServletException {
         String path = new UrlPathHelper().getPathWithinApplication(request);
         boolean interaction = path.startsWith("/api/v1/interactions/") || path.startsWith("/api/v1/sandbox/");

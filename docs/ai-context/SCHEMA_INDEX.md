@@ -61,6 +61,7 @@
 - Login completion advisory-locks challenge/sender then locks user; account/identity/contact/V4 provenance/V5 receipt commit atomically. Phone uniqueness never merges users. Rollback permits claim retry; durable original-session receipt retries survive Redis loss within challenge lifetime. Unambiguous legacy Telegram receipts preserve existing accounts; other legacy recovery explicit. Keep current contact provenance for verified account lifetime, no history/plaintext code/vCard/username. docs/TELEGRAM_HANDOFF.md.
 
 
-<!-- /coderabbit-ai-generated:v1 -->
 - V7 adds JDBC-owned sandbox_state: singleton smallint id=1, positive seed_version/generation, nonnegative Kolkata six-hour reset_interval and reset_at timestamptz. Five columns; no rows seeded by migration. V1-V6 unchanged.
 - Sandbox reset locks exclusively, deletes children before parents and atomically reseeds/increments generation; normal operations hold shared locks. Locking the metadata row rejects repeatable-read snapshots predating reset.
+
+<!-- /coderabbit-ai-generated:v1 -->

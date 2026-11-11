@@ -11,6 +11,9 @@ import org.springframework.core.env.EnumerablePropertySource;
 import org.springframework.core.env.MapPropertySource;
 
 public class IdentityEnvironmentPostProcessor implements EnvironmentPostProcessor, Ordered {
+    /**
+     * Rejects framework identity overrides and fixes session policy from the validated deployment realm and feature flags.
+     */
     @Override public void postProcessEnvironment(ConfigurableEnvironment environment, SpringApplication application) {
         for (var source : environment.getPropertySources()) {
             if (source instanceof EnumerablePropertySource<?> enumerable) {

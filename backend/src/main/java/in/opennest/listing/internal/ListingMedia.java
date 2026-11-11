@@ -90,6 +90,9 @@ class ListingMedia implements AutoCloseable {
                 || !ListingStore.instant(row.get("upload_expires_at")).isAfter(Instant.now()))
             throw new RequestFailure(RequestFailure.Kind.CONFLICT);
     }
+    /**
+     * Returns image metadata with sandbox fixture URLs or private signed storage URLs as appropriate.
+     */
     Map<String, Object> imageResponse(Map<String, Object> row) {
         var result = new LinkedHashMap<String, Object>();
         result.put("imageId", row.get("id")); result.put("segment", row.get("segment")); result.put("displayOrder", row.get("display_order"));
