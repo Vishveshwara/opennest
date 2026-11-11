@@ -4,7 +4,7 @@
 
 <!-- coderabbit-ai-generated-section:v1:b864089226616fd19daf68678e42331f325b53be4e73244b167a1d4e1819e138 -->
 
-- Status: V1-V4 unchanged; V3 adds media metadata/owner projection, V4 current contact provenance, V5 expiring Telegram login receipts; V6 adds a contact sender lookup index. Eight application tables/87 columns; six ORM mappings/76 columns. Identity/listing/sole Telegram authentication implemented; interactions planned, no hosted migration. docs/SCHEMA_CONTRACT.md.
+- Status: V1-V4 unchanged; V3 adds media metadata/owner projection, V4 current contact provenance, V5 expiring Telegram login receipts; V6 adds a contact sender lookup index; V7 adds sandbox reset metadata. Nine application tables/92 columns; six ORM mappings/76 columns. Identity/listing/sole Telegram authentication implemented; Phase 4 interactions implemented, no hosted migration. docs/SCHEMA_CONTRACT.md.
 - Phase 1.6 maps all 70 columns inside owning modules' internal.persistence packages; six package-private entities, scalar UUID foreign references, no entity associations/public contracts. Hibernate validate only; generated fields read-only, PropertyEntity.version @Version. After listing updates flush then refresh/reload generated geography/totals; `docs/BACKEND_PERSISTENCE.md`.
 - V1 conventions: UUID IDs supplied by application, text enums with CHECKs, timestamptz events, immediate RESTRICT foreign keys, no deletion cascades. Retention/erasure policy remains open.
 - Separate production and sandbox databases use the same migrations and distinct runtime credentials.
@@ -60,5 +60,8 @@
 - V4 contact_verifications: seven JDBC-owned columns, id challenge UUID PK, user_id unique users FK RESTRICT, phone_number exact +91, positive bigint telegram_user_id, 64-character hex session_digest, method TELEGRAM_ACCOUNT_CONTACT, verified_at. V4-era seven application tables/83 columns; current V5 totals eight tables/87 columns with six ORM mappings/76 columns unchanged.
 - Login completion advisory-locks challenge/sender then locks user; account/identity/contact/V4 provenance/V5 receipt commit atomically. Phone uniqueness never merges users. Rollback permits claim retry; durable original-session receipt retries survive Redis loss within challenge lifetime. Unambiguous legacy Telegram receipts preserve existing accounts; other legacy recovery explicit. Keep current contact provenance for verified account lifetime, no history/plaintext code/vCard/username. docs/TELEGRAM_HANDOFF.md.
 
+
+- V7 adds JDBC-owned sandbox_state: singleton smallint id=1, positive seed_version/generation, nonnegative Kolkata six-hour reset_interval and reset_at timestamptz. Five columns; no rows seeded by migration. V1-V6 unchanged.
+- Sandbox reset locks exclusively, deletes children before parents and atomically reseeds/increments generation; normal operations hold shared locks. Locking the metadata row rejects repeatable-read snapshots predating reset.
 
 <!-- /coderabbit-ai-generated:v1 -->

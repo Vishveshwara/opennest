@@ -26,7 +26,7 @@ V5 adds short-lived telegram_login_receipts for safe completion retries while th
 
 Sessions are opaque, HttpOnly, host-only, SameSite=Lax, Secure in production or HTTPS development. Idle expiry is 30 minutes; authenticated absolute expiry is 24 hours. Logout is CSRF-protected `POST /api/v1/auth/logout` and invalidates the session. `GET /api/v1/users/me` returns only the caller's authorized profile. Private and authentication responses are no-store.
 
-Telegram authentication requires explicit OPENNEST_TELEGRAM_AUTH_ENABLED=true and is unavailable in the recruiter sandbox. When disabled, anonymous listing browsing remains available with exact-origin CORS while owner/account routes stay denied. Sandbox personas remain a separate future phase. Untrusted headers never select stores or grant access.
+Telegram authentication requires explicit OPENNEST_TELEGRAM_AUTH_ENABLED=true and is unavailable in the recruiter sandbox. When disabled, anonymous listing browsing remains available with exact-origin CORS while owner/account routes stay denied. Phase 4 sandbox personas use separate explicit DEVELOPMENT/SANDBOX sessions and never enable Telegram there; see PHASE4_HANDOFF.md. Untrusted headers never select stores or grant access.
 
 Publication still requires verified +91 contact, required validated images, ownership, and the transactional five-listing quota. Telegram signup verifies contact before creating an authenticated user, but the publication gate remains necessary for legacy and fabricated test accounts. Browsing needs no login. Owners without Telegram cannot authenticate through this selected method.
 

@@ -3,6 +3,7 @@ package in.opennest.identity.internal.persistence;
 import java.util.UUID;
 import java.util.function.Supplier;
 import in.opennest.common.RequestFailure;
+import in.opennest.common.SandboxBoundary;
 import in.opennest.identity.TrustBadge;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -12,22 +13,28 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @Repository
-@ConditionalOnProperty(name = "opennest.identity.telegram-enabled", havingValue = "true")
+@ConditionalOnProperty(name = "opennest.identity.sessions-enabled", havingValue = "true")
 public class AccountStore {
     @PersistenceContext private EntityManager entityManager;
     private final TransactionTemplate readTransaction;
+    private final SandboxBoundary boundary;
 
-    public AccountStore(PlatformTransactionManager manager) {
+    public AccountStore(PlatformTransactionManager manager, SandboxBoundary boundary) {
+        this.boundary = boundary;
         readTransaction = new TransactionTemplate(manager);
-        readTransaction.setReadOnly(true);
+        readTransaction.setReadOnly(!boundary.sandbox());
     }
 
+    /**
+     * Runs a reset-guarded account read and preserves its original failure if transaction rollback also fails.
+     */
     private <T> T transact(TransactionTemplate template, Supplier<T> work) {
         class ApplicationFailure { RuntimeException cause; }
         var application = new ApplicationFailure();
         try {
             return template.execute(status -> {
                 try {
+                    boundary.lock();
                     return work.get();
                 } catch (RuntimeException failure) {
                     application.cause = failure;

@@ -12,6 +12,9 @@ public record IdentitySettings(boolean telegramEnabled, Origins primary, Origins
         @Override public String toString() { return "Origins[redacted]"; }
     }
 
+    /**
+     * Validates identity flags and selected browser origins, returning fixed safe errors for invalid configuration.
+     */
     public static IdentitySettings read(Environment environment) {
         try {
             String flag = environment.getProperty("opennest.identity.telegram-enabled",
@@ -31,7 +34,7 @@ public record IdentitySettings(boolean telegramEnabled, Origins primary, Origins
                     require(environment.getProperty(key, "").isBlank());
                 }
             }
-            if (settings.telegramEnabled()) {
+            if (settings.telegramEnabled() || sandboxSessions(environment)) {
                 var selected = settings.selected(environment);
                 origin(selected.backendOrigin(), production);
                 origin(selected.frontendOrigin(), production);
@@ -44,6 +47,13 @@ public record IdentitySettings(boolean telegramEnabled, Origins primary, Origins
     }
 
     public Origins selected(Environment environment) { return sandbox(environment) ? sandbox : primary; }
+    /**
+     * Enables persona sessions only for explicitly opted-in development sandbox deployments.
+     */
+    public static boolean sandboxSessions(Environment environment) {
+        return sandbox(environment) && !production(environment)
+                && environment.getProperty("opennest.deployment.features.persona-switching", Boolean.class, false);
+    }
     public static boolean production(Environment environment) {
         return "PRODUCTION".equalsIgnoreCase(environment.getProperty("opennest.deployment.environment", "DEVELOPMENT").strip());
     }

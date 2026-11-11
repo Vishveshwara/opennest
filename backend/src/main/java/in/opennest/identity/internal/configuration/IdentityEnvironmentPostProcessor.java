@@ -11,6 +11,9 @@ import org.springframework.core.env.EnumerablePropertySource;
 import org.springframework.core.env.MapPropertySource;
 
 public class IdentityEnvironmentPostProcessor implements EnvironmentPostProcessor, Ordered {
+    /**
+     * Rejects framework identity overrides and fixes session policy from the validated deployment realm and feature flags.
+     */
     @Override public void postProcessEnvironment(ConfigurableEnvironment environment, SpringApplication application) {
         for (var source : environment.getPropertySources()) {
             if (source instanceof EnumerablePropertySource<?> enumerable) {
@@ -24,14 +27,20 @@ public class IdentityEnvironmentPostProcessor implements EnvironmentPostProcesso
             }
         }
         var settings = IdentitySettings.read(environment);
+        if (!environment.getProperty("opennest.sandbox.command", "").isEmpty()
+                && (!IdentitySettings.sandbox(environment) || IdentitySettings.production(environment)))
+            throw new IllegalStateException("OpenNest sandbox commands require the dedicated development sandbox");
+        boolean sandbox = IdentitySettings.sandboxSessions(environment);
+        boolean sessions = settings.telegramEnabled() || sandbox;
         environment.getPropertySources().addFirst(new MapPropertySource("opennestIdentityPolicy", Map.of(
                 "opennest.identity.telegram-enabled", settings.telegramEnabled(),
-                "spring.session.redis.namespace", "opennest:" + IdentitySettings.realm(environment) + ":telegram-auth:v1:sessions",
+                "opennest.identity.sessions-enabled", sessions,
+                "spring.session.redis.namespace", "opennest:" + IdentitySettings.realm(environment) + (sandbox ? ":personas:v1:sessions" : ":telegram-auth:v1:sessions"),
                 "spring.session.timeout", "30m",
                 "spring.session.redis.repository-type", "default",
                 "spring.session.redis.flush-mode", "on_save",
                 "server.forward-headers-strategy", "none",
-                "spring.session.store-type", settings.telegramEnabled() ? "redis" : "none")));
+                "spring.session.store-type", sessions ? "redis" : "none")));
     }
     @Override public int getOrder() { return ConfigDataEnvironmentPostProcessor.ORDER + 2; }
 }

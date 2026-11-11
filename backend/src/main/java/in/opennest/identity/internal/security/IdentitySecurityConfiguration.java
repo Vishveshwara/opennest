@@ -3,6 +3,7 @@ package in.opennest.identity.internal.security;
 import java.time.Clock;
 import java.util.List;
 import in.opennest.common.HttpFailureResponse;
+import in.opennest.common.SandboxBoundary;
 import in.opennest.identity.internal.configuration.IdentitySettings;
 import in.opennest.identity.internal.telegram.TelegramSettings;
 import jakarta.servlet.DispatcherType;
@@ -33,7 +34,7 @@ import org.springframework.http.server.ServletServerHttpResponse;
 
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
-@ConditionalOnProperty(name = "opennest.identity.telegram-enabled", havingValue = "true")
+@ConditionalOnProperty(name = "opennest.identity.sessions-enabled", havingValue = "true")
 @EnableRedisHttpSession(maxInactiveIntervalInSeconds = 1800, redisNamespace = "${spring.session.redis.namespace}")
 class IdentitySecurityConfiguration {
     @Bean Clock identityClock() { return Clock.systemUTC(); }
@@ -68,8 +69,12 @@ class IdentitySecurityConfiguration {
         source.registerCorsConfiguration("/api/v1/**", cors);
         return source;
     }
+    /**
+     * Configures route authorization, CSRF, isolated sessions and fixed safe errors for the selected identity mode.
+     */
     @Bean SecurityFilterChain identitySecurity(HttpSecurity http, Environment environment, HttpFailureResponse errors,
-            Clock clock, CorsConfigurationSource identityCors, TelegramSettings telegram,
+            Clock clock, CorsConfigurationSource identityCors, org.springframework.beans.factory.ObjectProvider<TelegramSettings> telegramProvider,
+            SandboxBoundary boundary,
             HttpSessionSecurityContextRepository identityContexts) throws Exception {
         var corsFilter = new CorsFilter(identityCors);
         corsFilter.setCorsProcessor(new DefaultCorsProcessor() {
@@ -77,13 +82,20 @@ class IdentitySecurityConfiguration {
                 errors.write(((ServletServerHttpResponse) response).getServletResponse(), 403);
             }
         });
-        org.springframework.security.web.util.matcher.RequestMatcher webhook = request -> !telegram.polling()
+        var telegram = telegramProvider.getIfAvailable();
+        org.springframework.security.web.util.matcher.RequestMatcher webhook = request -> telegram != null && telegram.enabled() && !telegram.polling()
                 && "POST".equals(request.getMethod()) && "/api/v1/webhooks/telegram".equals(request.getServletPath());
         http.authorizeHttpRequests(authorize -> authorize
                 .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                 .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/auth/csrf", "/api/v1/auth/telegram/challenges/*").permitAll()
                 .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/auth/telegram/challenges", "/api/v1/auth/telegram/challenges/*/complete").permitAll()
                 .requestMatchers(webhook).permitAll()
+                .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/sandbox/personas", "/api/v1/sandbox/images/*.png").permitAll()
+                .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/sandbox/personas/select").permitAll()
+                .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/interactions/listings/*/reviews").permitAll()
+                .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/interactions/listings/*/state").authenticated()
+                .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/interactions/listings/*/reveal-phone",
+                        "/api/v1/interactions/listings/*/reviews", "/api/v1/interactions/listings/*/report-brokerage").authenticated()
                 .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/users/me", "/api/v1/listings/mine").authenticated()
                 .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/listings/search", "/api/v1/listings/*").permitAll()
                 .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/listings", "/api/v1/listings/*/publish", "/api/v1/listings/*/pause",
@@ -96,7 +108,7 @@ class IdentitySecurityConfiguration {
                 .securityContext(context -> context.securityContextRepository(identityContexts))
                 .sessionManagement(sessions -> sessions.sessionFixation(fixation -> fixation.changeSessionId()))
                 .addFilterAt(corsFilter, CorsFilter.class)
-                .addFilterAfter(new SessionPolicyFilter(IdentitySettings.realm(environment), clock, errors), CorsFilter.class)
+                .addFilterAfter(new SessionPolicyFilter(IdentitySettings.realm(environment), clock, errors, boundary), CorsFilter.class)
                 .exceptionHandling(failures -> failures
                         .authenticationEntryPoint((request, response, failure) -> errors.write(response, 401))
                         .accessDeniedHandler((request, response, failure) -> errors.write(response, 403)))

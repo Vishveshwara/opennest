@@ -1,0 +1,299 @@
+{
+  "info": {
+    "name": "OpenNest Phase 4 interactions and sandbox",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Use the existing Telegram collection to authenticate PRIMARY first and keep the cookie jar enabled. Set listingId to another owner's published listing. Sandbox requires a separately configured backend and persona flags. Refresh CSRF after persona rotation. Keep revealed contacts/session values private; do not export runtime values. No reset or telemetry HTTP endpoints exist."
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "sandboxBaseUrl",
+      "value": "http://localhost:8081"
+    },
+    {
+      "key": "listingId",
+      "value": ""
+    },
+    {
+      "key": "sandboxListingId",
+      "value": ""
+    },
+    {
+      "key": "csrfToken",
+      "value": ""
+    },
+    {
+      "key": "sandboxCsrfToken",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Primary fresh CSRF",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/auth/csrf"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"CSRF response succeeds\", function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code === 200) pm.collectionVariables.set(\"csrfToken\", pm.response.json().token);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Private profile",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/users/me"
+      }
+    },
+    {
+      "name": "3. Reveal published listing contact",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{csrfToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/interactions/listings/{{listingId}}/reveal-phone",
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "4. Create review once",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{csrfToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/interactions/listings/{{listingId}}/reviews",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"rating\": 5,\n  \"issueTag\": \"GENUINE_OWNER\",\n  \"commentText\": \"Fabricated manual testing example.\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "5. Report brokerage allegation",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{csrfToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/interactions/listings/{{listingId}}/report-brokerage",
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "6. Public reviews",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/interactions/listings/{{listingId}}/reviews?page=0&size=20"
+      }
+    },
+    {
+      "name": "7. Caller interaction state",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/interactions/listings/{{listingId}}/state"
+      }
+    },
+    {
+      "name": "8. Sandbox initial CSRF",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{sandboxBaseUrl}}/api/v1/auth/csrf"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"CSRF response succeeds\", function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code === 200) pm.collectionVariables.set(\"sandboxCsrfToken\", pm.response.json().token);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "9. Sandbox persona choices",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{sandboxBaseUrl}}/api/v1/sandbox/personas"
+      }
+    },
+    {
+      "name": "10. Select sandbox persona",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{sandboxCsrfToken}}"
+          }
+        ],
+        "url": "{{sandboxBaseUrl}}/api/v1/sandbox/personas/select",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"personaKey\": \"seeker-new\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "11. Sandbox fresh CSRF after rotation",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{sandboxBaseUrl}}/api/v1/auth/csrf"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"CSRF response succeeds\", function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code === 200) pm.collectionVariables.set(\"sandboxCsrfToken\", pm.response.json().token);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12. Sandbox nationwide listings",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{sandboxBaseUrl}}/api/v1/listings/search"
+      }
+    },
+    {
+      "name": "13. Sandbox review eligible fixture",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{sandboxCsrfToken}}"
+          }
+        ],
+        "url": "{{sandboxBaseUrl}}/api/v1/interactions/listings/{{sandboxListingId}}/reviews",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"rating\": 4,\n  \"issueTag\": \"OTHER\",\n  \"commentText\": \"Fabricated recruiter review.\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "14. Sandbox contact remains forbidden",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{sandboxCsrfToken}}"
+          }
+        ],
+        "url": "{{sandboxBaseUrl}}/api/v1/interactions/listings/{{sandboxListingId}}/reveal-phone",
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "15. Sandbox caller state",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{sandboxBaseUrl}}/api/v1/interactions/listings/{{sandboxListingId}}/state"
+      }
+    }
+  ]
+}

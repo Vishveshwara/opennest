@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@ConditionalOnProperty(name = "opennest.identity.telegram-enabled", havingValue = "true")
+@ConditionalOnProperty(name = "opennest.identity.sessions-enabled", havingValue = "true")
 class AccountController {
     private final AccountStore accounts;
     AccountController(AccountStore accounts) { this.accounts = accounts; }

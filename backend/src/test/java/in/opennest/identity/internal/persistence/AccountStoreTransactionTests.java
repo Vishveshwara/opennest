@@ -39,7 +39,7 @@ class AccountStoreTransactionTests {
     private final EntityManager entityManager = mock(EntityManager.class);
     private final PlatformTransactionManager manager = mock(PlatformTransactionManager.class);
     private final SimpleTransactionStatus status = new SimpleTransactionStatus();
-    private final AccountStore accounts = new AccountStore(manager);
+    private final AccountStore accounts = new AccountStore(manager, mock(in.opennest.common.SandboxBoundary.class));
 
     @BeforeEach
     void configureTransaction() {

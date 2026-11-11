@@ -118,6 +118,83 @@ class TelegramContactIT {
         assertThat(browser.send("GET", LOGIN + "/" + id, null, false).body()).doesNotContain(number, Long.toString(chat), code);
     }
 
+    /**
+     * Exercises interaction authorization, privacy and report conversion using controlled Telegram-created browser sessions.
+     */
+    @Test void telegramSessionsAuthorizeInteractionsWithoutExposingContactsOrDuplicatingReports() throws Exception {
+        var owner = loginBrowser();
+        var seeker = loginBrowser();
+        var anonymous = new Browser(0);
+        UUID ownerId = owner.account();
+        UUID seekerId = seeker.account();
+        var created = listingJson(owner.send("POST", "/api/v1/listings", pgDraft(), true), 201);
+        UUID property = UUID.fromString(created.get("id").asString());
+        String listingPath = "/api/v1/listings/" + property;
+        String path = "/api/v1/interactions/listings/" + property;
+        for (String segment : List.of("ROOM", "BATHROOM")) {
+            jdbc(0).update("insert into property_images(id,property_id,upload_object_key,object_key,segment,validation_state,upload_expires_at,declared_content_type,declared_byte_size,content_type,byte_size,width,height) values (?,?,?,?,?,'VALIDATED',statement_timestamp()+interval '10 minutes','image/png',100,'image/png',100,8,8)",
+                    UUID.randomUUID(), property, "staging/" + UUID.randomUUID(), "final/" + UUID.randomUUID(), segment);
+        }
+        listingJson(owner.send("POST", listingPath + "/publish", "{\"version\":0}", true), 200);
+        String comment = "Fabricated review preserved after a brokerage allegation.";
+        String reviewBody = json.writeValueAsString(Map.of("rating", 4, "issueTag", "GENUINE_OWNER", "commentText", comment));
+        for (String action : List.of("reveal-phone", "reviews", "report-brokerage")) {
+            String body = action.equals("reviews") ? reviewBody : "{}";
+            assertThat(anonymous.send("POST", path + "/" + action, body, true).statusCode()).isEqualTo(401);
+            assertThat(seeker.send("POST", path + "/" + action, body, false).statusCode()).isEqualTo(403);
+            assertThat(owner.send("POST", path + "/" + action, body, true).statusCode()).isEqualTo(403);
+        }
+        assertThat(anonymous.send("GET", path + "/state", null, false).statusCode()).isEqualTo(401);
+        assertThat(seeker.send("POST", path + "/reviews", reviewBody, true).statusCode()).isEqualTo(403);
+        assertThat(seeker.send("POST", path + "/report-brokerage", "{}", true).statusCode()).isEqualTo(403);
+        var initial = listingJson(seeker.send("GET", path + "/state", null, false), 200);
+        assertThat(initial.get("hasHistoricalReveal").asBoolean()).isFalse();
+        assertThat(initial.get("canReview").asBoolean()).isFalse();
+        assertThat(initial.get("review").isNull()).isTrue();
+        var reveal = listingJson(seeker.send("POST", path + "/reveal-phone", "{}", true), 200);
+        String phone = jdbc(0).queryForObject("select phone_number from users where id = ?", String.class, ownerId);
+        assertThat(reveal.get("phoneNumber").asString()).isEqualTo(phone);
+        assertThat(reveal.get("whatsappUrl").asString()).isEqualTo("https://wa.me/" + phone.substring(1));
+        assertThat(reveal.get("remainingReveals").asInt()).isEqualTo(9);
+        assertThat(listingJson(seeker.send("POST", path + "/reveal-phone", "{}", true), 200).get("remainingReveals").asInt()).isEqualTo(9);
+        assertThat(jdbc(0).queryForObject("select count(*) from contact_reveals where tenant_id = ? and property_id = ?", Long.class, seekerId, property)).isEqualTo(1L);
+        var eligible = listingJson(seeker.send("GET", path + "/state", null, false), 200);
+        assertThat(eligible.get("revealedToday").asBoolean()).isTrue();
+        assertThat(eligible.get("canReview").asBoolean()).isTrue();
+        var review = listingJson(seeker.send("POST", path + "/reviews", reviewBody, true), 200);
+        assertThat(seeker.send("POST", path + "/reviews", reviewBody, true).statusCode()).isEqualTo(409);
+        var report = listingJson(seeker.send("POST", path + "/report-brokerage", "{}", true), 200);
+        assertThat(report.get("id").asString()).isEqualTo(review.get("id").asString());
+        assertThat(report.get("createdAt").asString()).isEqualTo(review.get("createdAt").asString());
+        assertThat(report.get("commentText").asString()).isEqualTo(comment);
+        assertThat(report.get("rating").asInt()).isEqualTo(1);
+        assertThat(report.get("issueTag").asString()).isEqualTo("ASKED_BROKERAGE");
+        assertThat(report.get("isAutoBrokerReport").asBoolean()).isTrue();
+        assertThat(report.get("allegationNotice").asString()).contains("allegation");
+        assertThat(listingJson(seeker.send("POST", path + "/report-brokerage", "{}", true), 200)).isEqualTo(report);
+        assertThat(seeker.send("POST", path + "/reviews", reviewBody, true).statusCode()).isEqualTo(409);
+        assertThat(jdbc(0).queryForObject("select count(*) from owner_reviews where reviewer_id = ? and property_id = ?", Long.class, seekerId, property)).isEqualTo(1L);
+        var publicReviews = listingJson(anonymous.send("GET", path + "/reviews?page=0&size=1", null, false), 200);
+        assertThat(publicReviews.get("totalElements").asLong()).isEqualTo(1);
+        assertThat(publicReviews.get("items").get(0)).isEqualTo(report);
+        assertThat(publicReviews.toString()).doesNotContain("phoneNumber", "whatsappUrl", "ownerId", "reviewerId", "tenantId");
+        var state = listingJson(seeker.send("GET", path + "/state", null, false), 200);
+        assertThat(state.get("review")).isEqualTo(report);
+        assertThat(state.get("canReview").asBoolean()).isFalse();
+        assertThat(state.get("canReportBrokerage").asBoolean()).isFalse();
+        assertThat(state.toString()).doesNotContain("phoneNumber", "whatsappUrl", "ownerId", "reviewerId", "tenantId");
+        assertThat(listingJson(owner.send("GET", path + "/state", null, false), 200).get("review").isNull()).isTrue();
+        var profile = listingJson(owner.send("GET", "/api/v1/users/me", null, false), 200);
+        assertThat(profile.get("reviewCount").asLong()).isEqualTo(1);
+        assertThat(profile.get("brokerReportCount").asLong()).isEqualTo(1);
+        assertThat(profile.get("averageRating").asDouble()).isEqualTo(1);
+        assertThat(profile.get("trustBadge").asString()).isEqualTo("CRITICAL_BROKER_AND_LOW_RATING");
+        assertThat(listingJson(anonymous.send("GET", listingPath, null, false), 200).get("status").asString()).isEqualTo("ACTIVE");
+        listingJson(owner.send("POST", listingPath + "/pause", "{\"version\":1}", true), 200);
+        assertThat(anonymous.send("GET", path + "/reviews", null, false).statusCode()).isEqualTo(404);
+        assertThat(listingJson(seeker.send("GET", path + "/state", null, false), 200).get("hasHistoricalReveal").asBoolean()).isTrue();
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"ENTIRE_FLAT", "ROOM", "PG_HOSTEL"})
     void telegramSessionsAuthorizeEveryListingApiAndPreserveOwnership(String mode) throws Exception {

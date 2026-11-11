@@ -16,6 +16,7 @@ import tools.jackson.core.StreamReadFeature;
 import tools.jackson.databind.json.JsonMapper;
 
 @Component
+@org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication
 @Order(-90)
 class ListingRequestLimit extends OncePerRequestFilter {
     private final HttpFailureResponse errors;
@@ -30,16 +31,21 @@ class ListingRequestLimit extends OncePerRequestFilter {
             }
         };
     }
+    /**
+     * Applies exact-origin CORS and bounded duplicate-free JSON parsing to decoded listing, interaction and sandbox paths.
+     */
     @Override protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain) throws IOException, ServletException {
         String path = new UrlPathHelper().getPathWithinApplication(request);
-        if (!path.equals("/api/v1/listings") && !path.startsWith("/api/v1/listings/")) {
+        boolean interaction = path.startsWith("/api/v1/interactions/") || path.startsWith("/api/v1/sandbox/");
+        if (!interaction && !path.equals("/api/v1/listings") && !path.startsWith("/api/v1/listings/")) {
             chain.doFilter(request, response); return;
         }
         if (!processor.processRequest(cors.getCorsConfiguration(request), request, response) || CorsUtils.isPreFlightRequest(request)) return;
         if (!java.util.Set.of("POST", "PATCH").contains(request.getMethod())) { chain.doFilter(request, response); return; }
-        if (request.getContentLengthLong() > 32768) { errors.write(response, 413); return; }
-        var body = request.getInputStream().readNBytes(32769);
-        if (body.length > 32768) { errors.write(response, 413); return; }
+        int limit = interaction ? 8192 : 32768;
+        if (request.getContentLengthLong() > limit) { errors.write(response, 413); return; }
+        var body = request.getInputStream().readNBytes(limit + 1);
+        if (body.length > limit) { errors.write(response, 413); return; }
         try (var parser = strict.createParser(body)) { strict.readTree(parser); if (parser.nextToken() != null) throw new IllegalArgumentException(); }
         catch (RuntimeException failure) { errors.write(response, 400); return; }
         var wrapped = new HttpServletRequestWrapper(request) {
