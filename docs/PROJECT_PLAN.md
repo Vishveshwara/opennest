@@ -10,7 +10,7 @@
 
 # OpenNest implementation plan
 
-This plan defines OpenNest's proposed India-wide launch. Phase 0 provides documentation and local infrastructure. Phase 1 supplies the Java 25/Spring foundation, guarded stores, Flyway/Hibernate validation, safe errors, and real-store verification. Phase 2 supplies identity, Redis sessions, CSRF/logout, private profiles, and approved trust rules. The 10 November 2026 maintainer decision replaces the earlier provider with sole Telegram Bot API authentication in Phase 3A. Phase 3 implements listing services; Phases 4 and 5 cover interactions and the frontend. Phase 6 covers deployment and launch readiness after Phase 5. Phase 3 verification and remaining readiness gates are recorded in [LISTINGS_HANDOFF.md](LISTINGS_HANDOFF.md); later phases and hosted deployment remain outstanding. Work proceeds one phase per prompt and one reviewable PR per phase. The AI indexes summarize implemented behavior and proposals. [DEPLOYMENT_STACK.md](DEPLOYMENT_STACK.md) records hosting assumptions.
+This plan defines OpenNest's proposed India-wide launch. Phase 0 provides documentation and local infrastructure. Phase 1 supplies the Java 25/Spring foundation, guarded stores, Flyway/Hibernate validation, safe errors, and real-store verification. Phase 2 supplies identity, Redis sessions, CSRF/logout, private profiles, and approved trust rules. The 10 November 2026 maintainer decision replaces the earlier provider with sole Telegram Bot API authentication in Phase 3A. Phase 3 implements listing services; Phases 4 and 5 cover interactions and the frontend. Phase 6 covers deployment and launch readiness after Phase 5. Phase 3 verification and remaining readiness gates are recorded in [LISTINGS_HANDOFF.md](LISTINGS_HANDOFF.md); Phase 4 implementation and checks are recorded in PHASE4_HANDOFF.md; frontend and hosted deployment remain outstanding. Work proceeds one phase per prompt and one reviewable PR per phase. The AI indexes summarize implemented behavior and proposals. [DEPLOYMENT_STACK.md](DEPLOYMENT_STACK.md) records hosting assumptions.
 
 ## Confirmed product direction
 
@@ -129,6 +129,21 @@ Stable account identity uses the Telegram sender, never typed phone/email. Exist
 V5 adds four-column expiring login receipts. Challenge/identity advisory locks and user-row locking atomically commit account/identity/contact/current provenance/login receipt. Database rollback leaves the Redis claim retryable; committed receipts recover same-session retries while the original challenge remains valid. Expired login receipts are ignored and deleted hourly. Current contact provenance remains one receipt for the verified account's lifetime; future replacement/erasure must remove dependent private data.
 
 Production requires secret-authenticated HTTPS webhooks; explicit development polling is leased and persists acknowledged offsets. Recruiter contact actions stay disabled. Existing image, publication and listing quota gates remain. [Setup/Postman flow](TELEGRAM_HANDOFF.md) and [verification contract](TELEGRAM_CONTACT_VERIFICATION.md) record limits and current evidence. The revised clean Java 25/Linux amd64 Docker gate passed 553 tests on 10 November 2026, with no failures/errors/skips. Six Python checks, report/artifact validation, wrapper/context limits and removed-OAuth-library checks passed. The maintainer confirmed real local Telegram contact/OTP login and the private verified profile on 10 November. CI, hosted readiness and live listing/storage/failure/logout checks remain unverified. [API_VERIFICATION.md](API_VERIFICATION.md) records the expanded cross-API gate; [POSTMAN_API_GUIDE.md](POSTMAN_API_GUIDE.md) covers manual testing.
+
+### Phase 4 task boundaries
+
+Phase 4 is implemented locally. Final validated reports contain 596 passing Java tests and six passing Python checks on 11 November 2026. [The interaction and sandbox handoff](PHASE4_HANDOFF.md) records the combined run, corrected isolation assertion/recheck and remaining gates; CI/live storage/hosting remain unverified. Frontend and deployment remain in Phases 5 and 6.
+
+| Task | Deliverable |
+| --- | --- |
+| 4.1 | Public listing/identity contracts, module dependencies, shared sessions with PRIMARY-only Telegram |
+| 4.2 | Daily contact ledger, capture-after-lock Kolkata date, free retries and ten-listing quota |
+| 4.3 | Historical-reveal reviews, idempotent report conversion and atomic owner aggregates |
+| 4.4 | Public paginated reviews and caller-only interaction state |
+| 4.5 | Multi-city fabricated listings/images/history and all trust badges |
+| 4.6 | Allowlisted personas, CSRF/session rotation and realm/store/generation separation |
+| 4.7 | Operator CLI reset/telemetry, atomic six-hour resets and stale-session rejection |
+| 4.8 | Validation/concurrency/HTTP/isolation tests, contexts, Postman examples and handoff |
 
 ### Phase 6 task boundaries
 

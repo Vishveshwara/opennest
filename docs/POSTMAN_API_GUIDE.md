@@ -60,3 +60,9 @@ Inventory bodies and all mode-specific fields are defined in [LISTING_MODEL.md](
 | 503 on media | Storage may be disabled/unconfigured; this is separate from successful session authentication |
 
 Phone reveals, reviews/reports and recruiter operations belong to future phases. There is no active Google/OAuth route. [API_VERIFICATION.md](API_VERIFICATION.md) records automated coverage, OAuth removal and the distinction between confirmed local behavior and hosted readiness.
+
+## Test Phase 4 interactions and sandbox
+
+Import [OpenNest-Interactions.postman_collection.json](postman/OpenNest-Interactions.postman_collection.json). Authenticate PRIMARY using the Telegram collection, set listingId to another owner's published listing, and refresh CSRF in this collection. Reveal before reviewing/reporting; repeat reveal/report requests to check idempotency. Reviews and caller state contain no contact data.
+
+For the separate sandbox backend, enable persona switching, fetch its own CSRF, select seeker-new, then refresh CSRF after rotation. Read nationwide listings and set sandboxListingId to a fabricated listing before reviewing it. Sandbox reveal stays forbidden. Follow [the Phase 4 handoff](PHASE4_HANDOFF.md) for isolated startup and operator CLI reset/telemetry. Keep runtime contacts/tokens out of exported collections.

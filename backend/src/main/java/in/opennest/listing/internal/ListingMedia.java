@@ -94,6 +94,11 @@ class ListingMedia implements AutoCloseable {
         var result = new LinkedHashMap<String, Object>();
         result.put("imageId", row.get("id")); result.put("segment", row.get("segment")); result.put("displayOrder", row.get("display_order"));
         result.put("contentType", row.get("content_type")); result.put("byteSize", row.get("byte_size")); result.put("width", row.get("width")); result.put("height", row.get("height"));
+        if (store.sandbox() && ("sandbox-fixtures/" + row.get("id") + "/" + row.get("segment") + ".png").equals(row.get("object_key"))) {
+            result.put("url", "/api/v1/sandbox/images/" + row.get("segment") + ".png");
+            result.put("expiresAt", null);
+            return result;
+        }
         result.put("url", storage.enabled() ? storage.download((String) row.get("object_key")) : null);
         result.put("expiresAt", storage.enabled() ? Instant.now().plus(Duration.ofMinutes(5)) : null);
         return result;

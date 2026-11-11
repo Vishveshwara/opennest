@@ -2,7 +2,7 @@
 
 - Status: Telegram Bot API sole authentication by maintainer decision 10 November 2026. Spring Security, private profiles, Redis sessions/CSRF/logout, transactional accounts, and trust rules implemented; disabled until explicitly configured.
 - Own users, provider identities, verified private contacts, account/profile authorization, and identity-owned listing_owner_profiles view.
-- Public contracts: CurrentAccount.id(), IdentityAccounts.hasVerifiedContact(UUID)/lockForListingMutation(UUID), TrustBadge.calculate. Only public common RequestFailure/HttpFailureResponse dependencies; no other module dependency. Entities/profiles/credentials remain internal.
+- Public contracts: CurrentAccount.id(), IdentityAccounts.hasVerifiedContact(UUID)/lockForListingMutation(UUID), TrustBadge.calculate. Only public common dependencies; no other module dependency. Entities/profiles/credentials remain internal.
 - V1/V2 mappings UserEntity/AuthIdentityEntity remain package-private, scalar references/generated timestamps; six total ORM mappings still 76 columns. V4 contact provenance and V5 login receipts are JDBC-owned; Flyway/Hibernate validate only.
 - internal.telegram creates anonymous original-session/realm/expected-contact challenges. Private Telegram self-contact checks precede six-digit HMAC-derived OTP delivery; only original-session CSRF completion signs in. No account/phone reserved at challenge creation.
 - Telegram account key is issuer https://telegram.org plus validated sender ID. Never link by email/typed phone/username. Unambiguous existing verified receipt recovers its account; ambiguous/unassociated legacy accounts require explicit recovery. Preserve existing data/migrations.
@@ -18,3 +18,7 @@
 
 
 - Current proof and manual status: docs/API_VERIFICATION.md records all listing HTTP routes exercised through Telegram-created sessions with isolated image storage; maintainer confirmed real local OTP/profile. No OAuth library/wiring remains; deliberate reject guards and historical private schema are preserved.
+
+- Phase 4 adds public InteractionAccounts and PersonaSessions. Private contact DTOs redact toString; review aggregates are assigned within the interaction-owned owner-locked transaction.
+- Shared sessions/profile/CSRF/logout activate for Telegram PRIMARY or explicit DEVELOPMENT/SANDBOX personas. Telegram challenges/transport remain PRIMARY-only. Sandbox uses personas:v1 Redis namespace, allowlisted selection and generation-bound sessions.
+- Sandbox profile/session reads coordinate through SandboxBoundary; schema/application failures retain safe error classification. Phase 4 does not add any PRIMARY login alternative.

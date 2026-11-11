@@ -16,8 +16,8 @@ The [listing model](LISTING_MODEL.md), [search contract](LISTING_SEARCH.md), and
 
 ## Storage conventions
 
-- Eight application tables live in public: users, auth_identities, properties, property_images, contact_reveals, owner_reviews, contact_verifications and telegram_login_receipts. V1 introduced the first six; V4/V5 introduced the receipt tables. Flyway history and PostGIS objects are additional infrastructure.
-- Each table has `id uuid PRIMARY KEY`, NOT NULL, with no database default. The application supplies a random UUID before insertion. IDs never change; fixture IDs may be deterministic only in isolated sandbox/test databases.
+- Nine application tables live in public: users, auth_identities, properties, property_images, contact_reveals, owner_reviews, contact_verifications , telegram_login_receipts and sandbox_state. V1 introduced the first six; V4/V5 introduced the receipt tables. Flyway history and PostGIS objects are additional infrastructure.
+- Each application-domain table has `id uuid PRIMARY KEY`; sandbox_state instead has a singleton smallint key. Domain tables have, NOT NULL, with no database default. The application supplies a random UUID before insertion. IDs never change; fixture IDs may be deterministic only in isolated sandbox/test databases.
 - In the tables below, **required** means `NOT NULL`; **nullable** means SQL NULL is allowed. **None** means no explicit default. Nullable fields omitted on insert become NULL. Generated columns have no separate default and cannot accept a caller's value.
 - Enum-like values use `text` plus named `CHECK` constraints, mapped as strings later. Do not introduce PostgreSQL enum types or ordinal persistence. Every required enum also has `NOT NULL`.
 - Required free text has `CHECK (length(btrim(column)) > 0)`. Nullable text, when present, has the same nonblank check. This rejects empty/ASCII-space-only values; Unicode whitespace handling and future content/length limits belong to request validation. Technical keys are opaque, case-sensitive, and never silently trimmed or case-folded.
@@ -304,3 +304,18 @@ Telegram account identity uses fixed issuer https://telegram.org and validated s
 
 
 <!-- /coderabbit-ai-generated:v1 -->
+## Phase 4 reset metadata
+
+V7 adds sandbox_state through Flyway; V1-V6 are unchanged. It has id smallint primary key constrained to 1, seed_version integer >0, generation bigint >0, reset_interval bigint >=0, and reset_at timestamptz. All five columns are required and have no defaults. The migration inserts no rows in either database. Current totals are nine application tables and 92 columns; the six entity mappings remain unchanged at 76 columns.
+
+Sandbox tooling alone initializes the metadata alongside fabricated fixtures. Reset takes the exclusive advisory lock, deletes child rows before parent rows, reseeds, and increments generation in one transaction. Scheduled interval values use Kolkata six-hour boundaries. Normal sandbox transactions take the shared advisory lock. Snapshot reads also lock the metadata row, rejecting pre-reset repeatable-read snapshots rather than accepting an old generation.
+
+Phase 4 account locks use FOR NO KEY UPDATE for reveals and review writers. This preserves writer serialization while allowing foreign-key KEY SHARE checks for reciprocal interactions. The capture-after-quota-lock and historical-eligibility rules above remain authoritative.
+
+## Phase 4 reset metadata
+
+V7 adds sandbox_state through Flyway; V1-V6 are unchanged. It has id smallint primary key constrained to 1, seed_version integer >0, generation bigint >0, reset_interval bigint >=0, and reset_at timestamptz. All five columns are required and have no defaults. The migration inserts no rows in either database. Current totals are nine application tables and 92 columns; the six entity mappings remain unchanged at 76 columns.
+
+Sandbox tooling alone initializes metadata alongside fabricated fixtures. Reset takes the exclusive advisory lock, deletes child rows before parent rows, reseeds, and increments generation in one transaction. Scheduled interval values use Kolkata six-hour boundaries. Normal sandbox transactions take the shared advisory lock. Snapshot reads also lock the metadata row, rejecting pre-reset repeatable-read snapshots rather than accepting an old generation.
+
+Phase 4 account locks use FOR NO KEY UPDATE for reveals and review writers. This preserves writer serialization while allowing foreign-key KEY SHARE checks for reciprocal interactions. The capture-after-quota-lock and historical-eligibility rules above remain authoritative.

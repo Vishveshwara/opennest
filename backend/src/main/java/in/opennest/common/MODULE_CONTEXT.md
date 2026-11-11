@@ -15,3 +15,7 @@
 - PostgreSQL administrative shutdown SQLSTATE 57P01 and connection class 08 map to 503, as do recognized connection/resource failures and timeouts, including query timeouts. Unique/stale conflicts map to 409; generic integrity/schema/application failures and database-dropped 57P04 remain 500.
 - HTTP logs emit fixed status/error-ID events at INFO for 4xx and ERROR for 5xx. Root ERROR diagnostics use a literal redacted pattern without messages, logger/thread names, MDC, arguments, or stack traces. Raw framework/SQL/request data, access/debug/trace logs, and policy overrides remain disabled; `docs/BACKEND_HTTP_ERRORS.md`.
 - Baseline and enabled identity security expose the configured applicationCors source; listing body validation uses the same source before returning early errors, preserving exact-origin headers even when the security filter runs later.
+
+- Phase 4 public SandboxBoundary owns cross-module sandbox coordination: transaction-scoped shared reset lock, generation checks, and exclusive reset lock. Metadata comes from V7 sandbox_state; PRIMARY is a no-op and cannot acquire the exclusive lock.
+- Sandbox repeatable-read operations lock the metadata row FOR SHARE after the advisory lock, rejecting stale snapshots with safe 503. They remain read-only at the API level but permit database row locks.
+- HttpFailureResponse also classifies filter failures through the same safe classifier as controller errors.

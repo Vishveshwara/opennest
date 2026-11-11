@@ -29,8 +29,9 @@ UNIT_SUITES = {
     "in.opennest.identity.internal.telegram.TelegramSettingsTests",
     "in.opennest.identity.internal.telegram.TelegramHttpBotTests",
     "in.opennest.identity.internal.telegram.TelegramCryptoTests",
+    "in.opennest.interaction.internal.InteractionInputTests",
 }
-INTEGRATION_SUITES = {"in.opennest.SchemaMigrationIT", "in.opennest.BackendIsolationIT", "in.opennest.listing.internal.ListingLifecycleIT", "in.opennest.identity.internal.telegram.TelegramContactIT"}
+INTEGRATION_SUITES = {"in.opennest.SchemaMigrationIT", "in.opennest.BackendIsolationIT", "in.opennest.listing.internal.ListingLifecycleIT", "in.opennest.identity.internal.telegram.TelegramContactIT", "in.opennest.interaction.internal.Phase4IT"}
 
 
 def require(condition, message):
@@ -87,7 +88,7 @@ def verify_reports():
         require(not any(token in name for name in application_classes for token in
                         ("IsolationProbe", "IsolationTestConfiguration", "BackendIsolationIT", "HttpContractFixtures",
                          "SchemaMigrationIT", "PersistenceScenarios", "PersistenceScenarioSupport",
-                         "IdentityAuthenticationIT", "ControlledOidcProvider", "ProviderConfiguration", "ListingLifecycleIT", "ControlledStorage", "TelegramContactIT", "ControlledTelegram", "TelegramListingStorageFixture", "ControlledListingStorage")), "Test fixture packaged in application")
+                         "IdentityAuthenticationIT", "ControlledOidcProvider", "ProviderConfiguration", "ListingLifecycleIT", "ControlledStorage", "TelegramContactIT", "ControlledTelegram", "TelegramListingStorageFixture", "ControlledListingStorage", "Phase4IT", "ClockJdbc", "ClockConfiguration")), "Test fixture packaged in application")
         migrations = [name for name in application_classes if name.startswith("BOOT-INF/classes/db/migration/V")]
         require(set(migrations) == {
             "BOOT-INF/classes/db/migration/V1__create_application_schema.sql",
@@ -96,6 +97,7 @@ def verify_reports():
             "BOOT-INF/classes/db/migration/V4__telegram_contact_receipts.sql",
             "BOOT-INF/classes/db/migration/V5__telegram_login_receipts.sql",
             "BOOT-INF/classes/db/migration/V6__telegram_contact_sender_index.sql",
+            "BOOT-INF/classes/db/migration/V7__sandbox_reset_state.sql",
         }, "Packaged migrations differ from the Phase 1 handoff")
     version = subprocess.run(["java", "--version"], capture_output=True, text=True, check=True).stdout.strip()
     require(re.search(r"(?:openjdk|java) 25[.\s]", version), "Verification must run on Java 25")

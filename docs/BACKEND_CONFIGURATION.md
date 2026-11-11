@@ -1,6 +1,6 @@
 # OpenNest backend configuration
 
-Phase 1 supplies guarded stores, Flyway, Hibernate validation, and safe HTTP errors. Current Telegram-only identity configuration is in the [setup guide](TELEGRAM_HANDOFF.md). Authentication-disabled mode permits public listing reads and denies protected routes. Phase 3 listings exist; demo/interaction operations and diagnostic endpoints remain unavailable.
+Phase 1 supplies guarded stores, Flyway, Hibernate validation, and safe HTTP errors. Current Telegram-only identity configuration is in the [setup guide](TELEGRAM_HANDOFF.md). Authentication-disabled mode permits public listing reads and denies protected routes. Phase 3 listings exist; Phase 4 interaction operations are implemented; explicit sandbox personas and operator CLI operations are documented in PHASE4_HANDOFF.md. Diagnostic HTTP endpoints remain unavailable.
 
 ## Deployment selection
 
@@ -66,3 +66,7 @@ Phase 1.8's [container-only isolation suite](BACKEND_ISOLATION.md) passed all 23
 Deployed network rejection, restricted server privileges, session/cookie isolation, storage/cache isolation, and demo operations remain later tasks. The local Compose stores are development-only; production credentials, image architecture, runtime TLS options, and public routing require the separate [deployment plan](DEPLOYMENT_STACK.md).
 
 Framework references: [externalized configuration](https://docs.spring.io/spring-boot/reference/features/external-config.html), [config-data processing order](https://docs.spring.io/spring-boot/api/java/org/springframework/boot/context/config/ConfigDataEnvironmentPostProcessor.html), and [common application properties](https://docs.spring.io/spring-boot/appendix/application-properties/index.html). The checked backend uses Boot 4.1.1.
+
+## Phase 4 sandbox operations
+
+DEVELOPMENT/SANDBOX with OPENNEST_PERSONA_SWITCHING=true enables isolated persona sessions while OPENNEST_TELEGRAM_AUTH_ENABLED remains false. OPENNEST_DEMO_RESET enables the six-hour reset and manual reset command; OPENNEST_DEMO_TELEMETRY enables the aggregate telemetry command. Flags stay false by default and production rejects them. Operator commands use --opennest.sandbox.command=reset or telemetry and --spring.main.web-application-type=none with sandbox-only process configuration. No HTTP reset/telemetry routes exist. [The Phase 4 handoff](PHASE4_HANDOFF.md) records the API, first-initialization guard, metadata generation and verification.

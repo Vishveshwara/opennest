@@ -14,6 +14,21 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 
 class IdentitySettingsTests {
 
+    @Test void sandboxPersonasEnableSeparateSessionsWithoutTelegram() {
+        var environment = configured().withProperty("opennest.identity.telegram-enabled", "false")
+                .withProperty("opennest.deployment.data-mode", "SANDBOX")
+                .withProperty("opennest.deployment.features.persona-switching", "true");
+        process(environment);
+        assertThat(environment.getProperty("opennest.identity.sessions-enabled")).isEqualTo("true");
+        assertThat(environment.getProperty("opennest.identity.telegram-enabled")).isEqualTo("false");
+        assertThat(environment.getProperty("spring.session.redis.namespace")).isEqualTo("opennest:development:sandbox:personas:v1:sessions");
+    }
+
+    @Test void rejectsSandboxOperatorCommandsInPrimary() {
+        assertThatThrownBy(() -> process(configured().withProperty("opennest.sandbox.command", "reset")))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("dedicated development sandbox");
+    }
+
     private static final String PRIVATE_CANARY = "fabricated-identity-private-canary";
     private static final String SAFE_FAILURE = "Invalid OpenNest identity settings; check credentials, origins and deployment isolation";
 

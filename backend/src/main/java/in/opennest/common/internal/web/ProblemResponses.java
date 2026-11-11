@@ -29,6 +29,10 @@ public final class ProblemResponses implements in.opennest.common.HttpFailureRes
         write(response, status, Set.of());
     }
 
+    @Override public void write(HttpServletResponse response, Exception failure) throws IOException {
+        write(response, FailureClassifier.status(failure));
+    }
+
     void write(HttpServletResponse response, int status, Set<HttpMethod> allowedMethods) throws IOException {
         write(response, status, allowedMethods, detail(status));
     }

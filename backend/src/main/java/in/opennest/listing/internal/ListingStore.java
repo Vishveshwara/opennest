@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.function.Supplier;
 import in.opennest.common.RequestFailure;
+import in.opennest.common.SandboxBoundary;
 import in.opennest.identity.TrustBadge;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -24,26 +25,29 @@ class ListingStore {
     private final NamedParameterJdbcTemplate named;
     private final TransactionTemplate writes;
     private final TransactionTemplate reads;
+    private final SandboxBoundary boundary;
     private static final String JOIN = " from properties p join listing_owner_profiles o on o.id = p.owner_id ";
     private static final String SELECT = "select p.*, o.full_name, o.average_rating, o.review_count, o.broker_report_count";
 
-    ListingStore(JdbcTemplate jdbc, PlatformTransactionManager manager) {
+    ListingStore(JdbcTemplate jdbc, PlatformTransactionManager manager, SandboxBoundary boundary) {
         this.jdbc = jdbc; named = new NamedParameterJdbcTemplate(jdbc);
+        this.boundary = boundary;
         jdbc.setQueryTimeout(10);
         writes = new TransactionTemplate(manager);
         reads = new TransactionTemplate(manager);
-        reads.setReadOnly(true);
+        reads.setReadOnly(!boundary.sandbox());
         reads.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
     }
 
     <T> T write(Supplier<T> operation) { return execute(writes, operation); }
     JdbcTemplate jdbc() { return jdbc; }
+    boolean sandbox() { return boundary.sandbox(); }
     <T> T read(Supplier<T> operation) { return execute(reads, operation); }
     private <T> T execute(TransactionTemplate template, Supplier<T> operation) {
         var original = new RuntimeException[1];
         try {
             return template.execute(status -> {
-                try { return operation.get(); }
+                try { boundary.lock(); return operation.get(); }
                 catch (RuntimeException failure) { original[0] = failure; throw failure; }
             });
         } catch (RuntimeException failure) {

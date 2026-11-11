@@ -52,7 +52,7 @@ class SchemaMigrationIT {
             for (var database : databases) {
                 try (var connection = database.connect()) {
                     assertThat(value(connection, "SHOW server_version_num").toString()).startsWith("17");
-                    assertThat(value(connection, "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('users','auth_identities','properties','property_images','contact_reveals','owner_reviews','contact_verifications','telegram_login_receipts')"))
+                    assertThat(value(connection, "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('users','auth_identities','properties','property_images','contact_reveals','owner_reviews','contact_verifications','telegram_login_receipts','sandbox_state')"))
                             .as("Integration databases must be fresh; this suite never cleans or drops a schema").isEqualTo(0L);
                 }
                 var application = new SpringApplication(OpenNestApplication.class);
@@ -77,7 +77,7 @@ class SchemaMigrationIT {
                     var context = application.run(arguments.toArray(String[]::new));
                     contexts.add(context);
                     var flyway = context.getBean(Flyway.class);
-                    assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("6");
+                    assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("7");
                     assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
                     assertThat(flyway.migrate().migrationsExecuted).isZero();
                     assertThat(flyway.getConfiguration().isCleanDisabled()).isTrue();
@@ -135,7 +135,7 @@ class SchemaMigrationIT {
             try (var connection = database.connect()) {
                 assertThat(value(connection, "SELECT public.PostGIS_Lib_Version()").toString()).startsWith("3.5.");
                 var tables = strings(connection, "SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE' AND table_name <> 'spatial_ref_sys' ORDER BY table_name");
-                assertThat(tables).containsExactly("auth_identities", "contact_reveals", "contact_verifications", "flyway_schema_history", "owner_reviews", "properties", "property_images", "telegram_login_receipts", "users");
+                assertThat(tables).containsExactly("auth_identities", "contact_reveals", "contact_verifications", "flyway_schema_history", "owner_reviews", "properties", "property_images", "sandbox_state", "telegram_login_receipts", "users");
                 for (String table : tables) {
                     if (!table.equals("flyway_schema_history")) {
                         assertThat(value(connection, "SELECT count(*) FROM public." + table)).isEqualTo(0L);
@@ -147,21 +147,21 @@ class SchemaMigrationIT {
                         FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid
                         JOIN pg_namespace n ON n.oid=c.relnamespace
                         LEFT JOIN pg_attrdef d ON d.adrelid=c.oid AND d.adnum=a.attnum
-                        WHERE n.nspname='public' AND c.relname IN ('users','auth_identities','properties','property_images','contact_reveals','owner_reviews','contact_verifications','telegram_login_receipts')
+                        WHERE n.nspname='public' AND c.relname IN ('users','auth_identities','properties','property_images','contact_reveals','owner_reviews','contact_verifications','telegram_login_receipts','sandbox_state')
                             AND a.attnum>0 AND NOT a.attisdropped ORDER BY c.relname,a.attnum
                         """));
                 current += String.join("\n", strings(connection, "SELECT conrelid::regclass::text || ':' || conname || ':' || pg_get_constraintdef(oid) FROM pg_constraint WHERE connamespace='public'::regnamespace AND conname ~ '^(pk_|uq_|fk_|ck_)' ORDER BY conname"));
                 current += String.join("\n", strings(connection, "SELECT indexdef FROM pg_indexes WHERE schemaname='public' AND indexname LIKE 'ix_%' ORDER BY indexname"));
                 current += "\n" + ownerProfileViewFingerprint(connection);
                 var currentHistory = strings(connection, "SELECT version || ':' || checksum || ':' || success FROM public.flyway_schema_history WHERE version IS NOT NULL ORDER BY installed_rank");
-                assertThat(currentHistory).hasSize(6);
+                assertThat(currentHistory).hasSize(7);
                 if (fingerprint != null) {
                     assertThat(current).isEqualTo(fingerprint);
                     assertThat(currentHistory).isEqualTo(history);
                 }
                 fingerprint = current;
                 history = currentHistory;
-                assertThat(value(connection, "SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name IN ('users','auth_identities','properties','property_images','contact_reveals','owner_reviews','contact_verifications','telegram_login_receipts')")).isEqualTo(87L);
+                assertThat(value(connection, "SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name IN ('users','auth_identities','properties','property_images','contact_reveals','owner_reviews','contact_verifications','telegram_login_receipts','sandbox_state')")).isEqualTo(92L);
                 assertThat(value(connection, "SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND is_generated='ALWAYS'")).isEqualTo(3L);
                 assertThat(value(connection, "SELECT count(*) FROM pg_constraint WHERE connamespace='public'::regnamespace AND contype='f' AND confdeltype='r' AND confupdtype='r' AND NOT condeferrable")).isEqualTo(9L);
             }
@@ -317,6 +317,18 @@ class SchemaMigrationIT {
             for (String segment : List.of("ROOM", "HALL", "BATHROOM", "KITCHEN", "EXTERIOR_AMENITY")) {
                 execute(f.db(), "UPDATE property_images SET segment=? WHERE id=?", segment, image);
             }
+        });
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1})
+    void enforcesSandboxResetMetadataShapeWithoutSeedingApplicationData(int target) throws Exception {
+        fixture(target, f -> {
+            insert(f.db(), "sandbox_state", row("id", 1, "seed_version", 1, "generation", 1L, "reset_interval", 0L, "reset_at", OffsetDateTime.now()));
+            for (String change : List.of("id=2", "seed_version=0", "generation=0", "reset_interval=-1"))
+                reject(f.db(), "23514", "UPDATE sandbox_state SET " + change + " WHERE id=1");
+            reject(f.db(), "23502", "UPDATE sandbox_state SET reset_at=NULL WHERE id=1");
+            reject(f.db(), "23505", "INSERT INTO sandbox_state (id,seed_version,generation,reset_interval,reset_at) VALUES (1,1,1,0,current_timestamp)");
         });
     }
 

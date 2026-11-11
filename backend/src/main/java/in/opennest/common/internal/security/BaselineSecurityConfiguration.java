@@ -13,7 +13,8 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.savedrequest.NullRequestCache;
 
 @Configuration(proxyBeanMethods = false)
-@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "opennest.identity.telegram-enabled", havingValue = "false", matchIfMissing = true)
+@org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "opennest.identity.sessions-enabled", havingValue = "false", matchIfMissing = true)
 class BaselineSecurityConfiguration {
 
     @Bean
@@ -40,6 +41,7 @@ class BaselineSecurityConfiguration {
         cors.setAllowCredentials(true);
         var source = new org.springframework.web.cors.UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/api/v1/listings/**", cors);
+        source.registerCorsConfiguration("/api/v1/interactions/**", cors);
         return source;
     }
 
@@ -56,6 +58,7 @@ class BaselineSecurityConfiguration {
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/listings/mine").authenticated()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/listings/search", "/api/v1/listings/*").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/interactions/listings/*/reviews").permitAll()
                         .anyRequest().denyAll())
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
