@@ -19,13 +19,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ImageValidatorTests {
-    @Test void decodesStaticWebpAndWritesFreshPixels() {
-        byte[] webp = java.util.Base64.getDecoder().decode("UklGRlYAAABXRUJQVlA4IDoAAADwAgCdASoBAAEAAEcIhYWIhYSIAgICdaoD+AP6Ag1NGAD+/vNYf/5gZt2KO//mBv/80F4SW6//zLwASUNNVAgAAAB0ZXN0MXgxAA==");
+    @Test void preservesLosslessWebpInsteadOfReencodingJpeg() {
+        byte[] webp = java.util.Base64.getDecoder().decode("UklGRioAAABXRUJQVlA4TB4AAAAvAUAAABAIJEHsr7qGkCAh+/+vAoEkkv0t73/YcAU=");
         var validated = ImageValidator.validate(webp, "image/webp");
-        assertThat(validated.width()).isEqualTo(1);
-        assertThat(validated.height()).isEqualTo(1);
-        assertThat(validated.type()).isEqualTo("image/jpeg");
-        assertThat(new String(validated.bytes(), StandardCharsets.ISO_8859_1)).doesNotContain("test1x1");
+        assertThat(validated.width()).isEqualTo(2);
+        assertThat(validated.height()).isEqualTo(2);
+        assertThat(validated.type()).isEqualTo("image/webp");
+        assertThat(validated.bytes()).containsExactly(webp);
     }
     @ParameterizedTest @ValueSource(strings = {"jpeg", "png"})
     void decodesAndReencodesSupportedImagesWithoutChangingDimensions(String format) throws Exception {
@@ -94,7 +94,6 @@ class ImageValidatorTests {
         invalid(() -> ImageValidator.validate("<svg xmlns='http://www.w3.org/2000/svg'/>".getBytes(StandardCharsets.US_ASCII), "image/png"));
         invalid(() -> ImageValidator.validate(new byte[]{71, 73, 70, 56, 57, 97}, "image/gif"));
         invalid(() -> ImageValidator.validate(new byte[0], "image/jpeg"));
-        invalid(() -> ImageValidator.validate(new byte[ListingMedia.MAX_BYTES + 1], "image/jpeg"));
     }
 
     @Test void rejectsTruncatedJpegPngAndWebp() throws Exception {

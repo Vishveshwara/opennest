@@ -16,12 +16,13 @@ import tools.jackson.databind.JsonNode;
 
 @Service
 class ListingMedia implements AutoCloseable {
-    static final int MAX_BYTES = 5 * 1024 * 1024;
+    static final int MAX_BYTES = Integer.MAX_VALUE - 8;
+    static final int MAX_IMAGES = 20;
     private final ListingStore store;
     private final StorageObjects storage;
     private final IdentityAccounts accounts;
-    private final Semaphore processors = new Semaphore(2);
-    private final java.util.concurrent.ExecutorService decoders = new java.util.concurrent.ThreadPoolExecutor(2, 2, 0,
+    private final Semaphore processors = new Semaphore(1);
+    private final java.util.concurrent.ExecutorService decoders = new java.util.concurrent.ThreadPoolExecutor(1, 1, 0,
             java.util.concurrent.TimeUnit.SECONDS, new java.util.concurrent.SynchronousQueue<>(), Thread.ofPlatform().daemon().name("opennest-image-", 0).factory());
 
     ListingMedia(ListingStore store, StorageObjects storage, IdentityAccounts accounts) {
@@ -37,7 +38,7 @@ class ListingMedia implements AutoCloseable {
         return store.write(() -> {
             accounts.lockForListingMutation(owner); store.owned(property, owner, true);
             long count = store.jdbc().queryForObject("select count(*) from property_images where property_id = ? and (validation_state = 'VALIDATED' or (validation_state = 'PENDING' and upload_expires_at > current_timestamp))", Long.class, property);
-            if (count >= 12) throw new RequestFailure(RequestFailure.Kind.CONFLICT);
+            if (count >= MAX_IMAGES) throw new RequestFailure(RequestFailure.Kind.CONFLICT);
             long recent = store.jdbc().queryForObject("select count(*) from property_images i join properties p on p.id = i.property_id where p.owner_id = ? and i.created_at > current_timestamp - interval '24 hours'", Long.class, owner);
             if (recent >= 60) throw new RequestFailure(RequestFailure.Kind.RATE_LIMITED);
             var id = UUID.randomUUID(); String key = "listings/" + property + "/" + id;
@@ -59,6 +60,8 @@ class ListingMedia implements AutoCloseable {
         long started = System.nanoTime();
         String key = "listings/" + property + "/" + id + "/" + UUID.randomUUID();
         try {
+            long declaredBytes = ((Number) row.get("declared_byte_size")).longValue();
+            if (declaredBytes * 4L > Runtime.getRuntime().maxMemory() / 4L) throw new RequestFailure(RequestFailure.Kind.UNAVAILABLE);
             var bytes = storage.read((String) row.get("upload_object_key"), ((Number) row.get("declared_byte_size")).longValue());
             var validated = decode(bytes, (String) row.get("declared_content_type"));
             storage.writeFinal(key, validated.bytes(), validated.type());
@@ -66,7 +69,7 @@ class ListingMedia implements AutoCloseable {
                 accounts.lockForListingMutation(owner); store.owned(property, owner, true);
                 var locked = image(property, id, true);
                 if ("VALIDATED".equals(locked.get("validation_state"))) return imageResponse(locked);
-                if (System.nanoTime() - started > Duration.ofMinutes(2).toNanos()) throw new RequestFailure(RequestFailure.Kind.UNAVAILABLE);
+                if (System.nanoTime() - started > Duration.ofMinutes(5).toNanos()) throw new RequestFailure(RequestFailure.Kind.UNAVAILABLE);
                 checkPending(locked);
                 store.jdbc().update("update property_images set object_key = ?, validation_state = 'VALIDATED', content_type = ?, byte_size = ?, width = ?, height = ? where id = ?",
                         key, validated.type(), validated.bytes().length, validated.width(), validated.height(), id);
@@ -111,7 +114,7 @@ class ListingMedia implements AutoCloseable {
         java.util.concurrent.Future<ImageValidator.Validated> task;
         try { task = decoders.submit(() -> ImageValidator.validate(bytes, type)); }
         catch (java.util.concurrent.RejectedExecutionException failure) { throw new RequestFailure(RequestFailure.Kind.UNAVAILABLE); }
-        try { return task.get(20, java.util.concurrent.TimeUnit.SECONDS); }
+        try { return task.get(60, java.util.concurrent.TimeUnit.SECONDS); }
         catch (java.util.concurrent.ExecutionException failure) {
             if (failure.getCause() instanceof RuntimeException runtime) throw runtime;
             if (failure.getCause() instanceof Error error) throw error;

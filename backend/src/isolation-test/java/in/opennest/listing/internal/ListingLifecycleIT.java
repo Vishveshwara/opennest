@@ -141,8 +141,8 @@ class ListingLifecycleIT {
         assertThat(jdbc(0).queryForObject("select validation_state from property_images where id = ?", String.class, bad.get("imageId"))).isEqualTo("REJECTED");
         assertThatThrownBy(() -> as(owner, () -> service().change(id, node("{\"version\":0}"), "publish"))).isInstanceOf(RequestFailure.class);
         var reservations = new ArrayList<java.util.concurrent.Callable<Boolean>>();
-        for (int i = 0; i < 15; i++) reservations.add(() -> attempt(owner, () -> media().presign(id, owner, node("{\"segment\":\"ROOM\",\"contentType\":\"image/png\",\"byteSize\":100}"))));
-        assertThat(race(reservations).stream().filter(Boolean::booleanValue).count()).isEqualTo(12);
+        for (int i = 0; i < 25; i++) reservations.add(() -> attempt(owner, () -> media().presign(id, owner, node("{\"segment\":\"ROOM\",\"contentType\":\"image/png\",\"byteSize\":100}"))));
+        assertThat(race(reservations).stream().filter(Boolean::booleanValue).count()).isEqualTo(20);
         UUID pending = jdbc(0).queryForObject("select id from property_images where property_id = ? and validation_state = 'PENDING' limit 1", UUID.class, id);
         jdbc(0).update("update property_images set created_at = current_timestamp - interval '2 hours', upload_expires_at = current_timestamp - interval '1 hour' where id = ?", pending);
         assertThatThrownBy(() -> media().complete(id, owner, node(json.writeValueAsString(Map.of("imageId", pending))))).isInstanceOf(RequestFailure.class);
@@ -216,7 +216,7 @@ class ListingLifecycleIT {
         assertThatThrownBy(() -> as(owner(0, false), () -> service().change(id, inventory("ROOM", 0, true), "inventory"))).isInstanceOf(RequestFailure.class);
     }
     @Test void migrationUpgradePreservesOriginalChecksumsAndValidatesMediaMetadata() {
-        assertThat(jdbc(0).queryForList("select version from flyway_schema_history where success order by installed_rank", String.class)).containsExactly("1", "2", "3", "4", "5", "6", "7");
+        assertThat(jdbc(0).queryForList("select version from flyway_schema_history where success order by installed_rank", String.class)).containsExactly("1", "2", "3", "4", "5", "6", "7", "8");
         assertThat(jdbc(0).queryForList("select column_name from information_schema.columns where table_name='listing_owner_profiles'", String.class))
                 .containsExactlyInAnyOrder("id", "full_name", "average_rating", "review_count", "broker_report_count");
         UUID owner = owner(0, false);

@@ -80,7 +80,7 @@ class SchemaMigrationIT {
                     var context = application.run(arguments.toArray(String[]::new));
                     contexts.add(context);
                     var flyway = context.getBean(Flyway.class);
-                    assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("7");
+                    assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("8");
                     assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
                     assertThat(flyway.migrate().migrationsExecuted).isZero();
                     assertThat(flyway.getConfiguration().isCleanDisabled()).isTrue();
@@ -160,7 +160,7 @@ class SchemaMigrationIT {
                 current += String.join("\n", strings(connection, "SELECT indexdef FROM pg_indexes WHERE schemaname='public' AND indexname LIKE 'ix_%' ORDER BY indexname"));
                 current += "\n" + ownerProfileViewFingerprint(connection);
                 var currentHistory = strings(connection, "SELECT version || ':' || checksum || ':' || success FROM public.flyway_schema_history WHERE version IS NOT NULL ORDER BY installed_rank");
-                assertThat(currentHistory).hasSize(7);
+                assertThat(currentHistory).hasSize(8);
                 if (fingerprint != null) {
                     assertThat(current).isEqualTo(fingerprint);
                     assertThat(currentHistory).isEqualTo(history);
@@ -322,6 +322,47 @@ class SchemaMigrationIT {
             reject(f.db(), "23503", "UPDATE property_images SET property_id=? WHERE id=?", UUID.randomUUID(), image);
             for (String segment : List.of("ROOM", "HALL", "BATHROOM", "KITCHEN", "EXTERIOR_AMENITY")) {
                 execute(f.db(), "UPDATE property_images SET segment=? WHERE id=?", segment, image);
+            }
+        });
+    }
+
+    /**
+     * Allows lossless WebP metadata beyond former byte and pixel caps while retaining legacy metadata shapes.
+     */
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1})
+    void supportsLosslessPhotoMetadataWithoutApplyingTheBrowserSourceLimitToEncodedOutput(int target) throws Exception {
+        fixture(target, f -> {
+            UUID image = image(f, "staging/lossless-contract");
+            assertThat(value(f.db(), "SELECT num_nonnulls(declared_content_type,declared_byte_size,content_type,byte_size,width,height) FROM property_images WHERE id=?", image)).isEqualTo(0);
+            execute(f.db(), "UPDATE property_images SET declared_content_type='image/webp',declared_byte_size=50000000,validation_state='VALIDATED',object_key='final/lossless-contract',content_type='image/webp',byte_size=50000000,width=6000,height=4000 WHERE id=?", image);
+            assertThat(value(f.db(), "SELECT byte_size FROM property_images WHERE id=?", image)).isEqualTo(50_000_000L);
+            assertThat(value(f.db(), "SELECT width::bigint*height::bigint FROM property_images WHERE id=?", image)).isEqualTo(24_000_000L);
+            execute(f.db(), "UPDATE property_images SET declared_byte_size=2147483639,byte_size=2147483639,width=16384,height=16384 WHERE id=?", image);
+            assertThat(value(f.db(), "SELECT declared_byte_size FROM property_images WHERE id=?", image)).isEqualTo(2_147_483_639L);
+            assertThat(value(f.db(), "SELECT byte_size FROM property_images WHERE id=?", image)).isEqualTo(2_147_483_639L);
+            assertThat(value(f.db(), "SELECT width::bigint*height::bigint FROM property_images WHERE id=?", image)).isEqualTo(268_435_456L);
+            for (String type : List.of("image/jpeg", "image/png")) {
+                execute(f.db(), "UPDATE property_images SET declared_content_type=?,content_type=?,declared_byte_size=100,byte_size=100,width=20001,height=1 WHERE id=?", type, type, image);
+                assertThat(value(f.db(), "SELECT content_type FROM property_images WHERE id=?", image)).isEqualTo(type);
+            }
+            execute(f.db(), "UPDATE property_images SET declared_content_type=NULL,declared_byte_size=NULL,content_type=NULL,byte_size=NULL,width=NULL,height=NULL WHERE id=?", image);
+            assertThat(value(f.db(), "SELECT validation_state || ':' || num_nonnulls(declared_content_type,declared_byte_size,content_type,byte_size,width,height) FROM property_images WHERE id=?", image)).isEqualTo("VALIDATED:0");
+        });
+    }
+
+    /**
+     * Rejects incomplete groups, unsupported types and codec or transport bounds on each isolated target.
+     */
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1})
+    void rejectsInvalidLosslessPhotoMetadataWithoutNullCheckLeaks(int target) throws Exception {
+        fixture(target, f -> {
+            UUID image = image(f, "staging/lossless-rejections");
+            execute(f.db(), "UPDATE property_images SET declared_content_type='image/webp',declared_byte_size=50000000,validation_state='VALIDATED',object_key='final/lossless-rejections',content_type='image/webp',byte_size=50000000,width=6000,height=4000 WHERE id=?", image);
+            for (String change : List.of("declared_content_type=NULL", "declared_byte_size=NULL", "declared_content_type='image/gif'", "declared_byte_size=0", "declared_byte_size=2147483640",
+                    "content_type=NULL", "byte_size=NULL", "width=NULL", "height=NULL", "content_type='image/gif'", "byte_size=0", "byte_size=2147483640", "width=0", "height=0", "width=16385", "height=16385")) {
+                reject(f.db(), "23514", "UPDATE property_images SET " + change + " WHERE id=?", image);
             }
         });
     }

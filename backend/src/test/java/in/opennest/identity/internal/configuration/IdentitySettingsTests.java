@@ -24,6 +24,24 @@ class IdentitySettingsTests {
         assertThat(environment.getProperty("spring.session.redis.namespace")).isEqualTo("opennest:development:sandbox:personas:v1:sessions");
     }
 
+    @Test void permitsExplicitPrivateLanOriginsOnlyInPrimaryDevelopment() {
+        var environment = configured().withProperty("OPENNEST_DEV_LAN_ORIGINS", "http://192.168.1.9:3000,http://10.0.0.2:3000");
+        assertThat(IdentitySettings.developmentFrontendOrigins(environment))
+                .containsExactly("http://192.168.1.9:3000", "http://10.0.0.2:3000");
+        IdentitySettings.read(environment);
+        assertRejected(environment.withProperty("opennest.deployment.environment", "PRODUCTION"));
+        assertRejected(environment.withProperty("opennest.deployment.environment", "DEVELOPMENT")
+                .withProperty("opennest.deployment.data-mode", "SANDBOX"));
+    }
+
+    @ParameterizedTest @ValueSource(strings = {
+            "http://8.8.8.8:3000", "http://172.32.0.1:3000", "http://192.168.1.9:3000/", "http://192.168.1.9:3000/path",
+            "http://192.168.1.9:3000?query", "http://user@192.168.1.9:3000", "http://192.168.1.9:0", "http://192.168.1.9:3000,", "*"
+    })
+    void rejectsUnsafeDevelopmentLanOrigins(String origin) {
+        assertRejected(configured().withProperty("OPENNEST_DEV_LAN_ORIGINS", origin));
+    }
+
     @Test void rejectsSandboxOperatorCommandsInPrimary() {
         assertThatThrownBy(() -> process(configured().withProperty("opennest.sandbox.command", "reset")))
                 .isInstanceOf(IllegalStateException.class).hasMessageContaining("dedicated development sandbox");

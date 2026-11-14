@@ -1,6 +1,7 @@
 package in.opennest.listing.internal;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -153,11 +154,17 @@ class ListingStore {
         summary.put("trustBadge", TrustBadge.calculate((BigDecimal) row.get("average_rating"), reviews, reports));
         response.put("owner", summary); response.put("nearbyLandmarks", List.of());
         response.put("images", images.stream().map(media::imageResponse).toList());
+        response.put("publicLocation", Map.of("latitude", coarsenedCoordinate((BigDecimal) row.get("latitude")),
+                "longitude", coarsenedCoordinate((BigDecimal) row.get("longitude")), "radiusMeters", 2000));
         if (owner) {
             response.put("version", row.get("version")); response.put("privateAddress", row.get("private_address"));
             response.put("latitude", row.get("latitude")); response.put("longitude", row.get("longitude"));
         }
         return response;
+    }
+    static BigDecimal coarsenedCoordinate(BigDecimal coordinate) {
+        var cell = new BigDecimal("0.02");
+        return coordinate.divide(cell, 0, RoundingMode.FLOOR).multiply(cell).add(new BigDecimal("0.01"));
     }
     static Instant instant(Object value) { return value instanceof Timestamp timestamp ? timestamp.toInstant() : ((java.time.OffsetDateTime) value).toInstant(); }
 }
