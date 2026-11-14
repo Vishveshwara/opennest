@@ -1,6 +1,8 @@
 package in.opennest.identity.internal.configuration;
 
 import java.net.URI;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Set;
 import org.springframework.boot.context.properties.bind.Bindable;
 import org.springframework.boot.context.properties.bind.Binder;
@@ -28,6 +30,7 @@ public record IdentitySettings(boolean telegramEnabled, Origins primary, Origins
                     .orElseThrow(IllegalStateException::new);
             settings = new IdentitySettings(Boolean.parseBoolean(flag), settings.primary(), settings.sandbox());
             boolean production = production(environment);
+            developmentFrontendOrigins(environment);
             if (production) {
                 for (String key : new String[] {"GOOGLE_CLIENT_SECRET", "SANDBOX_GOOGLE_CLIENT_SECRET",
                         "opennest.identity.primary.client-secret", "opennest.identity.sandbox.client-secret"}) {
@@ -47,6 +50,31 @@ public record IdentitySettings(boolean telegramEnabled, Origins primary, Origins
     }
 
     public Origins selected(Environment environment) { return sandbox(environment) ? sandbox : primary; }
+    public static List<String> developmentFrontendOrigins(Environment environment) {
+        try {
+            String configured = environment.getProperty("OPENNEST_DEV_LAN_ORIGINS", "").strip();
+            if (configured.isEmpty()) return List.of();
+            require(!production(environment) && !sandbox(environment));
+            String[] origins = configured.split(",", -1);
+            require(origins.length <= 8);
+            return Arrays.stream(origins).map(String::strip).peek(value -> {
+                var uri = URI.create(value);
+                require("http".equals(uri.getScheme()) && uri.getHost() != null && uri.getRawUserInfo() == null
+                        && value.equals("http://" + uri.getRawAuthority()) && uri.getPort() != 0 && uri.getPort() <= 65535);
+                String[] octets = uri.getHost().split("\\.", -1);
+                require(octets.length == 4);
+                int[] address = Arrays.stream(octets).mapToInt(part -> {
+                    int number = Integer.parseInt(part);
+                    require(number >= 0 && number <= 255 && Integer.toString(number).equals(part));
+                    return number;
+                }).toArray();
+                require(address[0] == 10 || address[0] == 192 && address[1] == 168
+                        || address[0] == 172 && address[1] >= 16 && address[1] <= 31);
+            }).distinct().toList();
+        } catch (RuntimeException failure) {
+            throw new IllegalStateException("Invalid OpenNest identity settings; check credentials, origins and deployment isolation");
+        }
+    }
     /**
      * Enables persona sessions only for explicitly opted-in development sandbox deployments.
      */

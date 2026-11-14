@@ -19,6 +19,7 @@ final class ImageValidator {
         ListingInput.require(bytes.length > 0 && bytes.length <= ListingMedia.MAX_BYTES);
         String type = signature(bytes);
         ListingInput.require(type.equals(declaredType));
+        if (type.equals("image/webp")) return LosslessWebp.validate(bytes);
         rejectAnimation(bytes, type);
         int orientation = type.equals("image/jpeg") ? jpegOrientation(bytes) : 1;
         try (var input = new MemoryCacheImageInputStream(new ByteArrayInputStream(bytes))) {
@@ -28,7 +29,9 @@ final class ImageValidator {
             try {
                 reader.setInput(input, false, true);
                 int width = reader.getWidth(0), height = reader.getHeight(0);
-                ListingInput.require(width > 0 && height > 0 && (long) width * height <= 20_000_000 && reader.getNumImages(true) == 1);
+                ListingInput.require(width > 0 && height > 0 && width <= 16384 && height <= 16384 && reader.getNumImages(true) == 1);
+                if ((long) width * height * 16L + bytes.length * 3L > Runtime.getRuntime().maxMemory() / 4L)
+                    throw new in.opennest.common.RequestFailure(in.opennest.common.RequestFailure.Kind.UNAVAILABLE);
                 BufferedImage decoded = reader.read(0);
                 int outputWidth = orientation >= 5 ? height : width, outputHeight = orientation >= 5 ? width : height;
                 var clean = new BufferedImage(outputWidth, outputHeight, decoded.getColorModel().hasAlpha() ? BufferedImage.TYPE_INT_ARGB : BufferedImage.TYPE_INT_RGB);

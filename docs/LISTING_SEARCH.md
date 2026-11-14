@@ -1,6 +1,6 @@
 # OpenNest listing search plan
 
-Status: backend search is implemented in Phase 3; verification is recorded in [LISTINGS_HANDOFF.md](LISTINGS_HANDOFF.md). Browser controls remain Phase 5 work. Pagination, sorting, and filters will be implemented together, with the same search semantics in the public portal and recruiter sandbox on their separate backends. Sandbox responses will bypass shared/public caches.
+Status: backend search is implemented in Phase 3; verification is recorded in [LISTINGS_HANDOFF.md](LISTINGS_HANDOFF.md). Phase 5 adds browser controls; setup and verification are recorded in PHASE5_HANDOFF.md. Pagination, sorting, and filters are implemented together, with the same search semantics in the public portal and recruiter sandbox on their separate backends. Sandbox responses will bypass shared/public caches.
 
 ## Request and filters
 
@@ -46,7 +46,7 @@ Return/display owner-set capacity: maxOccupants for ENTIRE_FLAT, maxSharingPerRo
 
 Items and count queries must use identical filters and visibility rules. Obtain the page and totals from a consistent database snapshot for that request. Paginate distinct property IDs before hydrating image collections; joins must not duplicate cards or inflate counts. Use projections/batched relations to avoid a query per card. Inspect query plans for nationwide and city-filtered cases before tuning indexes.
 
-Image reservations and pending uploads must never appear as validated listing photos. Public cards use only VALIDATED image records. Exact stored coordinates may support geo queries internally. Public search and listing-detail responses omit owner phone, private address, and precise coordinates. A public map location may expose only a coarsened representation under an explicitly documented precision/coarsening policy; until that policy is defined, omit coordinates. Selecting that policy remains an open response-design decision in PROJECT_PLAN.md.
+Image reservations and pending uploads must never appear as validated listing photos. Public cards use only VALIDATED image records. Exact stored coordinates may support geo queries internally. Public search and listing-detail responses omit owner phone, private address, and precise coordinates. Phase 5 adds publicLocation with latitude, longitude and radiusMeters=2000. Derive each coordinate using decimal floor(value/0.02)*0.02+0.01, a stable cell center at roughly 2 km resolution. Cells at coarse input-bound edges can have centers slightly beyond those bounds. Public precise distances remain absent. Show an approximate area, never a building location. This reduces direct precision but does not prevent inference through repeated geo queries. No schema migration is needed.
 
 Offset pagination is the initial design because numbered pages and exact totals are useful at launch. It does not freeze results between requests: new listings and rent, inventory, or rating changes may move items across pages. Do not promise snapshot-stable browsing under concurrent writes. Evaluate cursor pagination when observed traffic or deep browsing requires it, retaining bounded queries throughout.
 
@@ -93,4 +93,4 @@ Individual rooms in flats nationwide, at least one vacancy and up to INR 10000 p
 - Verify invalid and incompatible inputs return 400, while valid contradictory filters return an empty result. Record query plans for representative nationwide and multi-filter searches.
 - End-to-end checks cover URL sharing, Back/Forward, filter/sort/size page reset, empty results, stale requests, and mobile/keyboard search controls.
 
-Phase 3 response policy: all listing responses use no-store and no shared cache is implemented. Public coordinates and precise distances are omitted. Only the authenticated owner receives private address/coordinates/version on owner detail and collection routes.
+Phase 3 response policy: all listing responses use no-store and no shared cache is implemented. Exact public coordinates and precise distances are omitted; Phase 5 adds only the approved approximate publicLocation projection. Only the authenticated owner receives private address/coordinates/version on owner detail and collection routes.

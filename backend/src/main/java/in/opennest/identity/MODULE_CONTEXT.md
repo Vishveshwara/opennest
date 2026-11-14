@@ -24,3 +24,6 @@
 - Sandbox profile/session reads coordinate through SandboxBoundary; schema/application failures retain safe error classification. Phase 4 does not add any PRIMARY login alternative.
 
 - PersonaSessions requires the caller to hold the shared reset lock while reading generation and installing the session; SandboxController is the sole caller and owns that lock.
+- OPENNEST_DEV_LAN_ORIGINS is an explicit DEVELOPMENT/PRIMARY CORS opt-in for at most eight exact HTTP RFC1918 IPv4 origins. Production/sandbox reject it even with authentication disabled. Existing primary origin, host-only/Lax cookies, CSRF, realm and datastore isolation stay enforced.
+
+- Named signup: correct OTP returns anonymous NAME_REQUIRED for new identities; same-session completion with normalized fullName 1..120 creates/authenticates atomically. Existing identities retain names. Three 30s fresh resends rotate salt/HMAC without resetting attempts/expiry; generation-fenced CODE_READY retries reuse the prepared code. Plain /start resumes the bound flow or gives browser guidance.

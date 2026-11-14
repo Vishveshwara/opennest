@@ -58,8 +58,10 @@ class TelegramContactController {
         if (principal != null && !id.toString().equals(request.getSession(false).getAttribute("OPENNEST_TELEGRAM_RETRY_ID")))
             throw new RequestFailure(RequestFailure.Kind.CONFLICT);
         String session = session(request, id);
-        var body = body(request, 8192); fields(body, Set.of("code"));
-        UUID user = contacts.complete(id, session, string(body, "code"));
+        var body = body(request, 8192); fields(body, Set.of("code", "fullName"));
+        var completed = contacts.complete(id, session, string(body, "code"), body.has("fullName") ? string(body, "fullName") : null);
+        if (completed.isEmpty()) return response(Map.of("status", "NAME_REQUIRED"));
+        UUID user = completed.orElseThrow();
         if (principal != null) {
             if (!user.equals(principal.userId())) throw new RequestFailure(RequestFailure.Kind.FORBIDDEN);
             return response(Map.of("status", "AUTHENTICATED"));
@@ -80,6 +82,13 @@ class TelegramContactController {
             throw failure;
         }
         return response(Map.of("status", "AUTHENTICATED"));
+    }
+    @PostMapping("/api/v1/auth/telegram/challenges/{id}/resend")
+    ResponseEntity<Map<String, Object>> resend(@PathVariable UUID id, @AuthenticationPrincipal SessionPrincipal principal,
+            HttpServletRequest request) throws IOException {
+        if (principal != null) throw new RequestFailure(RequestFailure.Kind.CONFLICT);
+        fields(body(request, 8192), Set.of());
+        return response(contacts.resend(id, session(request, id)));
     }
     @PostMapping("/api/v1/webhooks/telegram")
     ResponseEntity<Void> webhook(HttpServletRequest request) throws IOException {

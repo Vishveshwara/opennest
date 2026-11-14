@@ -10,7 +10,7 @@
 
 # OpenNest database schema contract
 
-Status: Phase 1.4 design implemented by Phase 1.5's V1 schema/V2 indexes and Phase 1.6's module-owned mappings/Hibernate validation, verified on isolated PostgreSQL 17/PostGIS 3.5 targets on 22 October 2026. See [migration execution](BACKEND_MIGRATIONS.md) and [persistence evidence](BACKEND_PERSISTENCE.md). Phase 3 adds V3 media metadata/listing services, and Phase 3A adds V4 current contact provenance plus V5 expiring login receipts, described below. Phase 4 adds V7 sandbox reset metadata and implements interaction APIs. Current totals are nine application tables/92 columns with six ORM mappings/76 columns. Hosted databases are not migrated; update triggers remain unimplemented.
+Status: Phase 1.4 design implemented by Phase 1.5's V1 schema/V2 indexes and Phase 1.6's module-owned mappings/Hibernate validation, verified on isolated PostgreSQL 17/PostGIS 3.5 targets on 22 October 2026. See [migration execution](BACKEND_MIGRATIONS.md) and [persistence evidence](BACKEND_PERSISTENCE.md). Phase 3 adds V3 media metadata/listing services, and Phase 3A adds V4 current contact provenance plus V5 expiring login receipts, described below. Phase 4 adds V7 sandbox reset metadata and implements interaction APIs. Current totals are nine application tables/92 columns with six ORM mappings/76 columns. V8 expands image metadata constraints without new tables or columns. Hosted databases are not migrated; update triggers remain unimplemented.
 
 The [listing model](LISTING_MODEL.md), [search contract](LISTING_SEARCH.md), and [authentication decisions](AUTHENTICATION.md) remain authoritative for feature behavior. Production and sandbox use identical migrations in separate databases. No row-level sandbox flag or request-selected database is introduced.
 
@@ -267,13 +267,13 @@ V3 adds six nullable columns to `property_images`; the six entity mappings now c
 | Column | Type | Service and database rules |
 | --- | --- | --- |
 | `declared_content_type` | text | Both declared fields absent for legacy rows or both present; JPEG, PNG, WebP only |
-| `declared_byte_size` | bigint | 1 through 5,242,880 bytes when present |
-| `content_type` | text | All four final metadata fields absent or all present on VALIDATED rows; JPEG or PNG |
-| `byte_size` | bigint | 1 through 5,242,880 bytes when present |
-| `width` | integer | Positive; width times height at most 20,000,000 |
-| `height` | integer | Positive; product uses bigint arithmetic |
+| `declared_byte_size` | bigint | V8: 1 through 2,147,483,639 encoded bytes when present |
+| `content_type` | text | All four final metadata fields absent or all present on VALIDATED rows; JPEG, PNG or WebP |
+| `byte_size` | bigint | V8: 1 through 2,147,483,639 encoded bytes when present |
+| `width` | integer | Positive; WebP at most 16,384 per side; no 20 MP product check in V8 |
+| `height` | integer | Positive; same WebP side bound |
 
-Constraints are `ck_property_images_declared_metadata` and `ck_property_images_validated_metadata`. Explicit `num_nonnulls` checks reject partial groups rather than allowing SQL NULL to bypass validation. No table, deletion cascade, or extra index is added. Service reservations/finalization, quotas, cleanup and response rules are in [LISTINGS_HANDOFF.md](LISTINGS_HANDOFF.md).
+V8 replaces `ck_property_images_declared_metadata` and `ck_property_images_validated_metadata`, preserving legacy null groups and JPEG/PNG rows. V1-V7 remain unchanged. The encoded-byte bound follows the Java byte-array transport; browser source-only 40 MB validation is independent and cannot be inferred from converted bytes. Explicit `num_nonnulls` checks reject partial groups rather than allowing SQL NULL to bypass validation. No table, deletion cascade, or extra index is added. Service reservations/finalization, quotas, cleanup and response rules are in [LISTINGS_HANDOFF.md](LISTINGS_HANDOFF.md).
 
 ## Phase 3A V4 contact receipt
 

@@ -61,7 +61,9 @@ class IdentitySecurityConfiguration {
     }
     @Bean({"identityCors", "applicationCors"}) CorsConfigurationSource identityCors(Environment environment) {
         var cors = new CorsConfiguration();
-        cors.setAllowedOrigins(List.of(IdentitySettings.read(environment).selected(environment).frontendOrigin()));
+        cors.setAllowedOrigins(java.util.stream.Stream.concat(
+                java.util.stream.Stream.of(IdentitySettings.read(environment).selected(environment).frontendOrigin()),
+                IdentitySettings.developmentFrontendOrigins(environment).stream()).toList());
         cors.setAllowCredentials(true);
         cors.setAllowedMethods(List.of("GET", "POST", "PATCH", "OPTIONS"));
         cors.setAllowedHeaders(List.of("Content-Type", "X-CSRF-TOKEN"));
@@ -88,7 +90,7 @@ class IdentitySecurityConfiguration {
         http.authorizeHttpRequests(authorize -> authorize
                 .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                 .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/auth/csrf", "/api/v1/auth/telegram/challenges/*").permitAll()
-                .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/auth/telegram/challenges", "/api/v1/auth/telegram/challenges/*/complete").permitAll()
+                .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/auth/telegram/challenges", "/api/v1/auth/telegram/challenges/*/complete", "/api/v1/auth/telegram/challenges/*/resend").permitAll()
                 .requestMatchers(webhook).permitAll()
                 .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/sandbox/personas", "/api/v1/sandbox/images/*.png").permitAll()
                 .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/sandbox/personas/select").permitAll()

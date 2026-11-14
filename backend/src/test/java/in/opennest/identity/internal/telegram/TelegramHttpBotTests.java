@@ -18,6 +18,7 @@ import in.opennest.common.RequestFailure;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.mock.env.MockEnvironment;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -26,6 +27,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 class TelegramHttpBotTests {
+    @ParameterizedTest @EnumSource(TelegramBot.Hint.class)
+    void retryGuidanceReturnsTheUserToTheirBrowserWithoutIncludingCodes(TelegramBot.Hint hint) throws Exception {
+        try (var fixture = new BotFixture()) {
+            fixture.bot.hint(123456789L, hint);
+            var request = fixture.take();
+            assertThat(request.body().path("chat_id").asLong()).isEqualTo(123456789L);
+            assertThat(request.body().path("text").asString()).contains("browser").doesNotContain(CODE, TOKEN, PRIVATE_URL);
+            assertThat(request.body().path("reply_markup").path("remove_keyboard").asBoolean()).isTrue();
+        }
+    }
     private static final String TOKEN = "123456789:fabricated_primary_bot_token_canary";
     private static final String CODE = "004217";
     private static final String PRIVATE_URL = "https://private.invalid/fabricated-contact";
