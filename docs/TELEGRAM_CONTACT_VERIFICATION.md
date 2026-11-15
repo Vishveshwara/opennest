@@ -12,9 +12,9 @@ This establishes Telegram-account access associated with the shared contact. It 
 
 ## Limits and private state
 
-Challenges last five minutes from creation, allow five incorrect code attempts, and have one active challenge per initiating session. Restarts cancel the previous challenge with a 60-second cooldown. Starts are limited to five per rolling hour per session and expected contact; status polling is limited to once per two seconds.
+Challenges last five minutes from creation, allow five incorrect code attempts, and have one active challenge per initiating session. Restarts cancel the previous challenge with a 60-second cooldown. A CODE_SENT challenge permits three fresh-code resends, 30 seconds apart. Each rotates the salt/HMAC and invalidates the old code without extending expiry or resetting bad attempts. CODE_READY delivery retries reuse the prepared generation, even when the fresh-resend allowance is exhausted. Original-session/CSRF protections remain; private /start resumes the bound chat or gives browser guidance. Starts are limited to five per rolling hour per session and expected contact; status polling is limited to once per two seconds.
 
-Realm-prefixed Redis scripts atomically enforce binding, state, attempts/rates, update leases/deduplication, and polling offsets. No account or verified contact is persisted before OTP completion. PostgreSQL preserves identity/contact/receipt consistency and idempotent completion; expiry/rollback behavior is described in AUTHENTICATION.md.
+Realm-prefixed Redis scripts atomically enforce binding, state, attempts/rates, update leases/deduplication, and polling offsets. No new account or verified contact is persisted before OTP completion and a supplied signup name. Correct-OTP NAME_REQUIRED remains anonymous, with the original-session proof retained only until the same challenge expires. PostgreSQL preserves identity/contact/receipt consistency and idempotent completion; expiry/rollback behavior is described in AUTHENTICATION.md.
 
 Current contact provenance stays in one private V4 receipt per verified account. V5 login receipts are private and expire with the challenge, then are deleted hourly. No chat history, Telegram username, vCard, or plaintext OTP is retained. Future contact replacement/account erasure must remove dependent receipts with private account data.
 
@@ -24,7 +24,7 @@ Production uses HTTPS webhooks and an independent secret_token as documented by 
 
 Explicit development polling uses a separate bot/update stream, one leased Redis consumer, persisted acknowledged offsets, and getMe/getWebhookInfo validation. It refuses an existing webhook, never deletes it automatically, and cannot run in production. Recruiter authentication/contact actions stay disabled.
 
-The fixed-host HTTP client disables redirects and bounds connection, total response time, and body bytes. OpenNest permits one send per second per private chat and 25 per second in aggregate, honoring 429/retry_after. Ambiguous failures retry the same challenge code without approving a user.
+The fixed-host HTTP client disables redirects and bounds connection, total response time, and body bytes. OpenNest permits one send per second per private chat and 25 per second in aggregate, honoring 429/retry_after. Ambiguous delivery failures retry the same prepared code without approving a user. Delivery acknowledgement is fenced by the salt generation. Reopening an active deep link or plain /start on the bound chat resumes the flow; an unbound/cancelled link gives browser restart guidance. A verified OTP awaiting a name directs the user back to that browser.
 
 ## Cost and secrets
 

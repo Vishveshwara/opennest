@@ -1,6 +1,6 @@
 # Third-party notices
 
-OpenNest remains licensed under AGPL-3.0-only. The following notice applies to the 94-byte `small_1x1.webp` fixture embedded in `ImageValidatorTests`, copied from TwelveMonkeys tag `twelvemonkeys-3.15.0`. Dependency JARs retain their own packaged notices.
+OpenNest remains licensed under AGPL-3.0-only. The following notice applies to the historical 94-byte `small_1x1.webp` fixture previously embedded in `ImageValidatorTests`, copied from TwelveMonkeys tag `twelvemonkeys-3.15.0`. Dependency JARs retain their own packaged notices.
 
 Source: https://github.com/haraldk/TwelveMonkeys/blob/twelvemonkeys-3.15.0/imageio/imageio-webp/src/test/resources/webp/small_1x1.webp
 

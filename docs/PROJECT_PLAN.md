@@ -10,7 +10,7 @@
 
 # OpenNest implementation plan
 
-This plan defines OpenNest's proposed India-wide launch. Phase 0 provides documentation and local infrastructure. Phase 1 supplies the Java 25/Spring foundation, guarded stores, Flyway/Hibernate validation, safe errors, and real-store verification. Phase 2 supplies identity, Redis sessions, CSRF/logout, private profiles, and approved trust rules. The 10 November 2026 maintainer decision replaces the earlier provider with sole Telegram Bot API authentication in Phase 3A. Phase 3 implements listing services; Phases 4 and 5 cover interactions and the frontend. Phase 6 covers deployment and launch readiness after Phase 5. Phase 3 verification and remaining readiness gates are recorded in [LISTINGS_HANDOFF.md](LISTINGS_HANDOFF.md); Phase 4 implementation and checks are recorded in PHASE4_HANDOFF.md; frontend and hosted deployment remain outstanding. Work proceeds one phase per prompt and one reviewable PR per phase. The AI indexes summarize implemented behavior and proposals. [DEPLOYMENT_STACK.md](DEPLOYMENT_STACK.md) records hosting assumptions.
+This plan defines OpenNest's proposed India-wide launch. Phase 0 provides documentation and local infrastructure. Phase 1 supplies the Java 25/Spring foundation, guarded stores, Flyway/Hibernate validation, safe errors, and real-store verification. Phase 2 supplies identity, Redis sessions, CSRF/logout, private profiles, and approved trust rules. The 10 November 2026 maintainer decision replaces the earlier provider with sole Telegram Bot API authentication in Phase 3A. Phase 3 implements listing services; Phases 4 and 5 cover interactions and the frontend. Phase 6 covers deployment and launch readiness after Phase 5. Phase 3 verification and remaining readiness gates are recorded in [LISTINGS_HANDOFF.md](LISTINGS_HANDOFF.md); Phase 4 implementation and checks are recorded in PHASE4_HANDOFF.md; Phase 5 frontend implementation and local checks are recorded in PHASE5_HANDOFF.md; hosted deployment remains outstanding. Work proceeds one phase per prompt and one reviewable PR per phase. The AI indexes summarize implemented behavior and proposals. [DEPLOYMENT_STACK.md](DEPLOYMENT_STACK.md) records hosting assumptions.
 
 ## Confirmed product direction
 
@@ -29,7 +29,7 @@ This plan defines OpenNest's proposed India-wide launch. Phase 0 provides docume
 - License: GNU Affero General Public License version 3 only (`AGPL-3.0-only`), included in the root LICENSE file.
 - `/recruiter-sandbox` will use fabricated listings across multiple Indian cities in a separate database. No public navigation link to it. Trusted sandbox seeding may create demo fixtures without real phone verification; callable contact actions stay disabled and production has no such bypass.
 - Reports and poor reviews produce warnings, never automatic listing suspension or deletion.
-- R2 presigned PUT uploads; client WebP compression targets <150 KB. Server-side metadata/content validation is still required.
+- R2 presigned PUT uploads; client-side lossless WebP without resizing or an output-size target, by maintainer decision on 12 November 2026. Source JPEG/PNG/WebP files may be up to 40,000,000 bytes; larger encoded output is allowed. Server-side metadata/content validation remains required.
 - FLAT images require ROOM, HALL, BATHROOM, KITCHEN; PG_HOSTEL requires ROOM and BATHROOM.
 - Preserve the TweakCN theme at `https://tweakcn.com/r/themes/cmv1h5ahl000104kwff88a0p8` when initializing the frontend.
 
@@ -116,7 +116,7 @@ Phase 3 implementation is described in [the listing handoff](LISTINGS_HANDOFF.md
 
 The clean local Java 25/Linux amd64 Docker gate passed 450 tests after review corrections on 9 November 2026, with no failures/errors/skips. Report/artifact checks, six Python checks, context limits and whitespace checks passed. Current-change CI, live R2/CORS, and manual real-provider login/logout remain unverified.
 
-The agreed limits are 20 retained listings per owner, 12 images per listing, 60 image reservations per owner per rolling 24 hours, 5 MiB/20 MP images, ten-minute upload URLs, and five-minute private read URLs. Cleanup runs hourly with a 24-hour object grace period and seven-day rejected-reservation retention. No draft is automatically deleted. Text/price edits, image replacement/removal, listing deletion, phone verification, frontend work, interactions, and recruiter personas remain outside Phase 3.
+The current agreed limits are 20 retained listings per owner, 20 images per listing, 60 image reservations per owner per rolling 24 hours, ten-minute upload URLs, and five-minute private read URLs. The 12 November 2026 media follow-up replaces 5 MiB/20 MP with a browser source-only 40,000,000-byte cap and on-device lossless WebP. No resizing or output-size target applies; format dimensions, transport bounds and dynamic backend capacity admission remain. Cleanup runs hourly with a 24-hour object grace period and seven-day rejected-reservation retention. No draft is automatically deleted. Text/price edits, image replacement/removal, listing deletion, phone verification, frontend work, interactions, and recruiter personas remain outside Phase 3.
 
 ### Phase 3A Telegram-only authentication
 
@@ -144,6 +144,25 @@ Phase 4 is implemented locally. Final validated reports contain 596 passing Java
 | 4.6 | Allowlisted personas, CSRF/session rotation and realm/store/generation separation |
 | 4.7 | Operator CLI reset/telemetry, atomic six-hour resets and stale-session rejection |
 | 4.8 | Validation/concurrency/HTTP/isolation tests, contexts, Postman examples and handoff |
+
+### Phase 5 task boundaries
+
+Phase 5 implements the local frontend and the approved additive public map projection. See [frontend handoff](PHASE5_HANDOFF.md) and [dependency selection](FRONTEND_DEPENDENCIES.md). Hosting remains Phase 6; no merge or deployment is authorized.
+
+| Task | Deliverable |
+| --- | --- |
+| 5.1 | Verify/pin Next.js 16.4.6, React 19.3.1, Node 24 and compatible tooling; initialize frontend |
+| 5.2 | Original TweakCN theme, responsive application shell and accessible components |
+| 5.3 | Typed API boundaries, backend sessions/CSRF, no-store and private-state cleanup |
+| 5.4 | Nationwide URL-backed filters, sorting, pagination and navigation |
+| 5.5 | Approximate publicLocation, MapLibre/MapTiler, private owner coordinate input |
+| 5.6 | Original-browser Telegram self-contact/OTP, account and logout |
+| 5.7 | Owner drafts, direct compressed uploads, validation, publication/pause and versioned inventory |
+| 5.8 | Authorized reveal, ordinary reviews and brokerage allegations |
+| 5.9 | Dedicated unlisted recruiter frontend, personas and disabled callable contacts |
+| 5.10 | Frontend CI, controlled-provider real-store browser harness, documentation and evidence |
+
+The projection uses decimal floor(coordinate/0.02)*0.02+0.01 and radiusMeters=2000. Exact coordinates remain owner-only. Maps show the current page and do not introduce an all-listings endpoint, geocoder, Overpass or shared cache. MapTiler requires the maintainer's restricted browser key and separate live-provider verification. Retention/erasure and appeal policies remain prerequisites before collecting real public interactions.
 
 ### Phase 6 task boundaries
 
@@ -188,7 +207,7 @@ Any earlier public preview must satisfy the applicable provider, routing, edge r
 - Phase 3A implements approved Telegram self-contact plus original-session OTP contact evidence. An arbitrary Telegram-chat OTP never verifies a typed phone. Local bot setup and maintainer-reported OTP/profile verification passed. Privacy/erasure operations, live repeated-login/failure/logout and production HTTPS/webhook readiness remain deployment gates. WhatsApp and paid Gateway/SMS alternatives remain unselected; owners without Telegram need a separately approved option. See TELEGRAM_HANDOFF.md.
 - Trust precedence is approved and implemented in Phase 2. Phase 3 listing responses must reuse it; Phase 4 review/report writers maintain aggregates transactionally.
 - Decide a manual moderation/appeal policy and retention/deletion requirements before collecting real personal data.
-- Decide a documented public map coarsening/precision policy before Phase 3 response DTOs; until then omit coordinates. Public search/detail responses must never expose precise coordinates, private address, or owner phone. Geo queries may use exact stored coordinates internally.
+- Phase 5 approval selects stable 0.02-degree grid-cell centers and radiusMeters=2000 for publicLocation. Public search/detail never expose precise coordinates, private address, owner phone or precise distances. MapLibre uses maintainer-configured MapTiler; no provisioning is authorized. Geo queries retain exact internal coordinates, so coarsening does not guarantee anonymity.
 - Phase 3 draft/upload limits and cleanup are selected and implemented in LISTINGS_HANDOFF.md. Text/price/image edit and deletion routes still require explicit contracts before exposure; the 20-retained-listing cap does not delete old drafts. The proposed rental-mode field and inventory constraints are defined in [LISTING_MODEL.md](LISTING_MODEL.md).
 
 Telegram is already the approved sole provider and local OTP/profile behavior is confirmed. Keep the remaining hosted/privacy/operations decisions explicit; do not enable an alternative provider or declare a public launch ready from local evidence. Trust thresholds remain approved.
@@ -206,3 +225,6 @@ Telegram is already the approved sole provider and local OTP/profile behavior is
 
 
 <!-- /coderabbit-ai-generated:v1 -->
+The 14 November 2026 frontend follow-up adds explicit DEVELOPMENT/PRIMARY LAN access for configured private IPv4 origins. Next development proxies existing /api/v1/... calls to the fixed loopback backend; browser session/CSRF/no-store behavior is verified independently from hosted readiness. Production/sandbox reject the LAN opt-in. Setup and evidence: [Phase 5 handoff](PHASE5_HANDOFF.md).
+
+The 14 November 2026 Telegram follow-up uses one phone-first flow with automatic existing Telegram-account sign-in after OTP and a required new-user name before account creation. Original-session resends allow three fresh generations with 30-second cooldowns; prepared-delivery retries reuse the current generation. Plain /start/reopened links resume the active bound flow or explain browser recovery. Original-session/CSRF/contact proof, fixed challenge expiry, five bad attempts, transactional identity and no phone-based linking remain required. Details: TELEGRAM_HANDOFF.md.

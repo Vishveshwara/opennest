@@ -43,11 +43,11 @@ Telegram-only login now establishes approved +91 contact evidence through privat
 | Limit | Value |
 | --- | --- |
 | Retained listings per owner, all statuses | 20 |
-| Validated or unexpired PENDING images per listing | 12 |
+| Validated or unexpired PENDING images per listing | 20 |
 | Image reservations per owner, rolling 24 hours | 60 |
-| Upload bytes | 1 through 5 MiB |
-| Image types | JPEG, PNG, WebP; actual signature and decoding must agree |
-| Decoded pixels | At most 20 million; animation rejected |
+| Browser source bytes | 1 through 40,000,000; converted output may be larger |
+| Browser source types / current upload | JPEG, PNG, WebP / lossless WebP |
+| Dimensions and capacity | No 20 MP cap; browser WebP encoder supports sides through 16,383; device and backend heap admission apply; animation rejected |
 | Upload URL lifetime | 10 minutes |
 | Image read URL lifetime | 5 minutes |
 | Title / description | 160 / 5,000 characters |
@@ -70,21 +70,23 @@ Set `OPENNEST_STORAGE_ENABLED=true` only after configuring private buckets and c
 
 Bucket names must be disjoint across deployments, including crossed staging/final names. Primary and sandbox credentials must differ when both are supplied. Production rejects sandbox storage credentials even when storage is disabled. Clients use the fixed HTTPS R2 S3 endpoint derived from the selected account; no user-supplied endpoint or object key is accepted.
 
-The browser performs the PUT directly. Apply the returned signed headers; the browser supplies Content-Length from the exact upload body. Configure bucket CORS for the exact frontend origin, PUT/GET/HEAD as needed, Content-Type and If-None-Match, and ETag exposure. CORS, scoped bucket credentials, and bucket lifecycle rules still require provider configuration and a live smoke test before exposure.
+The browser performs the PUT directly with a nine-minute transport timeout inside the ten-minute reservation lifetime. Apply the returned signed headers; the browser supplies Content-Length from the exact upload body. Configure bucket CORS for the exact frontend origin, PUT/GET/HEAD as needed, Content-Type and If-None-Match, and ETag exposure. CORS, scoped bucket credentials, and bucket lifecycle rules still require provider configuration and a live smoke test before exposure.
 
-Completion checks the actual size, conditionally reads the staging object's ETag, decodes bounded bytes, rejects animation, and re-encodes fresh pixels without source metadata. Output is JPEG for opaque images and PNG for alpha images. JPEG EXIF orientation, including mirrors and rotations, is applied to the pixels with the resulting dimensions before metadata is discarded. It writes a unique final object using If-None-Match, then rechecks ownership, state, and expiry under database locks before attaching it. Validated completion retries return the existing image metadata with fresh read URLs. A later staging write cannot affect the final object.
+The browser uses a dedicated @jsquash/webp WASM worker to encode browser-decoded 8-bit canvas pixels as lossless WebP. It applies source orientation without resizing or a target output size. Lossless output may exceed the original JPEG; previously discarded JPEG detail cannot be recovered. Browser color conversion still applies. The 40 MB source-only check is client-side because the backend receives converted bytes.
 
-Two processing permits and two decoder threads bound concurrent work. Storage calls have 20-second overall and 10-second attempt timeouts. Staging HEAD, GET, and actual body consumption share the 20-second total budget; expiry aborts the response stream even when bytes keep arriving. Decoding has a 20-second deadline; final attachment also checks an overall two-minute deadline. Decoder threads remain bounded even if a decoder ignores interruption. Upload/download URLs, bytes, addresses, and account/contact data are excluded from logs and DTO diagnostic strings.
+Completion checks the actual encoded size, conditionally reads the staging object's ETag, validates the RIFF/chunk structure and one VP8L decode, and strips container metadata while preserving the lossless payload. Lossy WebP, EXIF-bearing WebP and animation are rejected. Existing saved images stay readable. Legacy API JPEG/PNG inputs retain fresh-pixel sanitization and JPEG EXIF orientation handling; current UI uploads use WebP. It writes a unique final object using If-None-Match, then rechecks ownership, state, and expiry under database locks before attaching it. Validated completion retries return the existing image metadata with fresh read URLs. A later staging write cannot affect the final object.
+
+One processing permit and one decoder thread bound concurrent work. Encoded transport is bounded by the Java byte-array limit, 2,147,483,639 bytes, rather than the source-file policy. Before download, declared encoded bytes times four must fit one quarter of maximum JVM heap. Before WebP decode, eight bytes per pixel plus three encoded buffers must fit that budget; insufficient capacity returns retryable 503. This avoids a fixed megapixel cap but still requires suitable server memory. Storage calls have 120-second overall and 60-second attempt timeouts. Staging HEAD, GET, and actual body consumption share the 120-second total budget; expiry aborts the response stream even when bytes keep arriving. Decoding has a 60-second deadline; final attachment also checks an overall five-minute deadline. Decoder threads remain bounded even if a decoder ignores interruption. Upload/download URLs, bytes, addresses, and account/contact data are excluded from logs and DTO diagnostic strings.
 
 Hourly cleanup deletes staging objects and unattached final objects older than 24 hours. It marks PENDING reservations rejected after expiry plus 24 hours and deletes rejected reservation rows after seven days. Attached final objects and retained drafts remain. The completion deadline prevents old in-flight work from attaching objects eligible for orphan cleanup. Failed or duplicate finalization can leave temporary private objects until cleanup. Only dedicated selected buckets and server-generated `listings/` keys are scanned.
 
 Both buckets remain private. Public reads issue five-minute signed GET URLs only for validated images on visible listings. Pausing prevents new public URLs; an issued URL can remain usable until expiry. No public bucket, CDN, cache purge integration, or media hostname is provisioned.
 
-AWS SDK v2 `2.57.11` and TwelveMonkeys WebP decoder `3.15.3` were resolved from Maven Central and compiled under Java 25. The adapter follows [Cloudflare's Java SDK guidance](https://developers.cloudflare.com/r2/examples/aws/aws-sdk-java/), including disabled chunked encoding. The tiny positive WebP test fixture is from [TwelveMonkeys small_1x1.webp at tag 3.15.0](https://github.com/haraldk/TwelveMonkeys/blob/twelvemonkeys-3.15.0/imageio/imageio-webp/src/test/resources/webp/small_1x1.webp); its BSD notice is preserved in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+AWS SDK v2 `2.57.11` and TwelveMonkeys WebP decoder `3.15.3` were resolved from Maven Central and compiled under Java 25. The adapter follows [Cloudflare's Java SDK guidance](https://developers.cloudflare.com/r2/examples/aws/aws-sdk-java/), including disabled chunked encoding. The current 2x2 RGB/RGBA lossless fixtures were generated with the pinned jSquash encoder and verify exact pixels and retained VP8L bytes. The historical TwelveMonkeys fixture notice remains in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md); browser codec licenses are included in the generated frontend notices.
 
 ## Migration, verification, and remaining gates
 
-V3 adds the public owner projection and six nullable image metadata columns with shape/size constraints. Nullable metadata preserves pre-service V2 rows. New reservations and completions always populate metadata. V1/V2 contents remain unchanged; Flyway and Hibernate validation remain mandatory. Tests cover both clean migration and a populated V2 upgrade.
+V3 adds the public owner projection and six nullable image metadata columns with shape/size constraints. Nullable metadata preserves pre-service V2 rows. New reservations and completions always populate metadata. V8 replaces the old 5 MiB/20 MP constraints, allows WebP final metadata, and preserves legacy null groups and saved rows. V1-V7 contents remain unchanged; Flyway and Hibernate validation remain mandatory. Tests cover both clean migration and a populated V2 upgrade.
 
 Run from the repository root using Java 25 and Linux amd64 Docker:
 
