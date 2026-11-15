@@ -60,7 +60,8 @@ public record IdentitySettings(boolean telegramEnabled, Origins primary, Origins
             return Arrays.stream(origins).map(String::strip).peek(value -> {
                 var uri = URI.create(value);
                 require("http".equals(uri.getScheme()) && uri.getHost() != null && uri.getRawUserInfo() == null
-                        && value.equals("http://" + uri.getRawAuthority()) && uri.getPort() != 0 && uri.getPort() <= 65535);
+                        && value.equals("http://" + uri.getHost() + (uri.getPort() == -1 ? "" : ":" + uri.getPort()))
+                        && uri.getPort() != 0 && uri.getPort() != 80 && uri.getPort() <= 65535);
                 String[] octets = uri.getHost().split("\\.", -1);
                 require(octets.length == 4);
                 int[] address = Arrays.stream(octets).mapToInt(part -> {

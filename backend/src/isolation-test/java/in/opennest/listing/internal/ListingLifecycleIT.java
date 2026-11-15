@@ -147,6 +147,24 @@ class ListingLifecycleIT {
         jdbc(0).update("update property_images set created_at = current_timestamp - interval '2 hours', upload_expires_at = current_timestamp - interval '1 hour' where id = ?", pending);
         assertThatThrownBy(() -> media().complete(id, owner, node(json.writeValueAsString(Map.of("imageId", pending))))).isInstanceOf(RequestFailure.class);
     }
+    @Test void rejectsUploadsAboveTheHeapBudgetBeforeReservationAndBeforeStorageRead() throws Exception {
+        UUID owner = owner(0, false);
+        UUID id = (UUID) as(owner, () -> service().create(draft("PG_HOSTEL", "Pune", 7000))).get("id");
+        long tooLarge = Runtime.getRuntime().maxMemory() / 16L + 1;
+        assertThat(tooLarge).isLessThanOrEqualTo(ListingMedia.MAX_BYTES);
+        var storage = apps.getFirst().getBean(ControlledStorage.class);
+        int uploads = storage.uploads.get(), reads = storage.reads.get();
+        assertThatThrownBy(() -> media().presign(id, owner, node(json.writeValueAsString(Map.of("segment", "ROOM", "contentType", "image/webp", "byteSize", tooLarge)))))
+                .isInstanceOfSatisfying(RequestFailure.class, failure -> assertThat(failure.kind()).isEqualTo(RequestFailure.Kind.UNAVAILABLE));
+        assertThat(storage.uploads.get()).isEqualTo(uploads);
+        assertThat(jdbc(0).queryForObject("select count(*) from property_images where property_id = ?", Long.class, id)).isZero();
+        var reservation = media().presign(id, owner, node("{\"segment\":\"ROOM\",\"contentType\":\"image/webp\",\"byteSize\":100}"));
+        jdbc(0).update("update property_images set declared_byte_size = ? where id = ?", tooLarge, reservation.get("imageId"));
+        assertThatThrownBy(() -> media().complete(id, owner, node(json.writeValueAsString(Map.of("imageId", reservation.get("imageId"))))))
+                .isInstanceOfSatisfying(RequestFailure.class, failure -> assertThat(failure.kind()).isEqualTo(RequestFailure.Kind.UNAVAILABLE));
+        assertThat(storage.reads.get()).isEqualTo(reads);
+        assertThat(jdbc(0).queryForObject("select validation_state from property_images where id = ?", String.class, reservation.get("imageId"))).isEqualTo("PENDING");
+    }
     @Test void allSortsFiltersGeoAndPaginationRunAgainstPostgisWithoutDuplicateCards() throws Exception {
         var ids = new ArrayList<UUID>();
         var modes = List.of("ENTIRE_FLAT", "ROOM", "PG_HOSTEL", "ROOM");
@@ -469,11 +487,12 @@ class ListingLifecycleIT {
     }
     static class ControlledStorage implements StorageObjects {
         final Map<String, byte[]> staging = new ConcurrentHashMap<>(), finals = new ConcurrentHashMap<>();
+        final java.util.concurrent.atomic.AtomicInteger uploads = new java.util.concurrent.atomic.AtomicInteger(), reads = new java.util.concurrent.atomic.AtomicInteger();
         private Instant modified = Instant.now();
         public boolean enabled() { return true; }
-        public Upload upload(String key, String type, long size) { return new Upload("https://storage.example.invalid/" + key, Map.of("Content-Type", type)); }
+        public Upload upload(String key, String type, long size) { uploads.incrementAndGet(); return new Upload("https://storage.example.invalid/" + key, Map.of("Content-Type", type)); }
         void stage(String key, byte[] bytes) { staging.put(key, bytes); }
-        public byte[] read(String key, long size) { var bytes = staging.get(key); ListingInput.require(bytes != null && bytes.length == size); return bytes; }
+        public byte[] read(String key, long size) { reads.incrementAndGet(); var bytes = staging.get(key); ListingInput.require(bytes != null && bytes.length == size); return bytes; }
         public void writeFinal(String key, byte[] bytes, String type) { if (finals.putIfAbsent(key, bytes) != null) throw new IllegalStateException(); }
         public String download(String key) { return "https://media.example.invalid/" + key; }
         public void delete(Bucket bucket, String key) { (bucket == Bucket.STAGING ? staging : finals).remove(key); }

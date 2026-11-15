@@ -35,7 +35,7 @@ class IdentitySettingsTests {
     }
 
     @ParameterizedTest @ValueSource(strings = {
-            "http://8.8.8.8:3000", "http://172.32.0.1:3000", "http://192.168.1.9:3000/", "http://192.168.1.9:3000/path",
+            "http://8.8.8.8:3000", "http://10.0.0.2:80", "http://10.0.0.2:03000", "http://172.32.0.1:3000", "http://192.168.1.9:3000/", "http://192.168.1.9:3000/path",
             "http://192.168.1.9:3000?query", "http://user@192.168.1.9:3000", "http://192.168.1.9:0", "http://192.168.1.9:3000,", "*"
     })
     void rejectsUnsafeDevelopmentLanOrigins(String origin) {

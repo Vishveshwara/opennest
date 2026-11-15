@@ -362,7 +362,13 @@ export function Login() {
 }
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
-  const { account, ready, config } = useSession();
+  const { account, ready, status, config } = useSession();
+  if (status === "unavailable")
+    return (
+      <p role="status">
+        Your session could not be checked. Retry the session check to continue.
+      </p>
+    );
   if (!ready) return <p role="status">Checking your session…</p>;
   if (!account)
     return (

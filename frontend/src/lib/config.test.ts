@@ -20,6 +20,8 @@ it("uses same-origin browser requests with a fixed loopback server API for LAN d
 
 it.each([
   "http://8.8.8.8:3000",
+  "http://10.0.0.2:80",
+  "http://10.0.0.2:03000",
   "http://192.168.1.9:3000/other",
   "http://192.168.1.9:3000/",
   "http://192.168.1.9:3000,",

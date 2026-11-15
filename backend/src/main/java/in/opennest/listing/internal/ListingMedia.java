@@ -35,6 +35,7 @@ class ListingMedia implements AutoCloseable {
         String type = ListingInput.text(body, "contentType", 32);
         ListingInput.require(Set.of("image/jpeg", "image/png", "image/webp").contains(type));
         int size = ListingInput.integer(body, "byteSize", 1, MAX_BYTES);
+        requireUploadCapacity(size);
         return store.write(() -> {
             accounts.lockForListingMutation(owner); store.owned(property, owner, true);
             long count = store.jdbc().queryForObject("select count(*) from property_images where property_id = ? and (validation_state = 'VALIDATED' or (validation_state = 'PENDING' and upload_expires_at > current_timestamp))", Long.class, property);
@@ -61,7 +62,7 @@ class ListingMedia implements AutoCloseable {
         String key = "listings/" + property + "/" + id + "/" + UUID.randomUUID();
         try {
             long declaredBytes = ((Number) row.get("declared_byte_size")).longValue();
-            if (declaredBytes * 4L > Runtime.getRuntime().maxMemory() / 4L) throw new RequestFailure(RequestFailure.Kind.UNAVAILABLE);
+            requireUploadCapacity(declaredBytes);
             var bytes = storage.read((String) row.get("upload_object_key"), ((Number) row.get("declared_byte_size")).longValue());
             var validated = decode(bytes, (String) row.get("declared_content_type"));
             storage.writeFinal(key, validated.bytes(), validated.type());
@@ -82,6 +83,9 @@ class ListingMedia implements AutoCloseable {
             });
             throw failure;
         } finally { processors.release(); }
+    }
+    private static void requireUploadCapacity(long bytes) {
+        if (bytes * 4L > Runtime.getRuntime().maxMemory() / 4L) throw new RequestFailure(RequestFailure.Kind.UNAVAILABLE);
     }
     private Map<String, Object> image(UUID property, UUID id, boolean lock) {
         var rows = store.jdbc().queryForList("select * from property_images where id = ? and property_id = ?" + (lock ? " for update" : ""), id, property);

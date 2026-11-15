@@ -5,7 +5,7 @@ ALTER TABLE public.property_images
         num_nonnulls(declared_content_type, declared_byte_size) = 0 OR
         (num_nonnulls(declared_content_type, declared_byte_size) = 2
          AND declared_content_type IN ('image/jpeg', 'image/png', 'image/webp')
-         AND declared_byte_size BETWEEN 1 AND 2147483639)),
+         AND declared_byte_size BETWEEN 1 AND 2147483639)) NOT VALID,
     ADD CONSTRAINT ck_property_images_validated_metadata CHECK (
         num_nonnulls(content_type, byte_size, width, height) = 0 OR
         (num_nonnulls(content_type, byte_size, width, height) = 4
@@ -13,4 +13,8 @@ ALTER TABLE public.property_images
          AND content_type IN ('image/jpeg', 'image/png', 'image/webp')
          AND byte_size BETWEEN 1 AND 2147483639
          AND width > 0 AND height > 0
-         AND (content_type <> 'image/webp' OR (width <= 16384 AND height <= 16384))));
+         AND (content_type <> 'image/webp' OR (width <= 16384 AND height <= 16384)))) NOT VALID;
+
+ALTER TABLE public.property_images VALIDATE CONSTRAINT ck_property_images_declared_metadata;
+
+ALTER TABLE public.property_images VALIDATE CONSTRAINT ck_property_images_validated_metadata;

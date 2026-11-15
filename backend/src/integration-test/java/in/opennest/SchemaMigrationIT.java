@@ -102,6 +102,40 @@ class SchemaMigrationIT {
         containers.forEach(PostgreSQLContainer::stop);
     }
 
+    @Test
+    void commitsConstraintReplacementBeforeSeparateValidationTransactions() throws Exception {
+        try (var container = new PostgreSQLContainer(DockerImageName.parse("postgis/postgis:17-3.5").asCompatibleSubstituteFor("postgres"))
+                .withDatabaseName("opennest_migration_schema_test").withUsername("migration_test").withPassword("fabricated-migration-test")) {
+            container.start();
+            Flyway.configure().dataSource(container.getJdbcUrl(), container.getUsername(), container.getPassword())
+                    .target("7").load().migrate();
+            try (var connection = DriverManager.getConnection(container.getJdbcUrl(), container.getUsername(), container.getPassword())) {
+                execute(connection, "CREATE SCHEMA migration_probe");
+                execute(connection, "CREATE TABLE migration_probe.statements (transaction_id bigint, statement text, validated_count bigint)");
+                execute(connection, """
+                        CREATE FUNCTION migration_probe.trace() RETURNS event_trigger LANGUAGE plpgsql AS $$
+                        BEGIN
+                            IF current_query() LIKE '%2147483639%' OR current_query() LIKE '%VALIDATE CONSTRAINT ck_property_images_%' THEN
+                                INSERT INTO migration_probe.statements VALUES (txid_current(), current_query(),
+                                    (SELECT count(*) FROM pg_constraint WHERE conrelid='public.property_images'::regclass
+                                     AND conname IN ('ck_property_images_declared_metadata','ck_property_images_validated_metadata') AND convalidated));
+                            END IF;
+                        END;
+                        $$
+                        """);
+                execute(connection, "CREATE EVENT TRIGGER migration_trace ON ddl_command_end WHEN TAG IN ('ALTER TABLE') EXECUTE FUNCTION migration_probe.trace()");
+                var flyway = Flyway.configure().dataSource(container.getJdbcUrl(), container.getUsername(), container.getPassword()).load();
+                assertThat(flyway.migrate().migrationsExecuted).isEqualTo(1);
+                assertThat(value(connection, "SELECT count(*) FROM migration_probe.statements")).isEqualTo(3L);
+                assertThat(value(connection, "SELECT count(DISTINCT transaction_id) FROM migration_probe.statements")).isEqualTo(3L);
+                assertThat(strings(connection, "SELECT validated_count::text FROM migration_probe.statements ORDER BY transaction_id"))
+                        .containsExactly("0", "1", "2");
+                assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
+                assertThat(flyway.migrate().migrationsExecuted).isZero();
+            }
+        }
+    }
+
     @TestFactory
     Stream<DynamicNode> persistenceRoundTrips() {
         return java.util.stream.IntStream.range(0, contexts.size()).mapToObj(index -> {

@@ -19,3 +19,4 @@
 - TelegramContactIT now exercises every listing HTTP route using actual Telegram-flow session cookies in all three rental modes, with controlled test-only storage and genuine image validation. Ownership, CSRF, privacy, stale versions and logout remain enforced; docs/API_VERIFICATION.md. Live R2 remains unverified.
 
 - Phase 4 exposes public ListingInteractions owner/publication lookup. SandboxBoundary guards transactions and rejects old reset generations/snapshots. Bundled seeded fixture images use sandbox-only no-store image routes; normal R2 validation/publication gates remain.
+- Encoded-byte heap admission is shared by presign and completion, rejecting unsupported sizes before issuing storage PUT URLs or reading bytes. V8 uses committed NOT VALID replacement and separate validation transactions; application checks and quotas are unchanged.

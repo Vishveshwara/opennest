@@ -105,6 +105,7 @@ def verify_reports():
             "BOOT-INF/classes/db/migration/V6__telegram_contact_sender_index.sql",
             "BOOT-INF/classes/db/migration/V7__sandbox_reset_state.sql",
             "BOOT-INF/classes/db/migration/V8__lossless_listing_photos.sql",
+            "BOOT-INF/classes/db/migration/V8__lossless_listing_photos.sql.conf",
         }, "Packaged migrations differ from the Phase 1 handoff")
     version = subprocess.run(["java", "--version"], capture_output=True, text=True, check=True).stdout.strip()
     require(re.search(r"(?:openjdk|java) 25[.\s]", version), "Verification must run on Java 25")

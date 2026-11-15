@@ -57,6 +57,18 @@ test("extension HTML attributes and session network failure are handled", async 
     "data-ctrl-f-plus-layover-theme",
     "standard-dark",
   );
+  await expect(page.getByText("Sign-in unavailable", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Sign in", exact: true })).toHaveCount(0);
+  await page.getByRole("link", { name: "List your place" }).click();
+  await expect(page.getByText("Your session could not be checked.", { exact: false })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Sign in to continue" })).toHaveCount(0);
+  await page.unroute("**/api/v1/users/me");
+  await page.getByRole("button", { name: "Retry session check" }).click();
+  await expect(page.getByRole("heading", { name: "Sign in to continue" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Sign in", exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("alert").filter({ hasText: "OpenNest cannot reach a required service" }),
+  ).toHaveCount(0);
   expect(hydrationWarnings).toBe(0);
   expect(uncaught).toEqual([]);
 });

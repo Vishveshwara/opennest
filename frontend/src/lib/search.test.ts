@@ -66,6 +66,7 @@ describe("shareable nationwide searches", () => {
 describe("login returns", () => {
   it.each([
     "//external.example",
+    "/a/..//evil.example",
     "https://external.example",
     "/\\evil",
     "/path\n",

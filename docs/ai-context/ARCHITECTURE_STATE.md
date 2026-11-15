@@ -48,4 +48,6 @@
 
 - Explicit maintainer-requested local reset, 14 November: removed 3 DEVELOPMENT/PRIMARY accounts, 1 listing and dependent records; cleared local auth sessions/challenges, preserved polling offsets/deduplication and all 8 migrations. Backend restarted for fresh named signup. Header/account page displays caller fullName; no deletion API/schema change. R2 objects use existing orphan cleanup. docs/PHASE5_HANDOFF.md.
 
+- PR #7 review: development LAN origins reject default/zero-padded ports consistently; media heap admission runs before signing and completion. Frontend session-probe outages have retry state distinct from anonymous 401; URL history updates owner status, failed local photos are removable, and completed jobs release binary payloads. V8 commits NOT VALID checks before separate validation transactions.
+
 <!-- /coderabbit-ai-generated:v1 -->

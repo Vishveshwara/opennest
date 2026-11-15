@@ -125,7 +125,11 @@ function OwnerCollection() {
       <form className="actions owner-filters" onSubmit={filter}>
         <label className="field">
           Status
-          <select name="status" defaultValue={params.get("status") ?? ""}>
+          <select
+            key={params.get("status") ?? ""}
+            name="status"
+            defaultValue={params.get("status") ?? ""}
+          >
             <option value="">All statuses</option>
             <option value="PAUSED">Paused / draft</option>
             <option value="ACTIVE">Active</option>
@@ -725,23 +729,26 @@ function ManageListing({ id }: { id: string }) {
   );
 }
 
-type UploadJob = {
+type PhotoMetadata = {
   key: string;
-  file: File;
+  name: string;
   segment: ImageSegment;
+};
+type PendingUploadJob = PhotoMetadata & {
+  file: File;
   progress: number;
   status:
     | "ready"
     | "compressing"
     | "uploading"
     | "validating"
-    | "complete"
     | "error";
   error: string;
   imageId?: string;
   uploaded?: boolean;
   reservation?: { ticket: z.infer<typeof presignSchema>; blob: Blob };
 };
+type UploadJob = PendingUploadJob | (PhotoMetadata & { status: "complete" });
 function PhotoUploader({
   listing,
   reload,
@@ -752,12 +759,23 @@ function PhotoUploader({
   const { api, config } = useSession();
   const [segment, setSegment] = useState<ImageSegment>("ROOM"),
     [jobs, setJobs] = useState<UploadJob[]>([]),
-    [busy, setBusy] = useState(false);
-  const update = (key: string, changes: Partial<UploadJob>) =>
+    [busy, setBusy] = useState(false),
+    [reloadError, setReloadError] = useState("");
+  const update = (key: string, changes: Partial<PendingUploadJob>) =>
     setJobs((current) =>
-      current.map((job) => (job.key === key ? { ...job, ...changes } : job)),
+      current.map((job) =>
+        job.key === key && job.status !== "complete" ? { ...job, ...changes } : job,
+      ),
     );
-  async function run(job: UploadJob, now: number) {
+  async function refreshListing() {
+    try {
+      await reload();
+      setReloadError("");
+    } catch (error) {
+      setReloadError(errorMessage(error));
+    }
+  }
+  async function run(job: PendingUploadJob, now: number) {
     setBusy(true);
     let imageId = job.imageId,
       uploaded = job.uploaded;
@@ -796,8 +814,15 @@ function PhotoUploader({
         "POST",
         { imageId },
       );
-      update(job.key, { status: "complete", progress: 100, error: "" });
-      await reload();
+      setJobs((current) =>
+        current.map((value) =>
+          value.key === job.key
+            ? { key: value.key, name: value.name, segment: value.segment, status: "complete" }
+            : value,
+        ),
+      );
+      reservation = undefined;
+      await refreshListing();
     } catch (error) {
       if (
         (error instanceof ApiError && [400, 409, 413].includes(error.status)) ||
@@ -833,6 +858,18 @@ function PhotoUploader({
         each photo to lossless WebP without resizing or a target file size, then
         uploads it directly to storage. Converted files may be larger.
       </p>
+      {reloadError && (
+        <Notice error>
+          {reloadError} Your photo was validated. Refresh the listing to see it.
+          <Button
+            variant="outline"
+            disabled={busy}
+            onClick={() => void refreshListing()}
+          >
+            Refresh photos
+          </Button>
+        </Notice>
+      )}
       <div className="upload-grid">
         {listing.images.map((image) => (
           <figure key={image.imageId}>
@@ -892,6 +929,7 @@ function PhotoUploader({
                   (file) =>
                     ({
                       key: crypto.randomUUID(),
+                      name: file.name,
                       file,
                       segment,
                       progress: 0,
@@ -907,15 +945,15 @@ function PhotoUploader({
       </div>
       <p className="fine-print">
         Up to {MAX_LISTING_PHOTOS} images per listing, 60 upload reservations
-        per rolling 24 hours. Uploaded images cannot be removed or replaced in
-        this version.
+        per rolling 24 hours. Failed local photos can be removed. Validated
+        images cannot be removed or replaced in this version.
       </p>
       <ul className="upload-jobs">
         {jobs.map((job) => (
           <li key={job.key}>
             <div>
               <span>
-                {job.file.name} · {job.segment.replaceAll("_", " ")}
+                {job.name} · {job.segment.replaceAll("_", " ")}
               </span>
               <p role="status">
                 {job.status === "uploading"
@@ -932,13 +970,13 @@ function PhotoUploader({
               </p>
               {job.status === "uploading" && (
                 <progress
-                  aria-label={`Upload progress for ${job.file.name}`}
+                  aria-label={`Upload progress for ${job.name}`}
                   max={100}
                   value={job.progress}
                 />
               )}
             </div>
-            {["ready", "error"].includes(job.status) && (
+            {(job.status === "ready" || job.status === "error") && (
               <Button
                 variant="outline"
                 size="small"
@@ -947,6 +985,18 @@ function PhotoUploader({
               >
                 <Upload size={14} />
                 {job.status === "error" ? "Retry photo" : "Upload photo"}
+              </Button>
+            )}
+            {job.status === "error" && (
+              <Button
+                variant="ghost"
+                size="small"
+                disabled={busy}
+                onClick={() =>
+                  setJobs((current) => current.filter((value) => value.key !== job.key))
+                }
+              >
+                Remove failed photo
               </Button>
             )}
           </li>

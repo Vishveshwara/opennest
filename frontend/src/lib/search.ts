@@ -190,6 +190,7 @@ export function safeReturnPath(value: string | null, basePath = "") {
     const url = new URL(value, "https://opennest.co.in");
     if (
       url.origin !== "https://opennest.co.in" ||
+      url.pathname.startsWith("//") ||
       (basePath && !url.pathname.startsWith(`${basePath}/`))
     )
       return `${basePath}/`;

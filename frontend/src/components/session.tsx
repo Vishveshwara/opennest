@@ -12,11 +12,13 @@ import { useRouter } from "next/navigation";
 import { accountSchema, type Account } from "@/lib/contracts";
 import { ApiError, browserApi, errorMessage } from "@/lib/api";
 import type { AppConfig } from "@/lib/config";
+import { Button } from "./ui/button";
 
 type Session = {
   config: AppConfig;
   account: Account | null;
   ready: boolean;
+  status: "checking" | "ready" | "unavailable";
   epoch: number;
   api: ReturnType<typeof browserApi>;
   rotate: () => void;
@@ -33,7 +35,7 @@ export function SessionProvider({
   children: React.ReactNode;
 }) {
   const [account, setAccount] = useState<Account | null>(null),
-    [ready, setReady] = useState(false),
+    [status, setStatus] = useState<Session["status"]>("checking"),
     [epoch, setEpoch] = useState(0),
     [notice, setNotice] = useState("");
   const router = useRouter();
@@ -41,16 +43,31 @@ export function SessionProvider({
     () =>
       browserApi(config.browserApiOrigin, () => {
         setAccount(null);
+        setStatus("ready");
+        setNotice("");
         setEpoch((value) => value + 1);
       }),
     [config.browserApiOrigin],
   );
   const refresh = useCallback(async () => {
-    const profile = await api.request("/api/v1/users/me", accountSchema);
-    setAccount(profile);
-    setReady(true);
-    setNotice("");
-    return profile;
+    setStatus("checking");
+    try {
+      const profile = await api.request("/api/v1/users/me", accountSchema);
+      setAccount(profile);
+      setStatus("ready");
+      setNotice("");
+      return profile;
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        setAccount(null);
+        setStatus("ready");
+        setNotice("");
+      } else {
+        setStatus("unavailable");
+        setNotice(errorMessage(error));
+      }
+      throw error;
+    }
   }, [api]);
   const rotate = () => {
     api.clear();
@@ -62,14 +79,19 @@ export function SessionProvider({
     void api
       .probe("/api/v1/users/me", accountSchema)
       .then((profile) => {
-        if (alive) setAccount(profile);
+        if (alive) {
+          setAccount(profile);
+          setStatus("ready");
+        }
       })
       .catch((error) => {
-        if (alive && !(error instanceof ApiError && error.status === 401))
+        if (!alive) return;
+        if (error instanceof ApiError && error.status === 401) {
+          setStatus("ready");
+        } else {
+          setStatus("unavailable");
           setNotice(errorMessage(error));
-      })
-      .finally(() => {
-        if (alive) setReady(true);
+        }
       });
     return () => {
       alive = false;
@@ -79,6 +101,7 @@ export function SessionProvider({
     try {
       if (!(await api.logout())) return;
       setAccount(null);
+      setStatus("ready");
       setEpoch((value) => value + 1);
       setNotice("");
       router.replace(`${config.basePath}/`);
@@ -92,7 +115,8 @@ export function SessionProvider({
       value={{
         config: { ...config, apiOrigin: config.browserApiOrigin },
         account,
-        ready,
+        ready: status === "ready",
+        status,
         epoch,
         api,
         rotate,
@@ -103,6 +127,11 @@ export function SessionProvider({
       {notice && (
         <p role="alert" className="notice">
           {notice}
+          {status === "unavailable" && (
+            <Button type="button" variant="outline" onClick={() => void refresh().catch(() => {})}>
+              Retry session check
+            </Button>
+          )}
         </p>
       )}
       {children}
