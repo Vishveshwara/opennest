@@ -154,6 +154,62 @@ it("updates the draft publication checklist after removing its last required pho
   expect(screen.getByText(/^room photo validated$/)).toBeInTheDocument();
 });
 
+it.each(["inventory", "reload"])("ignores an older %s response after photo deletion", async (source) => {
+  const initial = listing(20);
+  initial.images.forEach((photo, index) => {
+    photo.segment = index === 0 ? "ROOM" : index === 1 ? "HALL" : index === 2 ? "BATHROOM" : index === 3 ? "KITCHEN" : "EXTERIOR_AMENITY";
+  });
+  const delayed = Promise.withResolvers<typeof initial>();
+  const removed = { ...initial, images: initial.images.slice(1), version: 2 };
+  let reads = 0;
+  request.mockImplementation((_path: string, _schema: unknown, method = "GET") => {
+    if (method === "DELETE") return Promise.resolve(removed);
+    if (method === "PATCH") return source === "inventory" ? delayed.promise : Promise.reject(new ApiError(409));
+    return ++reads === 1 ? Promise.resolve(initial) : delayed.promise;
+  });
+  render(<OwnerPage id={listingId} />);
+  const publish = await screen.findByRole("button", { name: "Publish listing" });
+  const input = screen.getByLabelText("Choose photos");
+  expect(publish).toBeEnabled();
+  expect(input).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "Save availability" }));
+  if (source === "reload") await waitFor(() => expect(reads).toBe(2));
+  fireEvent.click(screen.getAllByRole("button", { name: "Remove photo" })[0]);
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Remove photo" }));
+  await waitFor(() => expect(screen.getAllByRole("button", { name: "Remove photo" })).toHaveLength(19));
+  await act(async () => delayed.resolve({ ...initial, version: 1 }));
+  expect(screen.getAllByRole("button", { name: "Remove photo" })).toHaveLength(19);
+  expect(publish).toBeDisabled();
+  expect(input).toBeEnabled();
+  request.mockResolvedValueOnce({ ...removed, version: 3 });
+  fireEvent.click(screen.getByRole("button", { name: "Save availability" }));
+  await waitFor(() => expect(request).toHaveBeenLastCalledWith(
+    `/api/v1/listings/${listingId}/inventory`, ownerListingSchema, "PATCH", expect.objectContaining({ version: 2 }),
+  ));
+});
+
+it("ignores an older deletion response after a newer inventory response", async () => {
+  const initial = listing(1);
+  const delayed = Promise.withResolvers<typeof initial>();
+  const removed = { ...initial, images: [], version: 1 };
+  request.mockImplementation((_path: string, _schema: unknown, method = "GET") => {
+    if (method === "DELETE") return delayed.promise;
+    if (method === "PATCH") return Promise.resolve({ ...removed, maxOccupants: 4, version: 2 });
+    return Promise.resolve(initial);
+  });
+  render(<OwnerPage id={listingId} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Remove photo" }));
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Remove photo" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save availability" }));
+  await waitFor(() => expect(screen.queryByRole("button", { name: "Remove photo" })).not.toBeInTheDocument());
+  await act(async () => delayed.resolve(removed));
+  expect(screen.getByLabelText(/Maximum occupants/)).toHaveValue(4);
+  fireEvent.click(screen.getByRole("button", { name: "Save availability" }));
+  await waitFor(() => expect(request).toHaveBeenLastCalledWith(
+    `/api/v1/listings/${listingId}/inventory`, ownerListingSchema, "PATCH", expect.objectContaining({ version: 2 }),
+  ));
+});
+
 it("keeps the last required published photo until the owner pauses the listing", async () => {
   const initial = { ...listing(1), status: "ACTIVE" };
   request.mockResolvedValue(initial);

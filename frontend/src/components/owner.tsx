@@ -524,6 +524,13 @@ function ManageListing({ id }: { id: string }) {
     [error, setError] = useState(""),
     [message, setMessage] = useState(""),
     [busy, setBusy] = useState(false);
+  const installListing = useCallback((value: OwnerListing) => {
+    setListing((current) =>
+      current && current.id === value.id && current.version > value.version
+        ? current
+        : value,
+    );
+  }, []);
   const load = useCallback(async () => {
     if (!uuid.safeParse(id).success) throw new ApiError(404);
     const value = await api.request(
@@ -531,8 +538,8 @@ function ManageListing({ id }: { id: string }) {
       ownerListingSchema,
     );
     if (value.ownerId !== account?.id) throw new ApiError(403);
-    setListing(value);
-  }, [api, id, account?.id]);
+    installListing(value);
+  }, [api, id, account?.id, installListing]);
   useEffect(() => {
     let active = true;
     if (!uuid.safeParse(id).success) return;
@@ -541,7 +548,7 @@ function ManageListing({ id }: { id: string }) {
       .then((value) => {
         if (!active) return;
         if (value.ownerId !== account?.id) throw new ApiError(403);
-        setListing(value);
+        installListing(value);
         setError("");
       })
       .catch((error) => {
@@ -550,7 +557,7 @@ function ManageListing({ id }: { id: string }) {
     return () => {
       active = false;
     };
-  }, [api, id, account?.id]);
+  }, [api, id, account?.id, installListing]);
   async function mutate(
     action: "inventory" | "publish" | "pause",
     body: unknown,
@@ -559,7 +566,7 @@ function ManageListing({ id }: { id: string }) {
     setError("");
     setMessage("");
     try {
-      setListing(
+      installListing(
         await api.request(
           `/api/v1/listings/${id}/${action}`,
           ownerListingSchema,
@@ -667,7 +674,7 @@ function ManageListing({ id }: { id: string }) {
               </Button>
             </form>
           </section>
-          <PhotoUploader listing={listing} reload={load} onListingChange={setListing} />
+          <PhotoUploader listing={listing} reload={load} onListingChange={installListing} />
           <section className="panel">
             <h2>Your private location</h2>
             <p>{listing.privateAddress}</p>
