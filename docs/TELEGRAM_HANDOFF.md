@@ -25,12 +25,12 @@ Import [the Telegram Postman collection](postman/OpenNest-Telegram.postman_colle
 2. Set phoneNumber to your own +91 contact in a private local variable and start a challenge. Open the returned botUrl in Telegram, press Start, and share your own contact through the native button.
    If Share my contact is hidden, open Telegram's reply keyboard near the message input. You can use the same botUrl and account in the mobile app while keeping Postman on your computer. Complete within five minutes of challenge creation; an expired contact update cannot produce an OTP. Create a new challenge after the cooldown and use the new link if needed.
 
-3. Put the delivered six-digit code in the local otp variable and submit completion from the same cookie session. Expect status AUTHENTICATED and a rotated session cookie.
+3. Put the latest six-digit code in the private local otp variable and submit completion from the same cookie session. Existing linked accounts return AUTHENTICATED. A new user with no fullName receives NAME_REQUIRED and stays anonymous; set the private fullName variable and repeat the same request/code within the original five-minute lifetime. AUTHENTICATED rotates the session cookie.
 4. Fetch CSRF again. The pre-login token is invalid after authentication. Read `GET /api/v1/users/me` to see your own profile and phoneVerified=true.
 5. Use authenticated listing APIs with the fresh token. Import [the listing collection](postman/OpenNest-Listings.postman_collection.json) and follow [the full Postman guide](POSTMAN_API_GUIDE.md), postponing logout until done. Publication still requires required validated images and the transactional listing quota.
 6. Send `POST /api/v1/auth/logout` with the fresh CSRF token to invalidate the session. A later profile request returns 401.
 
-Do not share Postman exports containing real contacts, codes, cookies, or secrets. The repository collection leaves all private inputs empty. Challenge status requests must be at least two seconds apart. A challenge lasts five minutes, permits five bad-code attempts, and restarts require 60 seconds. At most five starts per rolling hour are allowed per initiating session and expected contact. Authenticated accounts must log out before starting another sign-in.
+Do not share Postman exports containing real contacts, codes, cookies, or secrets. The repository collection leaves all private inputs empty. Challenge status requests must be at least two seconds apart. A challenge lasts five minutes, permits five bad-code attempts, and restarts require 60 seconds. Fresh-code resends allow three generations, 30 seconds apart, without extending expiry or resetting attempts. CODE_READY delivery retries reuse the same generation immediately. The UI displays the resend/restart countdowns and remaining allowance. At most five starts per rolling hour are allowed per initiating session and expected contact. Authenticated accounts must log out before starting another sign-in.
 
 ## Configuration and routes
 
@@ -48,9 +48,10 @@ Production forbids polling and sandbox secrets. SANDBOX_ bot settings are reserv
 | Route | Behavior |
 | --- | --- |
 | `GET /api/v1/auth/csrf` | Creates/uses anonymous session, returns token/headerName |
-| `POST /api/v1/auth/telegram/challenges` | Anonymous session + CSRF, body {phoneNumber}, returns challengeId/botUrl/expiresAt/status |
-| `GET /api/v1/auth/telegram/challenges/{id}` | Initiating-session-only no-store status |
-| `POST /api/v1/auth/telegram/challenges/{id}/complete` | Same session + CSRF, body {code}, authenticates and rotates session |
+| `POST /api/v1/auth/telegram/challenges` | Anonymous session + CSRF, body {phoneNumber}, returns challengeId/botUrl/expiresAt/restartAt/status |
+| `GET /api/v1/auth/telegram/challenges/{id}` | Initiating-session-only no-store status with expiresAt/resendAt/resendsRemaining |
+| `POST /api/v1/auth/telegram/challenges/{id}/resend` | Same session + CSRF, body {}; rotate an eligible fresh code or retry pending delivery; return status/deadlines/remaining allowance |
+| `POST /api/v1/auth/telegram/challenges/{id}/complete` | Same session + CSRF, body {code, fullName?}; correct new-user OTP without a name returns NAME_REQUIRED while anonymous; repeat with name to create/sign in. Existing linked accounts authenticate directly. AUTHENTICATED rotates session |
 | `GET /api/v1/users/me` | Authenticated caller's private profile |
 | `POST /api/v1/auth/logout` | CSRF-protected logout, 204 |
 | `POST /api/v1/webhooks/telegram` | Webhook transport only, exact provider secret header, no browser CSRF |
@@ -73,3 +74,17 @@ On 10 November 2026, the clean Java 25/Linux amd64 Docker gate passed all 553 te
 
 
 <!-- /coderabbit-ai-generated:v1 -->
+
+## Signup names and missed codes
+
+Start with the Telegram-linked +91 phone, share your own contact, and enter the latest code in the browser where the challenge began. Existing verified Telegram accounts sign in automatically. New users then see Full name and Create account. The name is saved only when that same code/challenge completes successfully. Existing names are preserved. Name normalization uses NFKC and whitespace collapse, with a 120-code-point maximum; control characters are rejected. users.full_name already exists, so no migration is added.
+
+For a missed code, keep the current challenge and use Resend code after its visible 30-second cooldown. Only the newest code is valid. After three fresh resends, use Start again, subject to its separate 60-second cooldown and existing five-starts-per-hour limits. A failed prepared delivery remains retryable as Retry code delivery, even at zero fresh resends remaining. This reuses its code and original expiry. Plain /start can resume a bound chat; it cannot identify a browser flow that was never linked. Cancelled/expired links give guidance to use the current browser challenge link.
+
+The browser keeps the code/name only in component memory while finishing signup. Refreshing loses that UI state; no code/name/challenge is saved to localStorage or sessionStorage. Create a fresh challenge after an expired or lost browser flow and use its new link. Real Telegram signup, returning login and resends remain maintainer smoke checks; automated verification uses controlled bot providers and fabricated contacts.
+
+## Signup and retry follow-up verification, 14 November 2026
+
+The clean Java 25 schema/isolation gate passed 650 tests with no failures, errors or skips. New controlled-provider tests cover anonymous NAME_REQUIRED with no account/contact writes, name normalization and invalid-name retry, existing-user sign-in without name changes, resend cooldown/cap, old-code invalidation, unchanged expiry/attempts, concurrent resend generation, original-session/CSRF rejection, plain /start/reopened-link recovery, stale preparation rejection and delivery-failure retry. Three HTTP bot cases cover fixed browser guidance and keyboard removal. The separately selected real-store browser wrapper passed all four scenarios, including the new-user name form, bringing the final Java report set to 651.
+
+Frontend types, lint, production build and 64 tests passed. Seven signup/resend UI cases cover name completion, returning sign-in, resend/restart timers, failed delivery, allowance exhaustion, and retrying a prepared delivery at zero fresh allowance. Localhost and LAN browser checks passed with cookies, CSRF, no-store, invalid-input handling and logout. The local backend was restarted with the new artifact; the development frontend picked up the new flow. No real OTP/contact was submitted or bot message initiated by verification. Live signup/returning/resend smoke tests, physical-device behavior and remote CI remain maintainer checks.

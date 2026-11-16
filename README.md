@@ -2,7 +2,7 @@
 
 OpenNest is a zero-brokerage platform for finding flats and PG/hostel accommodation directly from owners across India. OpenNest is an independent project, not affiliated with NoBroker.
 
-**Status:** Phase 1 foundation, Phase 2 identity, Phase 3 listings, and opt-in Phase 3A Telegram-only authentication are implemented on Java 25/Spring Boot 4.1.1. Listings include drafts, owner retrieval, validated private image uploads, publication/inventory controls, and nationwide search. The [listing handoff](docs/LISTINGS_HANDOFF.md) records contracts, limits, verification, and pending provider checks. Interactions, the frontend, and public deployment remain outstanding.
+**Status:** Phase 1 foundation, Phase 2 identity, Phase 3 listings, and opt-in Phase 3A Telegram-only authentication are implemented on Java 25/Spring Boot 4.1.1. Listings include drafts, owner retrieval, validated private image uploads, publication/inventory controls, and nationwide search. The [listing handoff](docs/LISTINGS_HANDOFF.md) records contracts, limits, verification, and pending provider checks. Phase 4 interactions and the isolated recruiter backend are implemented. Phase 5 adds the public/recruiter frontend; see the [frontend handoff](docs/PHASE5_HANDOFF.md) for setup and verification. Public deployment and live-provider readiness remain outstanding.
 
 The clean Java 25/Docker gate passed 553 backend tests and six Python checks locally on 10 November 2026, with no failures, errors or skips. [The Telegram handoff](docs/TELEGRAM_HANDOFF.md) records evidence and remaining live checks. Bot setup passed, and the maintainer confirmed real local Telegram OTP authentication plus the verified private profile on 10 November. CI and hosted readiness remain unverified. [API verification](docs/API_VERIFICATION.md) distinguishes isolated cross-API tests from live provider checks.
 
@@ -98,3 +98,7 @@ Named volumes and Redis AOF support recovery but are not backups or guarantees o
 ## License
 
 OpenNest is licensed under the [GNU Affero General Public License, version 3 only](LICENSE) (`AGPL-3.0-only`). The full, unmodified license text is included in LICENSE. Third-party components retain their respective licenses.
+
+## Frontend
+
+Phase 5 adds the OpenNest public portal and isolated recruiter UI in `frontend/`. Use Node 24, then run `npm ci` and `npm run dev` from that directory. The default API target is http://localhost:8080; browsing is nationwide. See [frontend setup, browser tests and live-provider gates](docs/PHASE5_HANDOFF.md). No hosting or deployment is implied.
