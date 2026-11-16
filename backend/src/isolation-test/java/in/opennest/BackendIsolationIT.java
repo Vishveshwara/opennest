@@ -126,8 +126,8 @@ class BackendIsolationIT {
             assertThat(database(target).queryForObject("SHOW server_version_num", String.class)).startsWith("17");
             assertThat(contexts.get(target).getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();
             var current = database(target).queryForList("SELECT version || ':' || checksum FROM public.flyway_schema_history ORDER BY installed_rank", String.class);
-            assertThat(current).hasSize(7).startsWith("1:-65807919", "2:842141308", "3:-212349669");
-            assertThat(current.getLast()).startsWith("7:");
+            assertThat(current).hasSize(8).startsWith("1:-65807919", "2:842141308", "3:-212349669");
+            assertThat(current.getLast()).startsWith("8:");
             if (history != null) assertThat(current).isEqualTo(history);
             history = current;
             var selected = contexts.get(target).getBean(LettuceConnectionFactory.class);

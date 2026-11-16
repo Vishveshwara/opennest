@@ -55,5 +55,5 @@ Full pagination and filter behavior remains in [LISTING_SEARCH.md](LISTING_SEARC
 - Reject mismatched category/mode/inventory fields at the API and database constraint layers. Assert stored mode cannot be changed through inventory updates.
 - Verify ACTIVE/FULL_OCCUPIED/PAUSED transitions for the boolean and room-count modes, quota concurrency, stale-version conflicts, and current-version no-ops.
 - Verify mode-filter combinations, whole-flat NULL placement in room sorts, and bedroom versus available-room controls.
-- Phase 3 limits are 20 retained listings/owner, 12 images/listing, 60 reservations/rolling 24h, 5 MiB/20 MP images, and hourly orphan cleanup. Details and expiry rules: LISTINGS_HANDOFF.md.
+- Current limits are 20 retained listings/owner, 20 images/listing, 60 reservations/rolling 24h, and hourly orphan cleanup. The browser accepts source files through 40,000,000 bytes and converts them to lossless WebP locally without resizing or an output-size target. WebP dimensions and available device/backend memory still apply. Details and expiry rules: LISTINGS_HANDOFF.md.
 - Listing text/price edits, image replacement/removal, contact changes, and deletion require explicit contracts before they are exposed. The current endpoint inventory must not be interpreted as implementing these flows.

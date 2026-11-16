@@ -3,6 +3,12 @@
 !.env.example
 node_modules/
 .next/
+.next-verification/
+frontend/next-env.d.ts
+frontend/*.tsbuildinfo
+frontend/playwright-report/
+frontend/test-results/
+frontend/public/codecs/webp/
 out/
 target/
 /build/generated-spring-modulith/

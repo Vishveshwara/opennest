@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
 import in.opennest.common.RequestFailure;
@@ -23,8 +24,9 @@ class TelegramContacts {
     private final TelegramChallenges challenges;
     private final TelegramCrypto crypto;
     private final TelegramSettings settings;
-    TelegramContacts(JdbcTemplate jdbc, PlatformTransactionManager manager, TelegramChallenges challenges, TelegramCrypto crypto, TelegramSettings settings) {
-        this.jdbc = jdbc; transaction = new TransactionTemplate(manager); this.challenges = challenges; this.crypto = crypto; this.settings = settings;
+    private final TelegramUpdates updates;
+    TelegramContacts(JdbcTemplate jdbc, PlatformTransactionManager manager, TelegramChallenges challenges, TelegramCrypto crypto, TelegramSettings settings, TelegramUpdates updates) {
+        this.jdbc = jdbc; transaction = new TransactionTemplate(manager); this.challenges = challenges; this.crypto = crypto; this.settings = settings; this.updates = updates;
     }
     String session(String id) { return crypto.hmac("login-session", id); }
     UUID initiator(String session) { return UUID.nameUUIDFromBytes(session.getBytes(StandardCharsets.UTF_8)); }
@@ -34,20 +36,30 @@ class TelegramContacts {
         UUID id = challenges.create(initiator(session), session, phone, token);
         var challenge = challenges.find(id);
         return Map.of("challengeId", id, "botUrl", "https://t.me/" + settings.username() + "?start=" + token,
-                "expiresAt", Instant.ofEpochSecond(challenge.expires()), "status", "WAITING_BOT");
+                "expiresAt", Instant.ofEpochSecond(challenge.expires()), "restartAt", Instant.ofEpochSecond(challenge.created() + 60), "status", "WAITING_BOT");
     }
     Map<String, Object> status(UUID id, String session) {
         challenges.poll(initiator(session));
         if (receipt(id, session) != null) return Map.of("status", "COMPLETED");
         var challenge = owned(id, session);
-        return Map.of("status", challenge.state(), "expiresAt", Instant.ofEpochSecond(challenge.expires()));
+        return view(challenge);
     }
-    UUID complete(UUID id, String session, String code) {
+    Map<String, Object> resend(UUID id, String session) {
+        var challenge = owned(id, session);
+        if (!"CODE_SENT".equals(challenge.state()) && !"CODE_READY".equals(challenge.state())) throw conflict();
+        updates.resend(challenge);
+        return view(owned(id, session));
+    }
+    private Map<String, Object> view(TelegramChallenges.Challenge challenge) {
+        return Map.of("status", challenge.state(), "expiresAt", Instant.ofEpochSecond(challenge.expires()),
+                "resendAt", Instant.ofEpochSecond(challenge.resendAt()), "resendsRemaining", Math.max(0, 3 - challenge.resends()));
+    }
+    Optional<UUID> complete(UUID id, String session, String code, String fullName) {
         if (code == null || !code.matches("[0-9]{6}")) throw invalid();
-        UUID user = transact(() -> {
+        Optional<UUID> user = transact(() -> {
             jdbc.queryForObject("select pg_advisory_xact_lock(hashtextextended(?,0))", Object.class, id.toString());
             UUID completed = receipt(id, session);
-            if (completed != null) return completed;
+            if (completed != null) return Optional.of(completed);
             var challenge = owned(id, session);
             if (!challenges.claim(id, initiator(session), session, code)) throw conflict();
             challenge = owned(id, session);
@@ -59,8 +71,9 @@ class TelegramContacts {
             else {
                 var prior = jdbc.queryForList("select user_id from contact_verifications where telegram_user_id=?", Long.parseLong(sender));
                 if (prior.size() > 1) throw conflict();
+                if (prior.isEmpty() && (fullName == null || fullName.isBlank())) return Optional.empty();
                 account = prior.isEmpty() ? UUID.randomUUID() : (UUID) prior.getFirst().get("user_id");
-                if (prior.isEmpty()) jdbc.update("insert into users(id,full_name) values (?,?)", account, "OpenNest user");
+                if (prior.isEmpty()) jdbc.update("insert into users(id,full_name) values (?,?)", account, name(fullName));
                 jdbc.update("insert into auth_identities(id,user_id,issuer,subject) values (?,?,?,?)", UUID.randomUUID(), account, ISSUER, sender);
             }
             var accounts = jdbc.queryForList("select phone_number from users where id=? for update", account);
@@ -75,10 +88,16 @@ class TelegramContacts {
                     """, id, account, challenge.phone(), Long.parseLong(sender), session);
             jdbc.update("insert into telegram_login_receipts(id,user_id,session_digest,expires_at) values (?,?,?,?)",
                     id, account, session, Timestamp.from(Instant.ofEpochSecond(challenge.expires())));
-            return account;
+            return Optional.of(account);
         });
-        try { challenges.verified(id); } catch (org.springframework.dao.DataAccessException unavailable) { }
+        if (user.isPresent()) try { challenges.verified(id); } catch (org.springframework.dao.DataAccessException unavailable) { }
         return user;
+    }
+    private String name(String value) {
+        String normalized = java.text.Normalizer.normalize(value, java.text.Normalizer.Form.NFKC).replaceAll("(?U)\\s+", " ").strip();
+        if (normalized.isEmpty() || normalized.codePointCount(0, normalized.length()) > 120
+                || normalized.codePoints().anyMatch(Character::isISOControl)) throw invalid();
+        return normalized;
     }
     private TelegramChallenges.Challenge owned(UUID id, String session) {
         var challenge = challenges.find(id);

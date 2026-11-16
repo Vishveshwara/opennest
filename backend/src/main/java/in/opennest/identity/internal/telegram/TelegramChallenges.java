@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
 @Component
 @ConditionalOnProperty(name = "opennest.identity.telegram-enabled", havingValue = "true")
 class TelegramChallenges {
-    record Challenge(UUID id, UUID user, String session, String phone, String state, long created, long expires, String salt, String chat) {
+    record Challenge(UUID id, UUID user, String session, String phone, String state, long created, long expires, String salt, String chat, long resendAt, int resends) {
         @Override public String toString() { return "Challenge[private]"; }
     }
     final StringRedisTemplate redis;
@@ -49,7 +49,8 @@ class TelegramChallenges {
         Map<String, String> values = redis.<String, String>opsForHash().entries(key(id));
         if (values.isEmpty()) return null;
         return new Challenge(id, UUID.fromString(values.get("user")), values.get("session"), values.get("phone"), values.get("state"),
-                Long.parseLong(values.get("created")), Long.parseLong(values.get("expires")), values.get("salt"), values.get("chat"));
+                Long.parseLong(values.get("created")), Long.parseLong(values.get("expires")), values.get("salt"), values.get("chat"),
+                Long.parseLong(values.getOrDefault("resend_at", "0")), Integer.parseInt(values.getOrDefault("resends", "0")));
     }
     Challenge byToken(String token) {
         if (!token.matches("[A-Za-z0-9_-]{43}")) return null;
@@ -65,7 +66,7 @@ class TelegramChallenges {
                 local state=redis.call('HGET',KEYS[1],'state')
                 if not state or redis.call('GET',KEYS[2])~=ARGV[1] then return 'NO' end
                 local bound=redis.call('HGET',KEYS[1],'chat')
-                if state=='WAITING_CONTACT' and bound==ARGV[2] then return 'OK' end
+                if bound==ARGV[2] and (state=='WAITING_CONTACT' or state=='CODE_READY' or state=='CODE_SENT' or state=='COMPLETING') then return 'OK' end
                 if state~='WAITING_BOT' then return 'NO' end
                 local other=redis.call('GET',KEYS[3])
                 if other and other~=ARGV[1] then
@@ -81,17 +82,37 @@ class TelegramChallenges {
     boolean prepare(Challenge challenge, long chat, String code) {
         return "OK".equals(script("""
                 local state=redis.call('HGET',KEYS[1],'state')
-                if redis.call('GET',KEYS[2])~=ARGV[1] or redis.call('HGET',KEYS[1],'chat')~=ARGV[2] then return 'NO' end
+                if redis.call('GET',KEYS[2])~=ARGV[1] or redis.call('HGET',KEYS[1],'chat')~=ARGV[2]
+                    or redis.call('HGET',KEYS[1],'salt')~=ARGV[5] then return 'NO' end
                 if state~='WAITING_CONTACT' and state~='CODE_READY' then return 'NO' end
                 redis.call('ZREMRANGEBYSCORE',KEYS[3],'-inf',ARGV[4]-3600)
                 if not redis.call('ZSCORE',KEYS[3],ARGV[1]) and redis.call('ZCARD',KEYS[3]) >= 5 then return 'NO' end
                 redis.call('ZADD',KEYS[3],ARGV[4],ARGV[1])
                 redis.call('EXPIRE',KEYS[3],3600)
                 redis.call('HSET',KEYS[1],'state','CODE_READY','code',ARGV[3])
+                if state=='WAITING_CONTACT' then redis.call('HSET',KEYS[1],'resend_at',ARGV[4]+30) end
                 return 'OK'
-                """, List.of(key(challenge.id()), prefix + "account:" + challenge.user(), prefix + "rate:phone:" + crypto.hmac("phone", challenge.phone())), challenge.id().toString(), Long.toString(chat), crypto.hmac("otp", challenge.id() + ":" + code), Long.toString(Instant.now().getEpochSecond())));
+                """, List.of(key(challenge.id()), prefix + "account:" + challenge.user(), prefix + "rate:phone:" + crypto.hmac("phone", challenge.phone())), challenge.id().toString(), Long.toString(chat), crypto.hmac("otp", challenge.id() + ":" + code), Long.toString(Instant.now().getEpochSecond()), challenge.salt()));
     }
-    void sent(UUID id) { script("if redis.call('HGET',KEYS[1],'state')=='CODE_READY' then redis.call('HSET',KEYS[1],'state','CODE_SENT') end return 'OK'", List.of(key(id))); }
+    String rotate(Challenge challenge, String salt, String code) {
+        return script("""
+                if redis.call('GET',KEYS[2])~=ARGV[1] or redis.call('HGET',KEYS[1],'chat')~=ARGV[2] then return 'NO' end
+                local state=redis.call('HGET',KEYS[1],'state')
+                if state=='CODE_READY' then return 'READY' end
+                if state~='CODE_SENT' then return 'NO' end
+                if redis.call('HGET',KEYS[1],'salt')~=ARGV[3]
+                    or tonumber(redis.call('HGET',KEYS[1],'resend_at') or '0')>tonumber(ARGV[6])
+                    or tonumber(redis.call('HGET',KEYS[1],'resends') or '0')>=3 then return 'RATE' end
+                redis.call('HSET',KEYS[1],'state','CODE_READY','salt',ARGV[4],'code',ARGV[5],'resend_at',ARGV[6]+30)
+                redis.call('HINCRBY',KEYS[1],'resends',1)
+                return 'OK'
+                """, List.of(key(challenge.id()), prefix + "account:" + challenge.user()), challenge.id().toString(), challenge.chat(),
+                challenge.salt(), salt, crypto.hmac("otp", challenge.id() + ":" + code), Long.toString(Instant.now().getEpochSecond()));
+    }
+    void sent(UUID id, String salt) {
+        script("if redis.call('HGET',KEYS[1],'state')=='CODE_READY' and redis.call('HGET',KEYS[1],'salt')==ARGV[1] then redis.call('HSET',KEYS[1],'state','CODE_SENT') end return 'OK'",
+                List.of(key(id)), salt);
+    }
     boolean claim(UUID id, UUID user, String session, String code) {
         String result = script("""
                 if redis.call('GET',KEYS[2])~=ARGV[1] or redis.call('HGET',KEYS[1],'user')~=ARGV[2] or redis.call('HGET',KEYS[1],'session')~=ARGV[3] then return 'NO' end

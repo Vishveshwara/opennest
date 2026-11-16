@@ -1,0 +1,62 @@
+name: Frontend
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Frontend and real-store browser verification
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version-file: frontend/.node-version
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+      - name: Install pinned frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Check types, lint, tests, production build, and dependencies
+        working-directory: frontend
+        run: |
+          npm run typecheck
+          npm run lint
+          npm test
+          npm run build
+          npm audit --audit-level=moderate
+      - name: Install the browser
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Check repository contracts
+        run: |
+          python3 -m unittest discover --start-directory .github/scripts --pattern '*_test.py'
+          python3 .github/scripts/verify_backend.py
+      - name: Exercise the frontend against real isolated stores
+        run: >-
+          bash backend/mvnw --batch-mode --no-transfer-progress
+          --settings docs/verification/backend-dependencies/settings.xml
+          --global-settings docs/verification/backend-dependencies/settings.xml
+          --file backend/pom.xml -Pisolation-integration
+          -Dtest=OpenNestApplicationTests -Dit.test=FrontendBrowserHarness verify

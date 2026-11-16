@@ -39,6 +39,14 @@ class TelegramHttpBot implements TelegramBot, AutoCloseable {
         call("sendMessage", Map.of("chat_id", chat, "text", "OpenNest sign-in code: " + code + ". Enter it only in the browser where you started. Expires with your five-minute challenge. Do not share this code.",
                 "protect_content", true, "reply_markup", Map.of("remove_keyboard", true)), Duration.ofSeconds(5));
     }
+    @Override public void hint(long chat, Hint hint) {
+        String text = switch (hint) {
+            case OPEN_BROWSER -> "Open OpenNest in your browser and use its Open Telegram button to start or restart sign-in.";
+            case WAIT_FOR_RESEND -> "Use the latest OpenNest code, or request another in your browser when Resend code becomes available. Each challenge allows three resends.";
+            case FINISH_BROWSER -> "Your code was verified. Return to the browser where you started to finish your OpenNest account.";
+        };
+        call("sendMessage", Map.of("chat_id", chat, "text", text, "reply_markup", Map.of("remove_keyboard", true)), Duration.ofSeconds(5));
+    }
     @Override public void checkPolling() {
         var bot = call("getMe", Map.of(), Duration.ofSeconds(5));
         var hook = call("getWebhookInfo", Map.of(), Duration.ofSeconds(5));

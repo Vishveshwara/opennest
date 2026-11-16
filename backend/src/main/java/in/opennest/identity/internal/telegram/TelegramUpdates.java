@@ -45,10 +45,24 @@ class TelegramUpdates {
         long date = message.path("date").asLong(), now = Instant.now().getEpochSecond();
         if (date < now - 300 || date > now + 30) return;
         String text = message.path("text").asString("");
-        if (text.startsWith("/start ")) {
-            var challenge = challenges.byToken(text.substring(7));
-            if (challenge == null || date < challenge.created() - 1 || !challenges.bind(challenge, chat)) return;
-            challenges.sendBudget(chat); bot.contact(chat); return;
+        if (text.equals("/start") || text.startsWith("/start ")) {
+            var challenge = text.equals("/start") ? challenges.byChat(chat) : challenges.byToken(text.substring(7));
+            if (challenge == null || date < challenge.created() - 1 || !challenges.bind(challenge, chat)) {
+                challenges.sendBudget(chat); bot.hint(chat, TelegramBot.Hint.OPEN_BROWSER); return;
+            }
+            challenge = challenges.find(challenge.id());
+            if ("CODE_SENT".equals(challenge.state()) || "CODE_READY".equals(challenge.state())) {
+                try { resend(challenge); }
+                catch (RequestFailure failure) {
+                    if (failure.kind() != RequestFailure.Kind.RATE_LIMITED) throw failure;
+                    challenges.sendBudget(chat); bot.hint(chat, TelegramBot.Hint.WAIT_FOR_RESEND);
+                }
+            } else {
+                challenges.sendBudget(chat);
+                if ("COMPLETING".equals(challenge.state())) bot.hint(chat, TelegramBot.Hint.FINISH_BROWSER);
+                else bot.contact(chat);
+            }
+            return;
         }
         var contact = message.path("contact");
         if (!contact.isObject() || !contact.path("user_id").isIntegralNumber() || !contact.path("user_id").canConvertToLong() || contact.path("user_id").asLong() != chat) return;
@@ -58,6 +72,17 @@ class TelegramUpdates {
         if (challenge == null || date < challenge.created() - 1 || !phone.equals(challenge.phone())) return;
         String code = crypto.code(challenge.salt());
         if (!challenges.prepare(challenge, chat, code)) return;
-        challenges.sendBudget(chat); bot.code(chat, code); challenges.sent(challenge.id());
+        challenges.sendBudget(chat); bot.code(chat, code); challenges.sent(challenge.id(), challenge.salt());
+    }
+    void resend(TelegramChallenges.Challenge challenge) {
+        String salt, code;
+        do { salt = crypto.token(); code = crypto.code(salt); } while (code.equals(crypto.code(challenge.salt())));
+        String result = challenges.rotate(challenge, salt, code);
+        if ("RATE".equals(result)) throw new RequestFailure(RequestFailure.Kind.RATE_LIMITED);
+        if (!"OK".equals(result) && !"READY".equals(result)) throw new RequestFailure(RequestFailure.Kind.CONFLICT);
+        var ready = challenges.find(challenge.id());
+        if (ready == null || !"CODE_READY".equals(ready.state())) throw new RequestFailure(RequestFailure.Kind.CONFLICT);
+        long chat = Long.parseLong(ready.chat());
+        challenges.sendBudget(chat); bot.code(chat, crypto.code(ready.salt())); challenges.sent(ready.id(), ready.salt());
     }
 }

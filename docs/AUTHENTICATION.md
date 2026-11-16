@@ -12,7 +12,7 @@ On 10 November 2026 the maintainer selected Telegram Bot API as OpenNest's only 
 
 The maintainer approved this contact evidence on 9 November 2026 and its use as sole authentication on 10 November. It proves access to the Telegram account associated with the shared number, not fresh SIM possession or property ownership. A six-digit code alone is never a public login bearer: the initiating private browser session and completed self-contact challenge are required. The flow does not claim resistance to active OTP phishing.
 
-Account identity is issuer https://telegram.org plus the validated Telegram sender ID. Typed phones, display names, usernames, or email never select or merge users. New account names default to OpenNest user. Returning login must match the existing verified contact; contact replacement and identity linking are outside this flow. A phone already held by another account conflicts without disclosing that account.
+Account identity is issuer https://telegram.org plus the validated Telegram sender ID. Typed phones, display names, usernames, or email never select or merge users. After valid OTP verification, a new user receives NAME_REQUIRED while still anonymous. The original browser submits a fullName of 1..120 normalized Unicode code points with the same challenge/code to create the account and authenticate. Existing Telegram-linked or unambiguously recovered accounts sign in directly and retain their existing name. No account-existence lookup is exposed before OTP verification. Returning login must match the existing verified contact; contact replacement and identity linking are outside this flow. A phone already held by another account conflicts without disclosing that account.
 
 ## Preserving existing data
 

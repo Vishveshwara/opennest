@@ -41,6 +41,138 @@ import static org.assertj.core.api.Assertions.*;
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 @Timeout(value = 3, unit = TimeUnit.MINUTES)
 class TelegramContactIT {
+    @Test void newAccountsRequireANameAfterOtpAndReturningUsersSignInWithoutOne() {
+        var flow = ready();
+        assertThat(contacts().complete(flow.id(), flow.session(), code(flow), null)).isEmpty();
+        assertThat(identityCount(flow.chat())).isZero();
+        assertThat(phoneOwners(flow.phone())).isZero();
+        UUID account = contacts().complete(flow.id(), flow.session(), code(flow), "  Asha\u00a0 Sharma  ").orElseThrow();
+        assertThat(jdbc(0).queryForObject("select full_name from users where id=?", String.class, account)).isEqualTo("Asha Sharma");
+        var returning = ready(flow.phone(), flow.chat());
+        assertThat(contacts().complete(returning.id(), returning.session(), code(returning), null)).contains(account);
+        assertThat(contacts().complete(returning.id(), returning.session(), code(returning), "Different name")).contains(account);
+        assertThat(jdbc(0).queryForObject("select full_name from users where id=?", String.class, account)).isEqualTo("Asha Sharma");
+    }
+
+    @Test void missingNameDoesNotAuthenticateAndInvalidNamesRemainRetryable() throws Exception {
+        var browser = new Browser(0);
+        var flow = ready(browser);
+        String path = LOGIN + "/" + flow.id() + "/complete";
+        var response = browser.send("POST", path, json.writeValueAsString(Map.of("code", code(flow))), true);
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(json.readTree(response.body()).path("status").asString()).isEqualTo("NAME_REQUIRED");
+        assertThat(browser.send("GET", "/api/v1/users/me", null, false).statusCode()).isEqualTo(401);
+        var invalidName = browser.send("POST", path, json.writeValueAsString(Map.of("code", code(flow), "fullName", "x".repeat(121))), true);
+        assertThat(invalidName.statusCode()).isEqualTo(400);
+        assertThat(phoneOwners(flow.phone())).isZero();
+        var named = browser.send("POST", path, json.writeValueAsString(Map.of("code", code(flow), "fullName", "Fabricated new member")), true);
+        assertThat(named.statusCode()).isEqualTo(200);
+        assertThat(json.readTree(named.body()).path("status").asString()).isEqualTo("AUTHENTICATED");
+        browser.account();
+    }
+
+    @Test void resendRotatesOtpWithoutExtendingExpiryOrResettingBadAttempts() {
+        var flow = ready();
+        String old = code(flow);
+        var original = challenges().find(flow.id());
+        assertThatThrownBy(() -> contacts().resend(flow.id(), flow.session()))
+                .isInstanceOfSatisfying(RequestFailure.class, failure -> assertThat(failure.kind()).isEqualTo(RequestFailure.Kind.RATE_LIMITED));
+        allowResend(flow);
+        contacts().resend(flow.id(), flow.session());
+        String latest = code(flow);
+        assertThat(latest.equals(old)).isFalse();
+        assertThat(challenges().find(flow.id()).expires()).isEqualTo(original.expires());
+        assertThatThrownBy(() -> contacts().complete(flow.id(), flow.session(), old, "Fabricated member")).isInstanceOf(RequestFailure.class);
+        for (int index = 0; index < 2; index++) { allowResend(flow); contacts().resend(flow.id(), flow.session()); }
+        assertThat(challenges().redis.opsForHash().get(challenges().key(flow.id()), "attempts")).isEqualTo("1");
+        allowResend(flow);
+        assertThatThrownBy(() -> contacts().resend(flow.id(), flow.session()))
+                .isInstanceOfSatisfying(RequestFailure.class, failure -> assertThat(failure.kind()).isEqualTo(RequestFailure.Kind.RATE_LIMITED));
+        complete(flow);
+    }
+
+    @Test void concurrentResendsRotateOneGenerationAndCannotCrossOriginalSessions() throws Exception {
+        var flow = ready(); allowResend(flow);
+        assertThatThrownBy(() -> contacts().resend(flow.id(), contacts().session("other-resend-browser")))
+                .isInstanceOfSatisfying(RequestFailure.class, failure -> assertThat(failure.kind()).isEqualTo(RequestFailure.Kind.NOT_FOUND));
+        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            var gate = new CountDownLatch(1);
+            var calls = new ArrayList<Future<?>>();
+            for (int index = 0; index < 12; index++) calls.add(executor.submit(() -> {
+                gate.await();
+                try { contacts().resend(flow.id(), flow.session()); } catch (RequestFailure expected) {
+                    assertThat(expected.kind()).isIn(RequestFailure.Kind.RATE_LIMITED, RequestFailure.Kind.UNAVAILABLE, RequestFailure.Kind.CONFLICT);
+                }
+                return null;
+            }));
+            gate.countDown(); for (var call : calls) call.get(10, TimeUnit.SECONDS);
+        }
+        assertThat(challenges().redis.opsForHash().get(challenges().key(flow.id()), "resends")).isEqualTo("1");
+        complete(flow);
+    }
+
+    @Test void bareStartExplainsMissingLinksAndResendsOnlyTheActiveBoundChallenge() {
+        long unbound = chats.incrementAndGet(); clearBudget(unbound);
+        receiver().accept(event(unbound, Map.of("text", "/start")));
+        assertThat(bot().hints.get(unbound)).isEqualTo(TelegramBot.Hint.OPEN_BROWSER);
+        var flow = ready(); clearBudget(flow.chat());
+        String old = code(flow);
+        receiver().accept(event(flow.chat(), Map.of("text", "/start")));
+        assertThat(bot().hints.get(flow.chat())).isEqualTo(TelegramBot.Hint.WAIT_FOR_RESEND);
+        assertThat(code(flow).equals(old)).isTrue();
+        allowResend(flow);
+        receiver().accept(event(flow.chat(), Map.of("text", "/start")));
+        assertThat(code(flow).equals(old)).isFalse();
+        complete(flow);
+    }
+
+    @Test void failedResendDeliveryRetriesTheSameGenerationAndRejectsStalePreparation() {
+        var flow = ready(); allowResend(flow);
+        var stale = challenges().find(flow.id());
+        bot().fail.set(true);
+        assertThatThrownBy(() -> contacts().resend(flow.id(), flow.session())).isInstanceOf(RequestFailure.class);
+        var pending = challenges().find(flow.id());
+        assertThat(pending.state()).isEqualTo("CODE_READY");
+        assertThat(challenges().prepare(stale, flow.chat(), apps.getFirst().getBean(TelegramCrypto.class).code(stale.salt()))).isFalse();
+        clearBudget(flow.chat());
+        contacts().resend(flow.id(), flow.session());
+        assertThat(challenges().find(flow.id()).salt().equals(pending.salt())).isTrue();
+        assertThat(challenges().redis.opsForHash().get(challenges().key(flow.id()), "resends")).isEqualTo("1");
+        complete(flow);
+    }
+
+    @Test void resendHttpRequiresCsrfAndTheOriginalAnonymousBrowser() throws Exception {
+        var browser = new Browser(0); var flow = ready(browser); allowResend(flow);
+        String path = LOGIN + "/" + flow.id() + "/resend";
+        assertThat(browser.send("POST", path, "{}", false).statusCode()).isEqualTo(403);
+        var other = new Browser(0);
+        assertThat(other.send("POST", path, "{}", true).statusCode()).isEqualTo(404);
+        var response = browser.send("POST", path, "{}", true);
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("Cache-Control")).hasValue("no-store");
+        assertThat(json.readTree(response.body()).path("status").asString()).isEqualTo("CODE_SENT");
+        assertThat(browser.send("POST", path, "{}", true).statusCode()).isEqualTo(429);
+    }
+
+    private void allowResend(Flow flow) {
+        challenges().redis.opsForHash().put(challenges().key(flow.id()), "resend_at", "0");
+        clearBudget(flow.chat());
+    }
+
+    @Test void reopeningTheSameDeepLinkCanResendAfterTheCooldown() {
+        String session = contacts().session("fabricated-reopen-browser-" + UUID.randomUUID());
+        String number = phone(); long chat = chats.incrementAndGet();
+        var created = contacts().create(session, number);
+        UUID id = (UUID) created.get("challengeId");
+        String token = created.get("botUrl").toString().split("start=")[1];
+        clearBudget(chat); receiver().accept(start(chat, token));
+        clearBudget(chat); receiver().accept(contact(chat, number));
+        var flow = new Flow(id, contacts().initiator(session), session, number, chat);
+        String old = code(flow); allowResend(flow);
+        receiver().accept(start(chat, token));
+        assertThat(code(flow).equals(old)).isFalse();
+        complete(flow);
+    }
     private static final String LOGIN = "/api/v1/auth/telegram/challenges";
     private static final String ISSUER = "https://telegram.org";
     private final List<ConfigurableApplicationContext> apps = new ArrayList<>();
@@ -96,12 +228,12 @@ class TelegramContactIT {
         assertThat(identityCount(chat)).isZero();
         assertThat(browser.send("POST", "/api/v1/listings", pgDraft(), true).statusCode()).isEqualTo(401);
         String path = LOGIN + "/" + id + "/complete";
-        assertThat(browser.send("POST", path, json.writeValueAsString(Map.of("code", code)), false).statusCode()).isEqualTo(403);
-        var completed = browser.send("POST", path, json.writeValueAsString(Map.of("code", code)), true);
+        assertThat(browser.send("POST", path, json.writeValueAsString(Map.of("code", code, "fullName", "Fabricated member")), false).statusCode()).isEqualTo(403);
+        var completed = browser.send("POST", path, json.writeValueAsString(Map.of("code", code, "fullName", "Fabricated member")), true);
         assertThat(completed.statusCode()).isEqualTo(200);
         assertThat(json.readTree(completed.body()).get("status").asString()).isEqualTo("AUTHENTICATED");
         browser.refreshCsrf();
-        assertThat(browser.send("POST", path, json.writeValueAsString(Map.of("code", code)), true).statusCode()).isEqualTo(200);
+        assertThat(browser.send("POST", path, json.writeValueAsString(Map.of("code", code, "fullName", "Fabricated member")), true).statusCode()).isEqualTo(200);
         UUID account = browser.account();
         assertThat(jdbc(0).queryForObject("select count(*) from telegram_login_receipts where id=? and user_id=?", Long.class, id, account)).isEqualTo(1);
         assertThat(apps.getFirst().getBean(IdentityAccounts.class).hasVerifiedContact(account)).isTrue();
@@ -368,12 +500,12 @@ class TelegramContactIT {
         var flow = ready();
         String code = bot().codes.get(flow.chat());
         String other = contacts().session("other-fabricated-session");
-        assertThatThrownBy(() -> contacts().complete(flow.id(), other, code))
+        assertThatThrownBy(() -> contacts().complete(flow.id(), other, code, "Fabricated member").orElseThrow())
                 .isInstanceOfSatisfying(RequestFailure.class, failure -> assertThat(failure.kind()).isEqualTo(RequestFailure.Kind.NOT_FOUND));
         assertThatThrownBy(() -> contacts().status(flow.id(), other)).isInstanceOf(RequestFailure.class);
-        UUID account = contacts().complete(flow.id(), flow.session(), code);
+        UUID account = contacts().complete(flow.id(), flow.session(), code, "Fabricated member").orElseThrow();
         assertThat(jdbc(0).queryForObject("select phone_number from users where id=?", String.class, account)).isEqualTo(flow.phone());
-        assertThatThrownBy(() -> contacts().complete(flow.id(), other, code)).isInstanceOf(RequestFailure.class);
+        assertThatThrownBy(() -> contacts().complete(flow.id(), other, code, "Fabricated member").orElseThrow()).isInstanceOf(RequestFailure.class);
     }
 
     @Test void fiveBadAttemptsLockTheChallengeAndExpiryFailsClosed() {
@@ -381,13 +513,13 @@ class TelegramContactIT {
         String correct = bot().codes.get(flow.chat());
         String bad = correct.equals("000000") ? "999999" : "000000";
         for (int index = 0; index < 5; index++) {
-            assertThatThrownBy(() -> contacts().complete(flow.id(), flow.session(), bad)).isInstanceOf(RequestFailure.class);
+            assertThatThrownBy(() -> contacts().complete(flow.id(), flow.session(), bad, "Fabricated member").orElseThrow()).isInstanceOf(RequestFailure.class);
         }
         assertThat(challenges().find(flow.id()).state()).isEqualTo("LOCKED");
-        assertThatThrownBy(() -> contacts().complete(flow.id(), flow.session(), correct)).isInstanceOf(RequestFailure.class);
+        assertThatThrownBy(() -> contacts().complete(flow.id(), flow.session(), correct, "Fabricated member").orElseThrow()).isInstanceOf(RequestFailure.class);
         var expired = ready();
         challenges().redis.delete(challenges().key(expired.id()));
-        assertThatThrownBy(() -> contacts().complete(expired.id(), expired.session(), bot().codes.get(expired.chat()))).isInstanceOf(RequestFailure.class);
+        assertThatThrownBy(() -> contacts().complete(expired.id(), expired.session(), bot().codes.get(expired.chat()), "Fabricated member").orElseThrow()).isInstanceOf(RequestFailure.class);
         assertThat(identityCount(expired.chat())).isZero();
     }
 
@@ -504,7 +636,7 @@ class TelegramContactIT {
         assertThat(webhook(1, event, true).statusCode()).isEqualTo(204);
         assertThat(apps.get(1).getBean(ControlledTelegram.class).codes).doesNotContainKey(flow.chat());
         assertThatThrownBy(() -> apps.get(1).getBean(TelegramContacts.class)
-                .complete(flow.id(), flow.session(), "000000")).isInstanceOf(RequestFailure.class);
+                .complete(flow.id(), flow.session(), "000000", "Fabricated member")).isInstanceOf(RequestFailure.class);
         assertThat(identityCount(flow.chat())).isZero();
     }
 
@@ -514,7 +646,7 @@ class TelegramContactIT {
         String initialCsrf = browser.csrf;
         var flow = ready(browser);
         assertThat(browser.send("POST", LOGIN + "/" + flow.id() + "/complete",
-                json.writeValueAsString(Map.of("code", bot().codes.get(flow.chat()))), true).statusCode()).isEqualTo(200);
+                json.writeValueAsString(Map.of("code", bot().codes.get(flow.chat()), "fullName", "Fabricated member")), true).statusCode()).isEqualTo(200);
         assertThat(browser.cookie).isNotEqualTo(initialCookie);
         assertThat(raw("GET", "/api/v1/users/me", initialCookie, null, null).statusCode()).isEqualTo(401);
         assertThat(browser.send("POST", "/api/v1/listings", pgDraft(), true).statusCode()).isEqualTo(403);
@@ -610,8 +742,8 @@ class TelegramContactIT {
         UUID secondAccount;
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
             var gate = new CountDownLatch(1);
-            var one = executor.submit(() -> { gate.await(); return contacts().complete(first.id(), first.session(), code(first)); });
-            var two = executor.submit(() -> { gate.await(); return contacts().complete(second.id(), second.session(), code(second)); });
+            var one = executor.submit(() -> { gate.await(); return contacts().complete(first.id(), first.session(), code(first), "Fabricated member").orElseThrow(); });
+            var two = executor.submit(() -> { gate.await(); return contacts().complete(second.id(), second.session(), code(second), "Fabricated member").orElseThrow(); });
             gate.countDown();
             firstAccount = one.get(10, TimeUnit.SECONDS);
             secondAccount = two.get(10, TimeUnit.SECONDS);
@@ -700,7 +832,7 @@ class TelegramContactIT {
         apps.getFirst().getBean(com.zaxxer.hikari.HikariDataSource.class).getHikariPoolMXBean().softEvictConnections();
         assertUnavailable(authenticated.send("GET", "/api/v1/users/me", null, false));
         var failure = anonymous.send("POST", LOGIN + "/" + pending.id() + "/complete",
-                json.writeValueAsString(Map.of("code", code)), true);
+                json.writeValueAsString(Map.of("code", code, "fullName", "Fabricated member")), true);
         assertUnavailable(failure);
         assertThat(failure.body()).doesNotContain(pending.phone(), code, pending.id().toString());
         assertThat(anonymous.send("GET", "/api/v1/users/me", null, false).statusCode()).isEqualTo(401);
@@ -758,7 +890,7 @@ class TelegramContactIT {
         var challenge = apps.get(browser.target).getBean(TelegramChallenges.class).find(id);
         return new Flow(id, challenge.user(), challenge.session(), number, chat);
     }
-    private UUID complete(Flow flow) { return contacts().complete(flow.id(), flow.session(), code(flow)); }
+    private UUID complete(Flow flow) { return contacts().complete(flow.id(), flow.session(), code(flow), "Fabricated member").orElseThrow(); }
     private String code(Flow flow) {
         var challenge = challenges().find(flow.id());
         return challenge == null ? bot().codes.get(flow.chat()) : apps.getFirst().getBean(TelegramCrypto.class).code(challenge.salt());
@@ -768,7 +900,7 @@ class TelegramContactIT {
         var browser = new Browser(target);
         var flow = ready(browser);
         String code = apps.get(target).getBean(ControlledTelegram.class).codes.get(flow.chat());
-        assertThat(browser.send("POST", LOGIN + "/" + flow.id() + "/complete", json.writeValueAsString(Map.of("code", code)), true).statusCode()).isEqualTo(200);
+        assertThat(browser.send("POST", LOGIN + "/" + flow.id() + "/complete", json.writeValueAsString(Map.of("code", code, "fullName", "Fabricated member")), true).statusCode()).isEqualTo(200);
         browser.refreshCsrf();
         return browser;
     }
@@ -879,12 +1011,14 @@ class TelegramContactIT {
         }
     }
     static class ControlledTelegram implements TelegramBot {
+        final Map<Long, TelegramBot.Hint> hints = new ConcurrentHashMap<>();
         final Map<Long, String> codes = new ConcurrentHashMap<>();
         final Map<Long, AtomicInteger> sent = new ConcurrentHashMap<>();
         final AtomicBoolean fail = new AtomicBoolean();
         final Queue<JsonNode> batch = new ConcurrentLinkedQueue<>();
         final AtomicInteger pollCalls = new AtomicInteger();
         volatile CountDownLatch entered = new CountDownLatch(0), release = new CountDownLatch(0);
+        public void hint(long chat, TelegramBot.Hint hint) { hints.put(chat, hint); }
         public void contact(long chat) { }
         public void code(long chat, String code) {
             codes.put(chat, code);

@@ -25,7 +25,7 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 @Component
 class R2Storage implements StorageObjects, AutoCloseable {
-    private static final Duration STORAGE_DEADLINE = Duration.ofSeconds(20);
+    private static final Duration STORAGE_DEADLINE = Duration.ofSeconds(120);
     private static final ScheduledThreadPoolExecutor DEADLINES = deadlines();
     private final S3Client client;
     private final S3Presigner signer;
@@ -70,7 +70,7 @@ class R2Storage implements StorageObjects, AutoCloseable {
         var configuration = S3Configuration.builder().chunkedEncodingEnabled(false).pathStyleAccessEnabled(true).build();
         client = S3Client.builder().credentialsProvider(credentials).endpointOverride(endpoint).region(Region.of("auto"))
                 .serviceConfiguration(configuration).overrideConfiguration(builder -> builder.apiCallTimeout(STORAGE_DEADLINE)
-                        .apiCallAttemptTimeout(Duration.ofSeconds(10))).build();
+                        .apiCallAttemptTimeout(Duration.ofSeconds(60))).build();
         signer = S3Presigner.builder().credentialsProvider(credentials).endpointOverride(endpoint).region(Region.of("auto"))
                 .serviceConfiguration(configuration).build();
     }
@@ -96,12 +96,12 @@ class R2Storage implements StorageObjects, AutoCloseable {
         try (var deadline = new ReadDeadline(readDeadline)) {
             var remaining = deadline.remaining();
             var head = client.headObject(builder -> builder.bucket(staging).key(key).overrideConfiguration(configuration -> configuration
-                    .apiCallTimeout(remaining).apiCallAttemptTimeout(remaining.compareTo(Duration.ofSeconds(10)) < 0 ? remaining : Duration.ofSeconds(10))));
+                    .apiCallTimeout(remaining).apiCallAttemptTimeout(remaining.compareTo(Duration.ofSeconds(60)) < 0 ? remaining : Duration.ofSeconds(60))));
             if (head.contentLength() != expectedSize || head.contentLength() > ListingMedia.MAX_BYTES) throw ListingInput.invalid();
             var bodyRemaining = deadline.remaining();
             try (var stream = client.getObject(builder -> builder.bucket(staging).key(key).ifMatch(head.eTag())
                     .overrideConfiguration(configuration -> configuration.apiCallTimeout(bodyRemaining)
-                            .apiCallAttemptTimeout(bodyRemaining.compareTo(Duration.ofSeconds(10)) < 0 ? bodyRemaining : Duration.ofSeconds(10))))) {
+                            .apiCallAttemptTimeout(bodyRemaining.compareTo(Duration.ofSeconds(60)) < 0 ? bodyRemaining : Duration.ofSeconds(60))))) {
                 deadline.attach(stream);
                 var bytes = stream.readNBytes(ListingMedia.MAX_BYTES + 1);
                 deadline.remaining();

@@ -24,6 +24,10 @@
     {
       "key": "challengeId",
       "value": ""
+    },
+    {
+      "key": "fullName",
+      "value": ""
     }
   ],
   "item": [
@@ -110,13 +114,14 @@
         "url": "{{baseUrl}}/api/v1/auth/telegram/challenges/{{challengeId}}/complete",
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"code\": \"{{otp}}\"\n}",
+          "raw": "{\n  \"code\": \"{{otp}}\",\n  \"fullName\": \"{{fullName}}\"\n}",
           "options": {
             "raw": {
               "language": "json"
             }
           }
-        }
+        },
+        "description": "New-user correct OTP with an empty name returns NAME_REQUIRED while anonymous. Set fullName privately and repeat within the original expiry. Returning linked users receive AUTHENTICATED directly and retain their name."
       },
       "event": [
         {
@@ -124,7 +129,7 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test('Signed in', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().status).to.eql('AUTHENTICATED'); });"
+              "pm.test('Verified signup step or authenticated account', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().status).to.be.oneOf(['NAME_REQUIRED', 'AUTHENTICATED']); });"
             ]
           }
         }
@@ -207,6 +212,44 @@
             "type": "text/javascript",
             "exec": [
               "pm.test('Authentication required', () => pm.response.to.have.status(401));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Optional. Resend code on the current challenge",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{csrfToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/auth/telegram/challenges/{{challengeId}}/resend",
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Run only for a missed code after cooldown, or pending CODE_READY delivery. Three fresh resends per challenge. Copy the latest bot code to the private otp variable. Original expiry and bad attempts are preserved."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Code sent for the same challenge', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().status).to.eql('CODE_SENT'); });"
             ]
           }
         }

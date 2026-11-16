@@ -141,11 +141,29 @@ class ListingLifecycleIT {
         assertThat(jdbc(0).queryForObject("select validation_state from property_images where id = ?", String.class, bad.get("imageId"))).isEqualTo("REJECTED");
         assertThatThrownBy(() -> as(owner, () -> service().change(id, node("{\"version\":0}"), "publish"))).isInstanceOf(RequestFailure.class);
         var reservations = new ArrayList<java.util.concurrent.Callable<Boolean>>();
-        for (int i = 0; i < 15; i++) reservations.add(() -> attempt(owner, () -> media().presign(id, owner, node("{\"segment\":\"ROOM\",\"contentType\":\"image/png\",\"byteSize\":100}"))));
-        assertThat(race(reservations).stream().filter(Boolean::booleanValue).count()).isEqualTo(12);
+        for (int i = 0; i < 25; i++) reservations.add(() -> attempt(owner, () -> media().presign(id, owner, node("{\"segment\":\"ROOM\",\"contentType\":\"image/png\",\"byteSize\":100}"))));
+        assertThat(race(reservations).stream().filter(Boolean::booleanValue).count()).isEqualTo(20);
         UUID pending = jdbc(0).queryForObject("select id from property_images where property_id = ? and validation_state = 'PENDING' limit 1", UUID.class, id);
         jdbc(0).update("update property_images set created_at = current_timestamp - interval '2 hours', upload_expires_at = current_timestamp - interval '1 hour' where id = ?", pending);
         assertThatThrownBy(() -> media().complete(id, owner, node(json.writeValueAsString(Map.of("imageId", pending))))).isInstanceOf(RequestFailure.class);
+    }
+    @Test void rejectsUploadsAboveTheHeapBudgetBeforeReservationAndBeforeStorageRead() throws Exception {
+        UUID owner = owner(0, false);
+        UUID id = (UUID) as(owner, () -> service().create(draft("PG_HOSTEL", "Pune", 7000))).get("id");
+        long tooLarge = Runtime.getRuntime().maxMemory() / 16L + 1;
+        assertThat(tooLarge).isLessThanOrEqualTo(ListingMedia.MAX_BYTES);
+        var storage = apps.getFirst().getBean(ControlledStorage.class);
+        int uploads = storage.uploads.get(), reads = storage.reads.get();
+        assertThatThrownBy(() -> media().presign(id, owner, node(json.writeValueAsString(Map.of("segment", "ROOM", "contentType", "image/webp", "byteSize", tooLarge)))))
+                .isInstanceOfSatisfying(RequestFailure.class, failure -> assertThat(failure.kind()).isEqualTo(RequestFailure.Kind.UNAVAILABLE));
+        assertThat(storage.uploads.get()).isEqualTo(uploads);
+        assertThat(jdbc(0).queryForObject("select count(*) from property_images where property_id = ?", Long.class, id)).isZero();
+        var reservation = media().presign(id, owner, node("{\"segment\":\"ROOM\",\"contentType\":\"image/webp\",\"byteSize\":100}"));
+        jdbc(0).update("update property_images set declared_byte_size = ? where id = ?", tooLarge, reservation.get("imageId"));
+        assertThatThrownBy(() -> media().complete(id, owner, node(json.writeValueAsString(Map.of("imageId", reservation.get("imageId"))))))
+                .isInstanceOfSatisfying(RequestFailure.class, failure -> assertThat(failure.kind()).isEqualTo(RequestFailure.Kind.UNAVAILABLE));
+        assertThat(storage.reads.get()).isEqualTo(reads);
+        assertThat(jdbc(0).queryForObject("select validation_state from property_images where id = ?", String.class, reservation.get("imageId"))).isEqualTo("PENDING");
     }
     @Test void allSortsFiltersGeoAndPaginationRunAgainstPostgisWithoutDuplicateCards() throws Exception {
         var ids = new ArrayList<UUID>();
@@ -216,7 +234,7 @@ class ListingLifecycleIT {
         assertThatThrownBy(() -> as(owner(0, false), () -> service().change(id, inventory("ROOM", 0, true), "inventory"))).isInstanceOf(RequestFailure.class);
     }
     @Test void migrationUpgradePreservesOriginalChecksumsAndValidatesMediaMetadata() {
-        assertThat(jdbc(0).queryForList("select version from flyway_schema_history where success order by installed_rank", String.class)).containsExactly("1", "2", "3", "4", "5", "6", "7");
+        assertThat(jdbc(0).queryForList("select version from flyway_schema_history where success order by installed_rank", String.class)).containsExactly("1", "2", "3", "4", "5", "6", "7", "8");
         assertThat(jdbc(0).queryForList("select column_name from information_schema.columns where table_name='listing_owner_profiles'", String.class))
                 .containsExactlyInAnyOrder("id", "full_name", "average_rating", "review_count", "broker_report_count");
         UUID owner = owner(0, false);
@@ -469,11 +487,12 @@ class ListingLifecycleIT {
     }
     static class ControlledStorage implements StorageObjects {
         final Map<String, byte[]> staging = new ConcurrentHashMap<>(), finals = new ConcurrentHashMap<>();
+        final java.util.concurrent.atomic.AtomicInteger uploads = new java.util.concurrent.atomic.AtomicInteger(), reads = new java.util.concurrent.atomic.AtomicInteger();
         private Instant modified = Instant.now();
         public boolean enabled() { return true; }
-        public Upload upload(String key, String type, long size) { return new Upload("https://storage.example.invalid/" + key, Map.of("Content-Type", type)); }
+        public Upload upload(String key, String type, long size) { uploads.incrementAndGet(); return new Upload("https://storage.example.invalid/" + key, Map.of("Content-Type", type)); }
         void stage(String key, byte[] bytes) { staging.put(key, bytes); }
-        public byte[] read(String key, long size) { var bytes = staging.get(key); ListingInput.require(bytes != null && bytes.length == size); return bytes; }
+        public byte[] read(String key, long size) { reads.incrementAndGet(); var bytes = staging.get(key); ListingInput.require(bytes != null && bytes.length == size); return bytes; }
         public void writeFinal(String key, byte[] bytes, String type) { if (finals.putIfAbsent(key, bytes) != null) throw new IllegalStateException(); }
         public String download(String key) { return "https://media.example.invalid/" + key; }
         public void delete(Bucket bucket, String key) { (bucket == Bucket.STAGING ? staging : finals).remove(key); }
