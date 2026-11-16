@@ -165,6 +165,100 @@ class ListingLifecycleIT {
         assertThat(storage.reads.get()).isEqualTo(reads);
         assertThat(jdbc(0).queryForObject("select validation_state from property_images where id = ?", String.class, reservation.get("imageId"))).isEqualTo("PENDING");
     }
+    @Test void uploadedPhotoRemovalIsOwnedCsrfProtectedIdempotentAndReleasesItsSlot() throws Exception {
+        UUID owner = owner(0, false), attacker = owner(0, false);
+        UUID id = (UUID) as(owner, () -> service().create(draft("PG_HOSTEL", "Pune", 7000))).get("id");
+        images(id, owner, "PG_HOSTEL");
+        UUID image = jdbc(0).queryForObject("select id from property_images where property_id = ? and segment = 'ROOM'", UUID.class, id);
+        String key = jdbc(0).queryForObject("select object_key from property_images where id = ?", String.class, image);
+        for (int i = 0; i < 18; i++) media().presign(id, owner, node("{\"segment\":\"ROOM\",\"contentType\":\"image/png\",\"byteSize\":100}"));
+        String path = "/api/v1/listings/" + id + "/images/" + image;
+        String cookie = session(0, owner, "production:primary");
+        String csrf = json.readTree(send(0, "GET", "/api/v1/auth/csrf", cookie, null, null).body()).get("token").asString();
+        String otherCookie = session(0, attacker, "production:primary");
+        String otherCsrf = json.readTree(send(0, "GET", "/api/v1/auth/csrf", otherCookie, null, null).body()).get("token").asString();
+        assertThat(send(0, "DELETE", path, null, null, null).statusCode()).isIn(401, 403);
+        assertThat(send(0, "DELETE", path, cookie, null, null).statusCode()).isEqualTo(403);
+        assertThat(send(0, "DELETE", path, otherCookie, otherCsrf, null).statusCode()).isEqualTo(403);
+        assertThat(send(0, "DELETE", path, cookie, csrf, "{}").statusCode()).isEqualTo(400);
+        assertThat(send(0, "DELETE", "/api/v1/listings/" + id + "/images/" + UUID.randomUUID(), cookie, csrf, null).statusCode()).isEqualTo(404);
+        var response = send(0, "DELETE", path, cookie, csrf, null);
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("Cache-Control")).contains("no-store");
+        assertThat(json.readTree(response.body()).get("images").size()).isEqualTo(1);
+        assertThat(json.readTree(response.body()).get("version").asLong()).isEqualTo(1);
+        assertThat(media().remove(id, owner, image)).containsEntry("version", 1L);
+        assertThat(jdbc(0).queryForObject("select count(*) from property_images where property_id = ?", Long.class, id)).isEqualTo(20);
+        assertThat(jdbc(0).queryForObject("select validation_state from property_images where id = ?", String.class, image)).isEqualTo("REJECTED");
+        media().presign(id, owner, node("{\"segment\":\"ROOM\",\"contentType\":\"image/png\",\"byteSize\":100}"));
+        assertThatThrownBy(() -> media().complete(id, owner, node(json.writeValueAsString(Map.of("imageId", image)))))
+                .isInstanceOfSatisfying(RequestFailure.class, failure -> assertThat(failure.kind()).isEqualTo(RequestFailure.Kind.CONFLICT));
+        var storage = apps.getFirst().getBean(ControlledStorage.class);
+        assertThat(storage.finals).containsKey(key);
+        storage.ageAll(); media().cleanup();
+        assertThat(storage.finals).doesNotContainKey(key);
+        assertThat(jdbc(0).queryForObject("select count(*) from property_images where property_id = ? and validation_state = 'VALIDATED'", Long.class, id)).isEqualTo(1);
+    }
+    @ParameterizedTest @ValueSource(strings = {"ENTIRE_FLAT", "ROOM", "PG_HOSTEL"})
+    void lastRequiredPublishedPhotoNeedsPauseButDuplicatesCanBeRemoved(String mode) throws Exception {
+        UUID owner = owner(0, true);
+        UUID id = (UUID) as(owner, () -> service().create(draft(mode, "Chennai", 7000))).get("id");
+        images(id, owner, mode);
+        UUID original = jdbc(0).queryForObject("select id from property_images where property_id = ? and segment = 'ROOM'", UUID.class, id);
+        as(owner, () -> service().change(id, node("{\"version\":0}"), "publish"));
+        as(owner, () -> service().change(id, inventory(mode, 1, false), "inventory"));
+        assertThatThrownBy(() -> media().remove(id, owner, original))
+                .isInstanceOfSatisfying(RequestFailure.class, failure -> assertThat(failure.kind()).isEqualTo(RequestFailure.Kind.CONFLICT));
+        assertThat(as(owner, () -> service().detail(id))).containsEntry("status", "FULL_OCCUPIED").containsEntry("version", 2L);
+        byte[] bytes = png();
+        var duplicate = media().presign(id, owner, node(json.writeValueAsString(Map.of("segment", "ROOM", "contentType", "image/png", "byteSize", bytes.length))));
+        apps.getFirst().getBean(ControlledStorage.class).stage((String) duplicate.get("objectKey"), bytes);
+        media().complete(id, owner, node(json.writeValueAsString(Map.of("imageId", duplicate.get("imageId")))));
+        assertThat(media().remove(id, owner, original)).containsEntry("status", "FULL_OCCUPIED").containsEntry("version", 3L);
+        UUID last = (UUID) duplicate.get("imageId");
+        assertThatThrownBy(() -> media().remove(id, owner, last)).isInstanceOf(RequestFailure.class);
+        assertThatThrownBy(() -> as(owner, () -> service().change(id, node("{\"version\":2}"), "pause"))).isInstanceOf(RequestFailure.class);
+        as(owner, () -> service().change(id, node("{\"version\":3}"), "pause"));
+        assertThat(media().remove(id, owner, last)).containsEntry("status", "PAUSED").containsEntry("version", 5L);
+        assertThatThrownBy(() -> as(owner, () -> service().change(id, node("{\"version\":5}"), "publish"))).isInstanceOf(RequestFailure.class);
+    }
+    @Test void removalSerializesWithPublicationAndRepeatedRemoval() throws Exception {
+        UUID owner = owner(0, true);
+        UUID id = (UUID) as(owner, () -> service().create(draft("PG_HOSTEL", "Delhi", 7000))).get("id");
+        images(id, owner, "PG_HOSTEL");
+        UUID image = jdbc(0).queryForObject("select id from property_images where property_id = ? and segment = 'ROOM'", UUID.class, id);
+        assertThat(race(List.of(() -> attempt(owner, () -> media().remove(id, owner, image)),
+                () -> attempt(owner, () -> service().change(id, node("{\"version\":0}"), "publish")))))
+                .containsExactlyInAnyOrder(true, false);
+        var current = as(owner, () -> service().detail(id));
+        if (!"PAUSED".equals(current.get("status"))) as(owner, () -> service().change(id, node("{\"version\":1}"), "pause"));
+        long before = ((Number) as(owner, () -> service().detail(id)).get("version")).longValue();
+        boolean alreadyRemoved = "REJECTED".equals(jdbc(0).queryForObject("select validation_state from property_images where id = ?", String.class, image));
+        assertThat(race(List.of(() -> attempt(owner, () -> media().remove(id, owner, image)),
+                () -> attempt(owner, () -> media().remove(id, owner, image))))).containsExactly(true, true);
+        assertThat(as(owner, () -> service().detail(id))).containsEntry("version", before + (alreadyRemoved ? 0 : 1));
+    }
+    @Test void cancellationDuringCompletionCannotRestoreARemovedPhoto() throws Exception {
+        UUID owner = owner(0, false);
+        UUID id = (UUID) as(owner, () -> service().create(draft("PG_HOSTEL", "Mumbai", 7000))).get("id");
+        byte[] bytes = png();
+        var ticket = media().presign(id, owner, node(json.writeValueAsString(Map.of("segment", "ROOM", "contentType", "image/png", "byteSize", bytes.length))));
+        UUID image = (UUID) ticket.get("imageId");
+        var storage = apps.getFirst().getBean(ControlledStorage.class);
+        storage.stage((String) ticket.get("objectKey"), bytes);
+        var reading = new CountDownLatch(1); var resume = new CountDownLatch(1);
+        storage.afterRead.set(() -> { reading.countDown(); try { assertThat(resume.await(10, TimeUnit.SECONDS)).isTrue(); } catch (InterruptedException failure) { throw new IllegalStateException(failure); } });
+        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            var completion = executor.submit(() -> attempt(owner, () -> media().complete(id, owner, node(json.writeValueAsString(Map.of("imageId", image))))));
+            try {
+                assertThat(reading.await(10, TimeUnit.SECONDS)).isTrue();
+                media().remove(id, owner, image);
+            } finally { resume.countDown(); }
+            assertThat(completion.get(10, TimeUnit.SECONDS)).isFalse();
+        } finally { storage.afterRead.set(null); }
+        assertThat(jdbc(0).queryForObject("select validation_state from property_images where id = ?", String.class, image)).isEqualTo("REJECTED");
+        assertThat(as(owner, () -> service().detail(id)).get("images")).isEqualTo(List.of());
+    }
     @Test void allSortsFiltersGeoAndPaginationRunAgainstPostgisWithoutDuplicateCards() throws Exception {
         var ids = new ArrayList<UUID>();
         var modes = List.of("ENTIRE_FLAT", "ROOM", "PG_HOSTEL", "ROOM");
@@ -355,6 +449,7 @@ class ListingLifecycleIT {
         for (int i = 0; i < 60; i++) {
             var reserved = media().presign(id, owner, node("{\"segment\":\"ROOM\",\"contentType\":\"image/png\",\"byteSize\":100}"));
             jdbc(0).update("update property_images set created_at=current_timestamp - interval '2 hours', upload_expires_at=current_timestamp - interval '1 hour' where id=?", reserved.get("imageId"));
+            media().remove(id, owner, (UUID) reserved.get("imageId"));
         }
         assertThatThrownBy(() -> media().presign(id, owner, node("{\"segment\":\"ROOM\",\"contentType\":\"image/png\",\"byteSize\":100}")))
                 .isInstanceOfSatisfying(RequestFailure.class, failure -> assertThat(failure.kind()).isEqualTo(RequestFailure.Kind.RATE_LIMITED));
@@ -488,11 +583,12 @@ class ListingLifecycleIT {
     static class ControlledStorage implements StorageObjects {
         final Map<String, byte[]> staging = new ConcurrentHashMap<>(), finals = new ConcurrentHashMap<>();
         final java.util.concurrent.atomic.AtomicInteger uploads = new java.util.concurrent.atomic.AtomicInteger(), reads = new java.util.concurrent.atomic.AtomicInteger();
+        final java.util.concurrent.atomic.AtomicReference<Runnable> afterRead = new java.util.concurrent.atomic.AtomicReference<>();
         private Instant modified = Instant.now();
         public boolean enabled() { return true; }
         public Upload upload(String key, String type, long size) { uploads.incrementAndGet(); return new Upload("https://storage.example.invalid/" + key, Map.of("Content-Type", type)); }
         void stage(String key, byte[] bytes) { staging.put(key, bytes); }
-        public byte[] read(String key, long size) { reads.incrementAndGet(); var bytes = staging.get(key); ListingInput.require(bytes != null && bytes.length == size); return bytes; }
+        public byte[] read(String key, long size) { reads.incrementAndGet(); var bytes = staging.get(key); ListingInput.require(bytes != null && bytes.length == size); var callback = afterRead.getAndSet(null); if (callback != null) callback.run(); return bytes; }
         public void writeFinal(String key, byte[] bytes, String type) { if (finals.putIfAbsent(key, bytes) != null) throw new IllegalStateException(); }
         public String download(String key) { return "https://media.example.invalid/" + key; }
         public void delete(Bucket bucket, String key) { (bucket == Bucket.STAGING ? staging : finals).remove(key); }

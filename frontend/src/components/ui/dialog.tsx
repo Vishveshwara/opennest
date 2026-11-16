@@ -10,12 +10,14 @@ export function ConfirmDialog({
   trigger,
   confirm,
   busy = false,
+  confirmLabel = "Confirm report",
 }: {
   title: string;
   description: string;
   trigger: string;
   confirm: () => Promise<void>;
   busy?: boolean;
+  confirmLabel?: string;
 }) {
   return (
     <DialogPrimitive.Root>
@@ -37,7 +39,7 @@ export function ConfirmDialog({
             </DialogPrimitive.Close>
             <DialogPrimitive.Close asChild>
               <Button variant="destructive" onClick={() => void confirm()}>
-                Confirm report
+                {confirmLabel}
               </Button>
             </DialogPrimitive.Close>
           </div>

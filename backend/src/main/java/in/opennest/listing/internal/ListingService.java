@@ -59,7 +59,7 @@ class ListingService {
                 case "publish" -> {
                     if (paused) {
                         if (!accounts.hasVerifiedContact(owner)) throw new RequestFailure(RequestFailure.Kind.CONTACT_VERIFICATION_REQUIRED);
-                        var required = "FLAT".equals(row.get("category")) ? Set.of("ROOM", "HALL", "BATHROOM", "KITCHEN") : Set.of("ROOM", "BATHROOM");
+                        var required = ListingMedia.requiredSegments((String) row.get("category"));
                         var segments = store.jdbc().queryForList("select distinct segment from property_images where property_id = ? and validation_state = 'VALIDATED'", String.class, id);
                         if (!segments.containsAll(required) || store.count(owner, true) >= 5) throw new RequestFailure(RequestFailure.Kind.CONFLICT);
                         boolean available = "ENTIRE_FLAT".equals(row.get("flat_rental_mode")) ? Boolean.TRUE.equals(row.get("whole_flat_available"))
