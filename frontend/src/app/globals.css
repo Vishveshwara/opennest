@@ -456,6 +456,19 @@ textarea {
 .phone-input > input {
   min-width: 0;
 }
+.telegram-recovery {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  overflow-wrap: anywhere;
+}
+.telegram-recovery summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.telegram-recovery .button {
+  margin-top: 12px;
+}
 .filter-help {
   grid-column: 1 / -1;
   font-size: 11px;
@@ -1194,9 +1207,15 @@ input[type="checkbox"] {
 .upload-grid figcaption {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 5px;
   font-size: 9px;
   padding-top: 6px;
+}
+.upload-grid figcaption span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
 }
 .upload-jobs {
   list-style: none;

@@ -282,7 +282,8 @@ class BackendIsolationIT {
     private void assertListingRoutes(Map<org.springframework.web.servlet.mvc.method.RequestMappingInfo, org.springframework.web.method.HandlerMethod> mappings) {
         var expected = java.util.Set.of("GET /api/v1/listings/search", "GET /api/v1/listings/mine", "GET /api/v1/listings/{id}",
                 "POST /api/v1/listings", "POST /api/v1/listings/{id}/publish", "POST /api/v1/listings/{id}/pause",
-                "PATCH /api/v1/listings/{id}/inventory", "POST /api/v1/listings/{id}/images/presign", "POST /api/v1/listings/{id}/images/complete");
+                "PATCH /api/v1/listings/{id}/inventory", "POST /api/v1/listings/{id}/images/presign", "POST /api/v1/listings/{id}/images/complete",
+                "DELETE /api/v1/listings/{id}/images/{imageId}");
         var actual = new java.util.ArrayList<String>();
         mappings.forEach((mapping, handler) -> {
             var paths = mapping.getPatternValues().stream().filter(path -> path.equals("/api/v1/listings") || path.startsWith("/api/v1/listings/")).toList();

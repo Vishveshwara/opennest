@@ -33,6 +33,9 @@ const startedAt = Date.parse("2026-11-14T04:30:00Z");
 const challengesPath = "/api/v1/auth/telegram/challenges";
 const challengeId = "00000000-0000-4000-8000-000000000001";
 const challengePath = `${challengesPath}/${challengeId}`;
+const startToken = "a".repeat(43);
+const botUrl = `https://t.me/OpenNestTestBot?start=${startToken}`;
+const writeClipboard = vi.fn();
 const nationalPhone = "0000000001";
 const phoneNumber = `+91${nationalPhone}`;
 const code = "123456";
@@ -40,13 +43,15 @@ const completionBody = z.object({ code: z.string(), fullName: z.string().optiona
 let returning = false;
 let failNextResend = false;
 let resendAt = "";
-let deliveryStatus: "CODE_SENT" | "CODE_READY" = "CODE_SENT";
+let deliveryStatus: "WAITING_BOT" | "CODE_SENT" | "CODE_READY" = "CODE_SENT";
 let resendsRemaining = 3;
 
 beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(startedAt);
   vi.clearAllMocks();
+  writeClipboard.mockReset();
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: writeClipboard } });
   returning = false;
   failNextResend = false;
   deliveryStatus = "CODE_SENT";
@@ -59,7 +64,7 @@ beforeEach(() => {
       if (path === challengesPath && method === "POST") {
         return schema.parse({
           challengeId,
-          botUrl: "https://t.me/OpenNestTestBot?start=fabricated-browser-token",
+          botUrl,
           expiresAt: new Date(startedAt + 300_000).toISOString(),
           restartAt: new Date(Date.now() + 60_000).toISOString(),
           status: "WAITING_BOT",
@@ -197,6 +202,33 @@ it("creates a named account only after a valid OTP and reuses the same private c
   expect(doubles.router.replace).toHaveBeenCalledWith("/account");
 });
 
+it("copies the current browser's start command for an existing Telegram chat and hides it after binding", async () => {
+  deliveryStatus = "WAITING_BOT";
+  writeClipboard.mockResolvedValue(undefined);
+  await startLogin();
+  fireEvent.click(screen.getByText("Chat already open or no Start button?"));
+  expect(screen.getByRole("textbox", { name: "Telegram sign-in command" })).toHaveValue(`/start ${startToken}`);
+  await act(async () => fireEvent.click(screen.getByRole("button", { name: "Copy sign-in command" })));
+  expect(writeClipboard).toHaveBeenCalledWith(`/start ${startToken}`);
+  expect(screen.getByRole("button", { name: "Command copied" })).toBeInTheDocument();
+  expect(challengeCreations()).toHaveLength(1);
+  expect(doubles.rotate).not.toHaveBeenCalled();
+  deliveryStatus = "CODE_SENT";
+  await advance(3000);
+  expect(screen.queryByRole("textbox", { name: "Telegram sign-in command" })).not.toBeInTheDocument();
+});
+
+it("offers manual command copying when the clipboard is unavailable and removes expired commands", async () => {
+  deliveryStatus = "WAITING_BOT";
+  writeClipboard.mockRejectedValue(new Error("Clipboard unavailable"));
+  await startLogin();
+  fireEvent.click(screen.getByText("Chat already open or no Start button?"));
+  await act(async () => fireEvent.click(screen.getByRole("button", { name: "Copy sign-in command" })));
+  expect(screen.getByText("Select and copy the command above, then send it in the OpenNest bot chat.")).toBeInTheDocument();
+  await advance(300_000);
+  expect(screen.queryByRole("textbox", { name: "Telegram sign-in command" })).not.toBeInTheDocument();
+});
+
 it("signs an existing account in without asking for a name or submitting a replacement name", async () => {
   returning = true;
   await startLogin();
@@ -232,7 +264,7 @@ it("waits for the resend deadline then posts an empty body, retains the challeng
   expect(screen.getByRole("textbox", { name: "Telegram code" })).toHaveValue("");
   expect(screen.getByRole("button", { name: "Resend code (30s)" })).toBeDisabled();
   expect(screen.getByRole("link", { name: "Open Telegram" })).toHaveAttribute(
-    "href", "https://t.me/OpenNestTestBot?start=fabricated-browser-token",
+    "href", botUrl,
   );
   expect(challengeCreations()).toHaveLength(1);
 });
@@ -330,7 +362,7 @@ it("retries pending code delivery immediately at zero allowance and recovers the
   expect(screen.getByRole("textbox", { name: "Telegram code" })).toHaveValue("");
   expect(screen.getByRole("button", { name: "Resend limit reached" })).toBeDisabled();
   expect(screen.getByRole("link", { name: "Open Telegram" })).toHaveAttribute(
-    "href", "https://t.me/OpenNestTestBot?start=fabricated-browser-token",
+    "href", botUrl,
   );
   returning = true;
   await submitCode();

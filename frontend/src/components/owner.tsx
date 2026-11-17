@@ -19,6 +19,7 @@ import {
   segmentSchema,
   presignSchema,
   imageSchema,
+  deletedImageSchema,
   uuid,
   type OwnerListing,
   type ImageSegment,
@@ -32,6 +33,7 @@ import {
 import { useSession } from "./session";
 import { AuthGate } from "./auth";
 import { Button } from "./ui/button";
+import { ConfirmDialog } from "./ui/dialog";
 import {
   Notice,
   Pagination,
@@ -760,23 +762,26 @@ function PhotoUploader({
   const [segment, setSegment] = useState<ImageSegment>("ROOM"),
     [jobs, setJobs] = useState<UploadJob[]>([]),
     [busy, setBusy] = useState(false),
-    [reloadError, setReloadError] = useState("");
+    [reloadError, setReloadError] = useState(""),
+    [actionError, setActionError] = useState(""),
+    [actionMessage, setActionMessage] = useState("");
   const update = (key: string, changes: Partial<PendingUploadJob>) =>
     setJobs((current) =>
       current.map((job) =>
         job.key === key && job.status !== "complete" ? { ...job, ...changes } : job,
       ),
     );
-  async function refreshListing() {
+  async function refreshListing(successMessage: string) {
     try {
       await reload();
       setReloadError("");
     } catch (error) {
-      setReloadError(errorMessage(error));
+      setReloadError(`${successMessage} The listing could not be refreshed. ${errorMessage(error)}`);
     }
   }
   async function run(job: PendingUploadJob, now: number) {
     setBusy(true);
+    setActionError("");
     let imageId = job.imageId,
       uploaded = job.uploaded;
     let reservation = job.reservation;
@@ -822,7 +827,7 @@ function PhotoUploader({
         ),
       );
       reservation = undefined;
-      await refreshListing();
+      await refreshListing("Your photo was validated.");
     } catch (error) {
       if (
         (error instanceof ApiError && [400, 409, 413].includes(error.status)) ||
@@ -848,6 +853,33 @@ function PhotoUploader({
       setBusy(false);
     }
   }
+  async function deleteImage(imageId: string) {
+    setBusy(true);
+    setReloadError("");
+    setActionError("");
+    setActionMessage("");
+    try {
+      const result = await api.request(
+        `/api/v1/listings/${listing.id}/images/${imageId}`,
+        deletedImageSchema,
+        "DELETE",
+      );
+      await refreshListing("The photo was deleted.");
+      setActionMessage(
+        result.listingPaused
+          ? "Photo deleted. OpenNest paused the listing because a required photo is now missing."
+          : "Photo deleted.",
+      );
+    } catch (error) {
+      setActionError(`The photo could not be deleted. ${errorMessage(error)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const required =
+    listing.category === "FLAT"
+      ? ["ROOM", "HALL", "BATHROOM", "KITCHEN"]
+      : ["ROOM", "BATHROOM"];
   return (
     <section className="panel">
       <h2>
@@ -860,19 +892,26 @@ function PhotoUploader({
       </p>
       {reloadError && (
         <Notice error>
-          {reloadError} Your photo was validated. Refresh the listing to see it.
+          {reloadError}
           <Button
             variant="outline"
             disabled={busy}
-            onClick={() => void refreshListing()}
+            onClick={() => void refreshListing("The latest photos are not yet available.")}
           >
             Refresh photos
           </Button>
         </Notice>
       )}
+      {actionError && <Notice error>{actionError}</Notice>}
+      {actionMessage && <Notice>{actionMessage}</Notice>}
       <div className="upload-grid">
-        {listing.images.map((image) => (
-          <figure key={image.imageId}>
+        {listing.images.map((image) => {
+          const lastRequired =
+            listing.status !== "PAUSED" &&
+            required.includes(image.segment) &&
+            listing.images.filter((candidate) => candidate.segment === image.segment)
+              .length === 1;
+          return <figure key={image.imageId}>
             {image.url && (
               <img
                 src={imageUrl(image.url, config.apiOrigin)}
@@ -881,11 +920,26 @@ function PhotoUploader({
               />
             )}
             <figcaption>
-              <Check size={14} />
-              {image.segment.replaceAll("_", " ")}
+              <span>
+                <Check size={14} />
+                {image.segment.replaceAll("_", " ")}
+              </span>
+              <ConfirmDialog
+                title={`Delete ${image.segment.toLowerCase().replaceAll("_", " ")} photo?`}
+                description={
+                  lastRequired
+                    ? "Deleting this required photo will pause the published listing until a replacement is validated and the listing is published again."
+                    : "This photo will be permanently removed from the listing."
+                }
+                trigger="Delete photo"
+                triggerSize="small"
+                confirmLabel="Delete photo"
+                busy={busy}
+                confirm={() => deleteImage(image.imageId)}
+              />
             </figcaption>
-          </figure>
-        ))}
+          </figure>;
+        })}
       </div>
       <div className="form-grid">
         <label className="field">
@@ -945,8 +999,9 @@ function PhotoUploader({
       </div>
       <p className="fine-print">
         Up to {MAX_LISTING_PHOTOS} images per listing, 60 upload reservations
-        per rolling 24 hours. Failed local photos can be removed. Validated
-        images cannot be removed or replaced in this version.
+        per rolling 24 hours. Deleting the last required photo from a published
+        listing pauses it until the photo is replaced and the listing is
+        published again.
       </p>
       <ul className="upload-jobs">
         {jobs.map((job) => (

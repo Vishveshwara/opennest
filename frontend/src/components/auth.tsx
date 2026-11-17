@@ -33,10 +33,15 @@ export function Login() {
     [resendsRemaining, setResendsRemaining] = useState<number | null>(null),
     [now, setNow] = useState<number | null>(null),
     [status, setStatus] = useState(""),
+    [commandCopy, setCommandCopy] = useState<"IDLE" | "COPIED" | "MANUAL">("IDLE"),
     [error, setError] = useState(""),
     [operation, setOperation] = useState<"IDLE" | "STARTING" | "COMPLETING" | "RESENDING">("IDLE"),
     [expired, setExpired] = useState(false);
   const busy = operation !== "IDLE";
+  const startToken = challenge ? new URL(challenge.botUrl).searchParams.get("start") : null;
+  const startCommand = startToken && /^[A-Za-z0-9_-]{43}$/.test(startToken)
+    ? `/start ${startToken}`
+    : null;
   const challengeExpired =
     expired ||
     (challenge !== null && now !== null && now >= Date.parse(challenge.expiresAt));
@@ -128,6 +133,7 @@ export function Login() {
       setCompletion("CODE");
       setResendAt(null);
       setResendsRemaining(null);
+      setCommandCopy("IDLE");
     } catch (error) {
       setError(errorMessage(error));
     } finally {
@@ -196,6 +202,15 @@ export function Login() {
       setError(errorMessage(error));
     } finally {
       setOperation("IDLE");
+    }
+  }
+  async function copyStartCommand() {
+    if (!startCommand || challengeExpired) return;
+    try {
+      await navigator.clipboard.writeText(startCommand);
+      setCommandCopy("COPIED");
+    } catch {
+      setCommandCopy("MANUAL");
     }
   }
   return (
@@ -272,7 +287,7 @@ export function Login() {
             {completion === "CODE" && (
               <>
                 <ol className="login-steps">
-                  <li>Open the Telegram bot and press Start.</li>
+                  <li>Open Telegram using the button below, then press Start if shown.</li>
                   <li>Use its button to share your own +91 contact.</li>
                   <li>Enter the six-digit code here, in this browser.</li>
                 </ol>
@@ -281,6 +296,41 @@ export function Login() {
                     Open Telegram <ArrowUpRight size={16} />
                   </a>
                 </Button>
+                {status === "WAITING_BOT" && startCommand && !challengeExpired && (
+                  <details className="telegram-recovery">
+                    <summary>Chat already open or no Start button?</summary>
+                    <p>
+                      Copy this sign-in command, paste it into the OpenNest bot
+                      chat, and send it. This connects Telegram to this browser.
+                      Sending just /start does not connect a new sign-in.
+                    </p>
+                    <label className="field">
+                      Telegram sign-in command
+                      <input
+                        value={startCommand}
+                        readOnly
+                        autoComplete="off"
+                        spellCheck={false}
+                        onFocus={(event) => event.currentTarget.select()}
+                      />
+                    </label>
+                    <Button type="button" variant="outline" onClick={() => void copyStartCommand()}>
+                      {commandCopy === "COPIED" ? "Command copied" : "Copy sign-in command"}
+                    </Button>
+                    {commandCopy !== "IDLE" && (
+                      <p role="status">
+                        {commandCopy === "COPIED"
+                          ? "Paste the command into the OpenNest bot chat and send it."
+                          : "Select and copy the command above, then send it in the OpenNest bot chat."}
+                      </p>
+                    )}
+                    <p className="fine-print">
+                      After sharing your contact, enter the code in this browser,
+                      not in Telegram. If the bot does not reply, return here and
+                      try again shortly.
+                    </p>
+                  </details>
+                )}
               </>
             )}
             <p role="status" className="fine-print">

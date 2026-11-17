@@ -50,6 +50,9 @@ class ListingMedia implements AutoCloseable {
             return Map.of("imageId", id, "objectKey", key, "uploadUrl", upload.url(), "expiresAt", expires, "requiredHeaders", upload.headers());
         });
     }
+    static Set<String> requiredSegments(String category) {
+        return "FLAT".equals(category) ? Set.of("ROOM", "HALL", "BATHROOM", "KITCHEN") : Set.of("ROOM", "BATHROOM");
+    }
     Map<String, Object> complete(UUID property, UUID owner, JsonNode body) {
         requireStorage(); ListingInput.fields(body, Set.of("imageId"));
         UUID id;
@@ -83,6 +86,27 @@ class ListingMedia implements AutoCloseable {
             });
             throw failure;
         } finally { processors.release(); }
+    }
+    Map<String, Object> delete(UUID property, UUID id, UUID owner) {
+        return store.write(() -> {
+            accounts.lockForListingMutation(owner);
+            var listing = store.owned(property, owner, true);
+            var row = image(property, id, true);
+            if (store.jdbc().update("update property_images set validation_state = 'REJECTED', object_key = null, content_type = null, byte_size = null, width = null, height = null where id = ?", id) != 1)
+                throw new RequestFailure(RequestFailure.Kind.CONFLICT);
+            boolean published = !"PAUSED".equals(listing.get("status"));
+            boolean required = requiredSegments((String) listing.get("category")).contains(row.get("segment"));
+            boolean listingPaused = false;
+            if (published && "VALIDATED".equals(row.get("validation_state")) && required) {
+                long remaining = store.jdbc().queryForObject("select count(*) from property_images where property_id = ? and segment = ? and validation_state = 'VALIDATED'",
+                        Long.class, property, row.get("segment"));
+                if (remaining == 0) {
+                    store.status(property, ((Number) listing.get("version")).longValue(), "PAUSED");
+                    listingPaused = true;
+                }
+            }
+            return Map.of("deletedImageId", id, "listingPaused", listingPaused);
+        });
     }
     private static void requireUploadCapacity(long bytes) {
         if (bytes * 4L > Runtime.getRuntime().maxMemory() / 4L) throw new RequestFailure(RequestFailure.Kind.UNAVAILABLE);
