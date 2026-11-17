@@ -76,6 +76,8 @@ The deployment post-processor fixes this Logback configuration, disables debug/t
 
 A response already committed to the client cannot be replaced with a new Problem Detail. The boundary records only its fixed safe event and does not dump the exception. Disconnected-client writes cannot guarantee a complete JSON body. Invalid HTTP syntax rejected before application dispatch remains the servlet container's responsibility.
 
+AVIF native-loader diagnostics use a separate trusted application logger with additivity disabled and the same message-only appender. The first decoder-load or native-linkage failure per JVM emits the throwable class and a message bounded to 512 characters, with URI values and control characters redacted. It passes no image bytes, URLs, request/account context, throwable object, cause chain or stack trace to the logger. Invalid image decoding is not logged through this path. Client responses remain the generic retryable 503 contract; ordinary framework diagnostics remain redacted.
+
 ## Verification
 
 With Java 25, run the unit/context/HTTP checks or include the existing real database profile:

@@ -12,6 +12,9 @@
     <logger name="in.opennest.common.internal.web.ProblemResponses" level="INFO" additivity="false">
         <appender-ref ref="SAFE_HTTP_ERRORS"/>
     </logger>
+    <logger name="in.opennest.listing.internal.AvifImage" level="ERROR" additivity="false">
+        <appender-ref ref="SAFE_HTTP_ERRORS"/>
+    </logger>
     <root level="ERROR">
         <appender-ref ref="REDACTED_DIAGNOSTICS"/>
     </root>

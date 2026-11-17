@@ -1,6 +1,7 @@
 package in.opennest.listing.internal;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import java.nio.ByteBuffer;
@@ -8,10 +9,15 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import in.opennest.common.RequestFailure;
 import org.bytedeco.javacv.FFmpegFrameGrabber;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.mockConstruction;
+import static org.mockito.Mockito.doThrow;
 
+@ExtendWith(OutputCaptureExtension.class)
 class AvifImageTests {
     @Test
     void decodesAndPreservesValidAvifAboveFourMegabytes() throws Exception {
@@ -24,12 +30,27 @@ class AvifImageTests {
     }
 
     @Test
-    void reportsAnUnavailableNativeDecoderAsRetryableInfrastructureFailure() throws Exception {
+    void reportsNativeFailuresOnceWithoutChangingTheClientFailure(CapturedOutput output) throws Exception {
         try (var decoder = mockStatic(FFmpegFrameGrabber.class)) {
-            decoder.when(FFmpegFrameGrabber::tryLoad).thenThrow(new FFmpegFrameGrabber.Exception("Fabricated native load failure"));
-            assertThatThrownBy(() -> ImageValidator.validate(fixture(), "image/avif"))
-                    .isInstanceOfSatisfying(RequestFailure.class, failure -> assertThat(failure.kind()).isEqualTo(RequestFailure.Kind.UNAVAILABLE));
+            var failure = new FFmpegFrameGrabber.Exception("Fabricated native load failure https://native.example.invalid/image?token=fabricated-native-token\n");
+            failure.initCause(new IllegalStateException("Fabricated private account cause"));
+            decoder.when(FFmpegFrameGrabber::tryLoad).thenThrow(failure);
+            for (int attempt = 0; attempt < 2; attempt++) {
+                assertThatThrownBy(() -> ImageValidator.validate(fixture(), "image/avif"))
+                        .isInstanceOfSatisfying(RequestFailure.class, unavailable -> assertThat(unavailable.kind()).isEqualTo(RequestFailure.Kind.UNAVAILABLE));
+            }
+            decoder.when(FFmpegFrameGrabber::tryLoad).thenAnswer(invocation -> null);
+            try (var constructors = mockConstruction(FFmpegFrameGrabber.class, (grabber, context) ->
+                    doThrow(new UnsatisfiedLinkError("Fabricated decode linkage failure")).when(grabber).start(false))) {
+                assertThatThrownBy(() -> ImageValidator.validate(fixture(), "image/avif"))
+                        .isInstanceOfSatisfying(RequestFailure.class, unavailable -> assertThat(unavailable.kind()).isEqualTo(RequestFailure.Kind.UNAVAILABLE));
+            }
         }
+        assertThat(output.getAll()).containsOnlyOnce("OpenNest AVIF native decoder unavailable")
+                .contains("exceptionClass=org.bytedeco.javacv.FFmpegFrameGrabber$Exception",
+                        "message=Fabricated native load failure [redacted URI]")
+                .doesNotContain("native.example.invalid", "fabricated-native-token", "Fabricated private account cause",
+                        "message=Fabricated native load failure https:");
     }
 
     @Test

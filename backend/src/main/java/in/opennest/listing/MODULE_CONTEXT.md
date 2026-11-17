@@ -1,6 +1,7 @@
 # Listing module
 
 - Status: Phase 3 draft/owner/public APIs, mode-aware inventory, publication quotas, nationwide search and private R2 uploads implemented. Verification/configuration: docs/LISTINGS_HANDOFF.md.
+- Native media builds validate Linux/Windows x86-64 hosts and allowlist linux-x86_64/windows-x86_64 classifiers. Native decoder load/linkage failures log class and bounded, URI-redacted message once per JVM, without image/context/throwable chains; client 503 stays unchanged. docs/BACKEND_HTTP_ERRORS.md.
 - Own future listing lifecycle, mode-aware inventory, images, publication quota, and nationwide listing queries.
 - Phase 1.5 V1/V2 creates tables/indexes; Phase 1.6 adds package-private PropertyEntity/PropertyImageEntity under internal.persistence. Scalar owner/property UUIDs, no associations/cascades; Hibernate validation only. Contracts: `docs/SCHEMA_CONTRACT.md`, `docs/BACKEND_PERSISTENCE.md` from repository root.
 - Geography/JTS Point and room totals are read-only, retrieved on insert; flush then refresh/reload after updates. @Version protects dirty ORM writes; caller-version checks, unchanged-inventory increments, no-op publication, and quota/publication gates remain Phase 3 service work.

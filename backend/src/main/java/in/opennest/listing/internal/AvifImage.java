@@ -6,14 +6,19 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import in.opennest.common.RequestFailure;
 import org.bytedeco.javacv.FFmpegFrameGrabber;
 import org.bytedeco.javacv.FrameGrabber;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import static org.bytedeco.ffmpeg.global.avcodec.AV_CODEC_ID_AV1;
 import static org.bytedeco.ffmpeg.global.avutil.AV_LOG_QUIET;
 import static org.bytedeco.ffmpeg.global.avutil.av_log_set_level;
 
 final class AvifImage {
+    private static final Logger LOG = LoggerFactory.getLogger(AvifImage.class);
+    private static final AtomicBoolean NATIVE_FAILURE_LOGGED = new AtomicBoolean();
     static final int MAX_EDGE = 2048;
 
     static ImageValidator.Validated validate(byte[] bytes) {
@@ -52,7 +57,7 @@ final class AvifImage {
         try {
             FFmpegFrameGrabber.tryLoad();
         } catch (FrameGrabber.Exception | LinkageError failure) {
-            throw new RequestFailure(RequestFailure.Kind.UNAVAILABLE);
+            throw nativeUnavailable(failure);
         }
         try {
             av_log_set_level(AV_LOG_QUIET);
@@ -72,8 +77,19 @@ final class AvifImage {
         } catch (FrameGrabber.Exception failure) {
             throw ListingInput.invalid();
         } catch (LinkageError failure) {
-            throw new RequestFailure(RequestFailure.Kind.UNAVAILABLE);
+            throw nativeUnavailable(failure);
         }
+    }
+
+    private static RequestFailure nativeUnavailable(Throwable failure) {
+        if (NATIVE_FAILURE_LOGGED.compareAndSet(false, true)) {
+            String message = String.valueOf(failure.getMessage())
+                    .replaceAll("\\b[a-zA-Z][a-zA-Z0-9+.-]*:[^\\s]+", "[redacted URI]")
+                    .replaceAll("\\R|\\p{Cntrl}", " ");
+            LOG.error("OpenNest AVIF native decoder unavailable exceptionClass={} message={}",
+                    failure.getClass().getName(), message.substring(0, Math.min(message.length(), 512)));
+        }
+        return new RequestFailure(RequestFailure.Kind.UNAVAILABLE);
     }
 
     private static Box[] boxes(byte[] bytes, int start, int end, List<String> types) {

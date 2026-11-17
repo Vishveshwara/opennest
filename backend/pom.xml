@@ -160,6 +160,37 @@
 	<build>
 		<plugins>
 			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-enforcer-plugin</artifactId>
+				<version>3.7.0</version>
+				<executions>
+					<execution>
+						<id>validate-media-platform</id>
+						<phase>validate</phase>
+						<goals><goal>enforce</goal></goals>
+						<configuration>
+							<rules>
+								<requireProperty>
+									<property>os.name</property>
+									<regex>Linux|Windows .*</regex>
+									<regexMessage>OpenNest native media builds support Linux or Windows hosts only.</regexMessage>
+								</requireProperty>
+								<requireProperty>
+									<property>os.arch</property>
+									<regex>amd64|x86_64</regex>
+									<regexMessage>OpenNest native media builds require an x86-64 host; ARM and 32-bit hosts are unsupported.</regexMessage>
+								</requireProperty>
+								<requireProperty>
+									<property>opennest.media.platform</property>
+									<regex>linux-x86_64|windows-x86_64</regex>
+									<regexMessage>OpenNest native media targets must be linux-x86_64 or windows-x86_64.</regexMessage>
+								</requireProperty>
+							</rules>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
 			</plugin>
