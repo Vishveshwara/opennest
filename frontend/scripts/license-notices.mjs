@@ -16,6 +16,6 @@ for (const [path, entry] of Object.entries(lock.packages).sort(([a], [b]) => a.l
   for (const file of licenses) notices.push(await readFile(resolve(directory, file), "utf8"));
   if (!licenses.length) notices.push(`Upstream license reference: https://www.npmjs.com/package/${pkg.name}/v/${pkg.version}`);
 }
-notices.push("\nWebP codec BSD license\n", await readFile("node_modules/@jsquash/webp/codec/LICENSE.codec.md", "utf8"));
+notices.push("\nAVIF codec licenses\n", await readFile("third-party/AVIF_CODEC_NOTICES.txt", "utf8"));
 const contents = notices.join("\n\n").replace(/[ \t]+$/gm, "").trimEnd();
 await writeFile("public/third-party-notices.txt", `${contents}\n`);

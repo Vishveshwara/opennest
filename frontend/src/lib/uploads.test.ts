@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from "vitest";
-import { convertToLosslessWebp, uploadDirect } from "./uploads";
-import { MAX_SOURCE_BYTES, validateSource } from "./photo-policy";
+import { convertToAvif, uploadDirect } from "./uploads";
+import { MAX_AVIF_BYTES, MAX_SOURCE_BYTES, photoDimensions, validateSource } from "./photo-policy";
 
 let encodedBytes = new ArrayBuffer(32);
 class CodecWorker {
@@ -34,16 +34,15 @@ it("accepts source files at 40 MB and rejects larger files before starting a wor
   expect(() => validateSource(source)).not.toThrow();
   const oversized = new File(["photo"], "large.png", { type: "image/png" });
   Object.defineProperty(oversized, "size", { value: MAX_SOURCE_BYTES + 1 });
-  await expect(convertToLosslessWebp(oversized)).rejects.toThrow("40 MB");
+  await expect(convertToAvif(oversized)).rejects.toThrow("40 MB");
   expect(CodecWorker.instances).toHaveLength(0);
 });
 
-it("does not impose the source-size limit on lossless output", async () => {
-  encodedBytes = new ArrayBuffer(MAX_SOURCE_BYTES + 1);
+it("returns an AVIF blob and releases its worker", async () => {
   const source = new File(["photo"], "source.jpeg", { type: "image/jpeg" });
-  const result = await convertToLosslessWebp(source);
-  expect(result.size).toBe(MAX_SOURCE_BYTES + 1);
-  expect(result.type).toBe("image/webp");
+  const result = await convertToAvif(source);
+  expect(result.size).toBe(32);
+  expect(result.type).toBe("image/avif");
   expect(CodecWorker.instances[0].postMessage).toHaveBeenCalledWith({
     file: source,
   });
@@ -52,11 +51,25 @@ it("does not impose the source-size limit on lossless output", async () => {
 
 it("rejects unsupported formats before allocating an encoder", async () => {
   await expect(
-    convertToLosslessWebp(
+    convertToAvif(
       new File(["file"], "image.svg", { type: "image/svg+xml" }),
     ),
-  ).rejects.toThrow("JPEG, PNG, or WebP");
+  ).rejects.toThrow("JPEG, PNG, WebP, or AVIF");
   expect(CodecWorker.instances).toHaveLength(0);
+});
+
+it("bounds encoded output independently of the source limit", async () => {
+  encodedBytes = new ArrayBuffer(MAX_AVIF_BYTES + 1);
+  await expect(convertToAvif(new File(["photo"], "source.png", { type: "image/png" }))).rejects.toThrow("4 MB");
+  expect(CodecWorker.instances[0].terminate).toHaveBeenCalledOnce();
+});
+
+it("resizes large photos proportionally without upscaling small photos", () => {
+  expect(photoDimensions(6000, 4000)).toEqual({ width: 2048, height: 1365 });
+  expect(photoDimensions(4000, 6000)).toEqual({ width: 1365, height: 2048 });
+  expect(photoDimensions(40, 40)).toEqual({ width: 40, height: 40 });
+  expect(photoDimensions(1, 10000)).toEqual({ width: 1, height: 2048 });
+  expect(() => photoDimensions(0, 100)).toThrow("dimensions");
 });
 
 it("uses browser-owned content length and can complete a PUT whose previous acknowledgement was lost", async () => {

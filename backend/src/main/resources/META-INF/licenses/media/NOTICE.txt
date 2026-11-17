@@ -1,0 +1,25 @@
+OpenNest media decoder dependencies
+
+OpenNest remains AGPL-3.0-only. These dependency grants do not change that license.
+
+JavaCV and JavaCPP 1.5.14 are used under their Apache-2.0 option.
+Their upstream dual-license text is retained in JavaCV-JavaCPP-LICENSE.txt.
+Sources and copyright headers:
+https://github.com/bytedeco/javacv/tree/1.5.14
+https://github.com/bytedeco/javacpp/tree/1.5.14
+https://github.com/bytedeco/javacpp-presets/tree/1.5.14/ffmpeg
+
+FFmpeg 8.1.2-1.5.14 uses the standard non-GPL platform classifier.
+Its executable reports LGPL version 3 or later; the LGPLv3 text and the GPLv3
+terms it incorporates are retained alongside this notice. This dependency's
+"or later" option applies to FFmpeg, not to OpenNest.
+FFmpeg source: https://github.com/FFmpeg/FFmpeg/tree/n8.1.2
+Build configuration, component versions, source archives and patches:
+https://github.com/bytedeco/javacpp-presets/blob/1.5.14/ffmpeg/cppbuild.sh
+https://github.com/bytedeco/javacpp-presets/tree/1.5.14/ffmpeg
+
+The upstream native build also links codec/support libraries with their own
+licenses, identified by the pinned build configuration. Preserve component
+notices and make the matching sources/build materials available when
+redistributing native binaries. A binary release must include that material;
+this repository change does not publish or deploy a release.

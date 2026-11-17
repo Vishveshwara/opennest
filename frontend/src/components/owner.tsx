@@ -25,7 +25,7 @@ import {
 } from "@/lib/contracts";
 import { ApiError, errorMessage } from "@/lib/api";
 import {
-  convertToLosslessWebp,
+  convertToAvif,
   uploadDirect,
   UploadTransportError,
 } from "@/lib/uploads";
@@ -784,7 +784,7 @@ function PhotoUploader({
       if (!uploaded) {
         update(job.key, { status: "compressing", error: "", progress: 0 });
         const blob =
-          reservation?.blob ?? (await convertToLosslessWebp(job.file));
+          reservation?.blob ?? (await convertToAvif(job.file));
         if (!reservation || now >= Date.parse(reservation.ticket.expiresAt)) {
           const ticket = await api.request(
             `/api/v1/listings/${listing.id}/images/presign`,
@@ -854,9 +854,9 @@ function PhotoUploader({
         <ImagePlus size={22} className="inline-icon" /> Add photos
       </h2>
       <p>
-        Choose JPEG, PNG, or WebP files up to 40 MB each. Your device converts
-        each photo to lossless WebP without resizing or a target file size, then
-        uploads it directly to storage. Converted files may be larger.
+        Choose JPEG, PNG, WebP, or AVIF photos up to 40 MB each. Photos are
+        optimized on your device to AVIF, up to 2,048 pixels on the longest side.
+        Smaller photos keep their dimensions. Transparency becomes a white background.
       </p>
       {reloadError && (
         <Notice error>
@@ -907,7 +907,7 @@ function PhotoUploader({
           Choose photos
           <input
             type="file"
-            accept="image/jpeg,image/png,image/webp"
+            accept="image/jpeg,image/png,image/webp,image/avif"
             multiple
             disabled={
               busy ||
@@ -963,7 +963,7 @@ function PhotoUploader({
                     : job.status === "complete"
                       ? "Validated"
                       : job.status === "compressing"
-                        ? "Converting to lossless WebP…"
+                        ? "Preparing AVIF photo…"
                         : job.status === "error"
                           ? job.error
                           : "Ready to upload"}

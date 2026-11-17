@@ -132,6 +132,26 @@ class ListingLifecycleIT {
         assertThat(storage.finals).containsKey(finalKey).doesNotContainKey("listings/orphan");
         assertThat(storage.staging).isEmpty();
     }
+    @Test void avifCompletionPreservesEncodedBytesAndRejectsOversizedReservations() throws Exception {
+        UUID owner = owner(0, true);
+        UUID id = (UUID) as(owner, () -> service().create(draft("PG_HOSTEL", "Hyderabad", 6000))).get("id");
+        var storage = apps.getFirst().getBean(ControlledStorage.class);
+        int uploads = storage.uploads.get();
+        assertThatThrownBy(() -> media().presign(id, owner, node("{\"segment\":\"ROOM\",\"contentType\":\"image/avif\",\"byteSize\":4000001}")))
+                .isInstanceOfSatisfying(RequestFailure.class, failure -> assertThat(failure.kind()).isEqualTo(RequestFailure.Kind.INVALID_INPUT));
+        assertThat(storage.uploads.get()).isEqualTo(uploads);
+        byte[] bytes;
+        try (var stream = getClass().getResourceAsStream("/images/browser-avif.avif")) { bytes = stream.readAllBytes(); }
+        var ticket = media().presign(id, owner, node(json.writeValueAsString(Map.of("segment", "ROOM", "contentType", "image/avif", "byteSize", bytes.length))));
+        storage.stage((String) ticket.get("objectKey"), bytes);
+        var body = node(json.writeValueAsString(Map.of("imageId", ticket.get("imageId"))));
+        var completed = media().complete(id, owner, body);
+        assertThat(completed).containsEntry("contentType", "image/avif").containsEntry("width", 64).containsEntry("height", 48);
+        assertThat(media().complete(id, owner, body).get("imageId")).isEqualTo(ticket.get("imageId"));
+        String key = jdbc(0).queryForObject("select object_key from property_images where id=?", String.class, ticket.get("imageId"));
+        assertThat(storage.finals.get(key)).containsExactly(bytes);
+    }
+
     @Test void malformedExpiredAndExcessUploadsCannotPublish() throws Exception {
         UUID owner = owner(0, true);
         UUID id = (UUID) as(owner, () -> service().create(draft("PG_HOSTEL", "Kolkata", 6000))).get("id");
@@ -234,7 +254,7 @@ class ListingLifecycleIT {
         assertThatThrownBy(() -> as(owner(0, false), () -> service().change(id, inventory("ROOM", 0, true), "inventory"))).isInstanceOf(RequestFailure.class);
     }
     @Test void migrationUpgradePreservesOriginalChecksumsAndValidatesMediaMetadata() {
-        assertThat(jdbc(0).queryForList("select version from flyway_schema_history where success order by installed_rank", String.class)).containsExactly("1", "2", "3", "4", "5", "6", "7", "8");
+        assertThat(jdbc(0).queryForList("select version from flyway_schema_history where success order by installed_rank", String.class)).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9");
         assertThat(jdbc(0).queryForList("select column_name from information_schema.columns where table_name='listing_owner_profiles'", String.class))
                 .containsExactlyInAnyOrder("id", "full_name", "average_rating", "review_count", "broker_report_count");
         UUID owner = owner(0, false);

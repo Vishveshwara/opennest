@@ -26,6 +26,7 @@ UNIT_SUITES = {
     "in.opennest.listing.internal.ListingPublicLocationTests",
     "in.opennest.listing.internal.ImageValidatorTests",
     "in.opennest.listing.internal.LosslessWebpTests",
+    "in.opennest.listing.internal.AvifImageTests",
     "in.opennest.listing.internal.R2StorageTests",
     "in.opennest.listing.internal.ListingRequestLimitTests",
     "in.opennest.identity.internal.telegram.TelegramSettingsTests",
@@ -106,7 +107,15 @@ def verify_reports():
             "BOOT-INF/classes/db/migration/V7__sandbox_reset_state.sql",
             "BOOT-INF/classes/db/migration/V8__lossless_listing_photos.sql",
             "BOOT-INF/classes/db/migration/V8__lossless_listing_photos.sql.conf",
-        }, "Packaged migrations differ from the Phase 1 handoff")
+            "BOOT-INF/classes/db/migration/V9__avif_listing_photos.sql",
+            "BOOT-INF/classes/db/migration/V9__avif_listing_photos.sql.conf",
+        }, "Packaged migrations differ from the schema contract")
+        require({
+            "META-INF/licenses/media/NOTICE.txt",
+            "META-INF/licenses/media/JavaCV-JavaCPP-LICENSE.txt",
+            "META-INF/licenses/media/FFmpeg-COPYING.LGPLv3",
+            "META-INF/licenses/media/FFmpeg-COPYING.GPLv3",
+        }.issubset(jar.namelist()), "Packaged native media decoder notices are missing")
     version = subprocess.run(["java", "--version"], capture_output=True, text=True, check=True).stdout.strip()
     require(re.search(r"(?:openjdk|java) 25[.\s]", version), "Verification must run on Java 25")
     result = {"java": version, "unit": unit, "integration": integration,

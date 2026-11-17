@@ -33,8 +33,9 @@ class ListingMedia implements AutoCloseable {
         ListingInput.fields(body, Set.of("segment", "contentType", "byteSize"));
         String segment = ListingInput.enumeration(body, "segment", ListingInput.Segment.class).name();
         String type = ListingInput.text(body, "contentType", 32);
-        ListingInput.require(Set.of("image/jpeg", "image/png", "image/webp").contains(type));
+        ListingInput.require(Set.of("image/jpeg", "image/png", "image/webp", "image/avif").contains(type));
         int size = ListingInput.integer(body, "byteSize", 1, MAX_BYTES);
+        if (type.equals("image/avif")) ListingInput.require(size <= AvifImage.MAX_BYTES);
         requireUploadCapacity(size);
         return store.write(() -> {
             accounts.lockForListingMutation(owner); store.owned(property, owner, true);
@@ -62,6 +63,7 @@ class ListingMedia implements AutoCloseable {
         String key = "listings/" + property + "/" + id + "/" + UUID.randomUUID();
         try {
             long declaredBytes = ((Number) row.get("declared_byte_size")).longValue();
+            if ("image/avif".equals(row.get("declared_content_type"))) ListingInput.require(declaredBytes <= AvifImage.MAX_BYTES);
             requireUploadCapacity(declaredBytes);
             var bytes = storage.read((String) row.get("upload_object_key"), ((Number) row.get("declared_byte_size")).longValue());
             var validated = decode(bytes, (String) row.get("declared_content_type"));

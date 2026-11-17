@@ -9,6 +9,7 @@ frontend/*.tsbuildinfo
 frontend/playwright-report/
 frontend/test-results/
 frontend/public/codecs/webp/
+frontend/public/codecs/avif/
 out/
 target/
 /build/generated-spring-modulith/

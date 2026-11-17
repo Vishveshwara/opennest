@@ -103,7 +103,7 @@ class R2Storage implements StorageObjects, AutoCloseable {
                     .overrideConfiguration(configuration -> configuration.apiCallTimeout(bodyRemaining)
                             .apiCallAttemptTimeout(bodyRemaining.compareTo(Duration.ofSeconds(60)) < 0 ? bodyRemaining : Duration.ofSeconds(60))))) {
                 deadline.attach(stream);
-                var bytes = stream.readNBytes(ListingMedia.MAX_BYTES + 1);
+                var bytes = stream.readNBytes(Math.toIntExact(expectedSize + 1));
                 deadline.remaining();
                 ListingInput.require(bytes.length == expectedSize);
                 return bytes;
