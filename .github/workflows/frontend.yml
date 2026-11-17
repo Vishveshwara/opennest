@@ -35,6 +35,10 @@ jobs:
           java-version: '25'
           cache: maven
           cache-dependency-path: backend/pom.xml
+      - name: Install native media decoder runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends --yes libxcb1 libxcb-shm0 libasound2t64 libpulse0
       - name: Install pinned frontend dependencies
         working-directory: frontend
         run: npm ci

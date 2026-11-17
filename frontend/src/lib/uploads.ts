@@ -1,6 +1,6 @@
 import { presignSchema } from "./contracts";
 import { z } from "zod";
-import { MAX_AVIF_BYTES, validateSource } from "./photo-policy";
+import { validateSource } from "./photo-policy";
 
 export async function convertToAvif(file: File): Promise<Blob> {
   validateSource(file);
@@ -22,7 +22,7 @@ export async function convertToAvif(file: File): Promise<Blob> {
           }),
           z.object({
             kind: z.literal("failed"),
-            reason: z.enum(["size", "conversion"]),
+            reason: z.literal("conversion"),
           }),
         ])
         .safeParse(event.data);
@@ -34,15 +34,14 @@ export async function convertToAvif(file: File): Promise<Blob> {
         return;
       }
       if (result.data.kind === "encoded") {
-        if (!result.data.bytes.byteLength || result.data.bytes.byteLength > MAX_AVIF_BYTES) {
-          reject(new Error("The converted photo exceeds the 4 MB upload limit."));
+        if (!result.data.bytes.byteLength) {
+          reject(new Error("The photo encoder returned an empty image. Please try again."));
           return;
         }
         resolve(new Blob([result.data.bytes], { type: "image/avif" }));
         return;
       }
       const messages = {
-        size: "The converted photo exceeds 4 MB. Choose a smaller photo.",
         conversion:
           "Your browser could not convert this photo. It may be damaged, animated, or exceed your device's available memory.",
       };

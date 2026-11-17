@@ -14,6 +14,16 @@ import static org.mockito.Mockito.mockStatic;
 
 class AvifImageTests {
     @Test
+    void decodesAndPreservesValidAvifAboveFourMegabytes() throws Exception {
+        byte[] bytes = AvifFixture.withPadding();
+        assertThat(bytes.length).isGreaterThan(4_000_000);
+        var result = ImageValidator.validate(bytes, "image/avif");
+        assertThat(result.width()).isEqualTo(64);
+        assertThat(result.height()).isEqualTo(48);
+        assertThat(result.bytes()).isEqualTo(bytes);
+    }
+
+    @Test
     void reportsAnUnavailableNativeDecoderAsRetryableInfrastructureFailure() throws Exception {
         try (var decoder = mockStatic(FFmpegFrameGrabber.class)) {
             decoder.when(FFmpegFrameGrabber::tryLoad).thenThrow(new FFmpegFrameGrabber.Exception("Fabricated native load failure"));
@@ -24,6 +34,7 @@ class AvifImageTests {
 
     @Test
     void decodesThePinnedBrowserEncoderWithoutReencoding() throws Exception {
+        FFmpegFrameGrabber.tryLoad();
         try (var stream = getClass().getResourceAsStream("/images/browser-avif.avif")) {
             byte[] original = stream.readAllBytes();
             var result = ImageValidator.validate(original, "image/avif");
@@ -43,11 +54,11 @@ class AvifImageTests {
         invalid(bytes);
     }
 
-    @Test void rejectsOversizeTruncatedTrailingAndAnimatedContainers() throws Exception {
+    @Test void rejectsEmptyTruncatedTrailingAndAnimatedContainers() throws Exception {
         byte[] bytes = fixture();
         invalid(Arrays.copyOf(bytes, bytes.length - 1));
         invalid(Arrays.copyOf(bytes, bytes.length + 1));
-        invalid(new byte[AvifImage.MAX_BYTES + 1]);
+        invalid(new byte[0]);
         bytes[11] = 's'; invalid(bytes);
     }
 

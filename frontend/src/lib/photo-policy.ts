@@ -2,7 +2,6 @@ export const MAX_SOURCE_BYTES = 40_000_000;
 export const MAX_LISTING_PHOTOS = 20;
 export const MAX_PHOTO_EDGE = 2_048;
 export const TARGET_PHOTO_BYTES = 1_000_000;
-export const MAX_AVIF_BYTES = 4_000_000;
 
 export function photoDimensions(width: number, height: number) {
   if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width < 1 || height < 1)

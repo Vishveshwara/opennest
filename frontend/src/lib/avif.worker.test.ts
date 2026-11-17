@@ -51,9 +51,10 @@ it("makes at most two attempts and keeps the smaller result", async () => {
   expect(postMessage.mock.calls[0][0].bytes.byteLength).toBe(500_000);
 });
 
-it("rejects encoded images above the hard limit without starting an upload", async () => {
+it("returns encoded images above 4 MB for direct upload", async () => {
   encode.mockReturnValue(new Uint8Array(4_000_001));
   await run();
   expect(encode).toHaveBeenCalledTimes(2);
-  expect(postMessage).toHaveBeenCalledWith({ kind: "failed", reason: "size" });
+  expect(postMessage.mock.calls[0][0]).toEqual({ kind: "encoded", bytes: expect.any(ArrayBuffer) });
+  expect(postMessage.mock.calls[0][0].bytes.byteLength).toBe(4_000_001);
 });

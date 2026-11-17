@@ -1,7 +1,7 @@
 import createEncoder from "@jsquash/avif/codec/enc/avif_enc.js";
 import { defaultOptions } from "@jsquash/avif/meta.js";
 import { z } from "zod";
-import { MAX_AVIF_BYTES, TARGET_PHOTO_BYTES, photoDimensions, validateSource } from "./photo-policy";
+import { TARGET_PHOTO_BYTES, photoDimensions, validateSource } from "./photo-policy";
 
 self.addEventListener("message", async (event: MessageEvent<unknown>) => {
   try {
@@ -38,10 +38,6 @@ self.addEventListener("message", async (event: MessageEvent<unknown>) => {
         ...defaultOptions, quality: 45, speed: 8,
       });
       if (output && output.byteLength < bytes.byteLength) bytes = output.slice().buffer;
-    }
-    if (bytes.byteLength > MAX_AVIF_BYTES) {
-      self.postMessage({ kind: "failed", reason: "size" });
-      return;
     }
     self.postMessage({ kind: "encoded", bytes }, { transfer: [bytes] });
   } catch {

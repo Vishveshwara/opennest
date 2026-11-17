@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { convertToAvif, uploadDirect } from "./uploads";
-import { MAX_AVIF_BYTES, MAX_SOURCE_BYTES, photoDimensions, validateSource } from "./photo-policy";
+import { MAX_SOURCE_BYTES, photoDimensions, validateSource } from "./photo-policy";
 
 let encodedBytes = new ArrayBuffer(32);
 class CodecWorker {
@@ -58,10 +58,17 @@ it("rejects unsupported formats before allocating an encoder", async () => {
   expect(CodecWorker.instances).toHaveLength(0);
 });
 
-it("bounds encoded output independently of the source limit", async () => {
-  encodedBytes = new ArrayBuffer(MAX_AVIF_BYTES + 1);
-  await expect(convertToAvif(new File(["photo"], "source.png", { type: "image/png" }))).rejects.toThrow("4 MB");
+it("accepts converted output above 4 MB without a product size cap", async () => {
+  encodedBytes = new ArrayBuffer(4_000_001);
+  const blob = await convertToAvif(new File(["photo"], "source.png", { type: "image/png" }));
+  expect(blob.size).toBe(4_000_001);
+  expect(blob.type).toBe("image/avif");
   expect(CodecWorker.instances[0].terminate).toHaveBeenCalledOnce();
+});
+
+it("rejects an empty encoder result", async () => {
+  encodedBytes = new ArrayBuffer(0);
+  await expect(convertToAvif(new File(["photo"], "source.png", { type: "image/png" }))).rejects.toThrow("empty image");
 });
 
 it("resizes large photos proportionally without upscaling small photos", () => {

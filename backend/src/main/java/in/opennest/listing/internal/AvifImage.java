@@ -14,11 +14,10 @@ import static org.bytedeco.ffmpeg.global.avutil.AV_LOG_QUIET;
 import static org.bytedeco.ffmpeg.global.avutil.av_log_set_level;
 
 final class AvifImage {
-    static final int MAX_BYTES = 4_000_000;
     static final int MAX_EDGE = 2048;
 
     static ImageValidator.Validated validate(byte[] bytes) {
-        ListingInput.require(bytes.length > 0 && bytes.length <= MAX_BYTES);
+        ListingInput.require(bytes.length > 0);
         var top = boxes(bytes, 0, bytes.length, List.of("ftyp", "meta", "mdat"));
         exact(bytes, top[0], "6176696600000000617669666d6966316d6961664d413142");
         var meta = top[1];

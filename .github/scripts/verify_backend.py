@@ -109,6 +109,8 @@ def verify_reports():
             "BOOT-INF/classes/db/migration/V8__lossless_listing_photos.sql.conf",
             "BOOT-INF/classes/db/migration/V9__avif_listing_photos.sql",
             "BOOT-INF/classes/db/migration/V9__avif_listing_photos.sql.conf",
+            "BOOT-INF/classes/db/migration/V10__avif_transport_capacity.sql",
+            "BOOT-INF/classes/db/migration/V10__avif_transport_capacity.sql.conf",
         }, "Packaged migrations differ from the schema contract")
         require({
             "META-INF/licenses/media/NOTICE.txt",
