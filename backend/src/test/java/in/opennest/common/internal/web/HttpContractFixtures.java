@@ -129,6 +129,16 @@ class HttpContractFixtures {
                         new org.hibernate.TransactionException(CANARY, new SQLException(CANARY, "57P01")));
                 case "database-dropped" -> new SQLException(CANARY, "57P04");
                 case "redis-outage" -> new RedisConnectionFailureException(CANARY);
+                case "redis-io-outage" -> redisFailure(new java.io.IOException(CANARY));
+                case "redis-socket-outage" -> redisFailure(new java.net.SocketException(CANARY));
+                case "redis-channel-outage" -> redisFailure(new java.nio.channels.ClosedChannelException());
+                case "redis-driver-bug" -> redisFailure(new IllegalStateException(CANARY));
+                case "redis-server-bug" -> new RedisSystemException(CANARY,
+                        new io.lettuce.core.RedisCommandExecutionException(CANARY));
+                case "redis-server-io-bug" -> new RedisSystemException(CANARY,
+                        new io.lettuce.core.RedisCommandExecutionException(CANARY, new java.io.IOException(CANARY)));
+                case "redis-unknown-driver-bug" -> new RedisSystemException(CANARY, new io.lettuce.core.RedisException(CANARY));
+                case "wrapped-redis-io-bug" -> new IllegalStateException(CANARY, redisFailure(new java.io.IOException(CANARY)));
                 case "redis-bug" -> new RedisSystemException(CANARY, new IllegalStateException(CANARY));
                 case "transaction-outage" -> new CannotCreateTransactionException(CANARY, new SQLException(CANARY, "08001"));
                 case "transaction-bug" -> new TransactionSystemException(CANARY, new IllegalStateException(CANARY));
@@ -145,6 +155,11 @@ class HttpContractFixtures {
                 case "security-authentication" -> new BadCredentialsException(CANARY);
                 default -> new IllegalStateException(CANARY);
             };
+        }
+
+        private org.springframework.dao.DataAccessException redisFailure(Exception cause) {
+            return new org.springframework.data.redis.connection.lettuce.LettuceExceptionConverter()
+                    .convert(new io.lettuce.core.RedisException(CANARY, cause));
         }
 
         private ErrorResponseException customProblem() {

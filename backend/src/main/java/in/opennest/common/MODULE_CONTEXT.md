@@ -19,3 +19,4 @@
 - Phase 4 public SandboxBoundary owns cross-module sandbox coordination: transaction-scoped shared reset lock, generation checks, and exclusive reset lock. Metadata comes from V7 sandbox_state; PRIMARY is a no-op and cannot acquire the exclusive lock.
 - Sandbox repeatable-read operations lock the metadata row FOR SHARE after the advisory lock, rejecting stale snapshots with safe 503. They remain read-only at the API level but permit database row locks.
 - HttpFailureResponse also classifies filter failures through the same safe classifier as controller errors.
+- Spring RedisSystemException wrapping an exact Lettuce RedisException with an IOException cause maps to 503. Unknown driver failures, command-execution subclasses and arbitrary application wrappers stay 500; no exception-message matching or disclosure.
