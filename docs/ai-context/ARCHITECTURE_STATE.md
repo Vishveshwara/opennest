@@ -50,4 +50,6 @@
 
 - PR #7 review: development LAN origins reject default/zero-padded ports consistently; media heap admission runs before signing and completion. Frontend session-probe outages have retry state distinct from anonymous 401; URL history updates owner status, failed local photos are removable, and completed jobs release binary payloads. V8 commits NOT VALID checks before separate validation transactions.
 
+- PRs #7/#8 merged on 16 November 2026; V8 reconciliation applies only to pre-review development checksums. On 17 November, narrow Redis transport I/O classification and eight HTTP regressions passed the 662-test Java 25 combined-profile gate, six Python checks and package/context gates. The earlier intermittent Windows 500 did not recur; its exact cause remains unconfirmed. New-branch CI and hosted checks remain unverified. docs/BACKEND_HTTP_ERRORS.md.
+
 <!-- /coderabbit-ai-generated:v1 -->

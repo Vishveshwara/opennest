@@ -58,7 +58,7 @@ PostgreSQL administrative shutdown, SQLSTATE `57P01`, is a known infrastructure 
 | Generic integrity error, foreign-key/not-null violation, bad SQL/schema, unknown Redis/system error | Generic 500 |
 | IllegalArgumentException, IllegalStateException, or other unexpected application exception | Generic 500, even if an arbitrary application wrapper contains a known conflict/outage cause |
 
-Cause inspection unwraps recognized data-access, persistence, transaction, JDBC, and servlet wrappers only. It does not search messages or translate every database exception to 409/503. Recognizing a quota/conflict does not implement its transactional enforcement. Rate limiting, publication quotas, owner serialization, and review idempotency remain feature work.
+Cause inspection unwraps recognized data-access, persistence, transaction, JDBC, and servlet wrappers only. Spring can translate a Lettuce transport I/O failure into `RedisSystemException` with an exact `RedisException` cause wrapping an `IOException`. That specific chain returns 503, including socket resets and closed channels. Classification uses types, never exception messages. Unknown Redis failures, `RedisCommandExecutionException` subclasses, and arbitrary application wrappers remain 500. Recognizing a quota/conflict does not implement its transactional enforcement. Rate limiting, publication quotas, owner serialization, and review idempotency remain feature work.
 
 ## Security defaults
 
@@ -94,6 +94,8 @@ Docker is unavailable locally, so database tests used isolated PostgreSQL 17.11/
 The initial 30 October run passed all 186 tests with real Docker/PostGIS/Redis. Review corrections now cover the previously missing return-value ConstraintViolationException case, preserve empty-set 400 behavior, verify Security delegation and shared status handling, and check log levels and redaction during real startup failure. The [handoff](BACKEND_HANDOFF.md) records the final regression results. Earlier execution limits above describe the 22 October run.
 
 Phase 3 amendment: authentication-disabled security now permits public listing GETs with exact configured-origin CORS while protected/other routes remain denied. CONTACT_VERIFICATION_REQUIRED maps to fixed 403 guidance about separately verified +91 contact; it copies no submitted value. All listing responses are no-store; listing JSON request limits return fixed 400/413 errors. See [LISTINGS_HANDOFF.md](LISTINGS_HANDOFF.md).
+
+17 November 2026 transport regression: deterministic HTTP fixtures using Spring's Lettuce exception converter reproduced 500 for I/O, socket-reset and closed-channel causes before the classifier change; all now return safe 503. Five additional cases preserve generic 500 for driver/application bugs and command-error subclasses. Repeated real-store outage checks, including an abrupt Redis crash, passed before the patch through the timeout path, so the exact cause of the earlier intermittent Windows 500 remains unconfirmed. The final Java 25 clean combined-profile gate passed 662 tests with no failures, errors or skips, including all 25 isolation checks. Six Python checks and report/package/context/whitespace gates passed. The run completed after a tool-session interruption delayed execution. Frontend/browser, live-provider and new-branch remote CI checks were not rerun.
 
 
 <!-- /coderabbit-ai-generated:v1 -->

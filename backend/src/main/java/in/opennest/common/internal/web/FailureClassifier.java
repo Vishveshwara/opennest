@@ -1,5 +1,6 @@
 package in.opennest.common.internal.web;
 
+import java.io.IOException;
 import java.sql.SQLException;
 import java.sql.SQLNonTransientConnectionException;
 import java.sql.SQLRecoverableException;
@@ -9,6 +10,7 @@ import java.util.Collections;
 import java.util.IdentityHashMap;
 
 import in.opennest.common.RequestFailure;
+import io.lettuce.core.RedisException;
 import jakarta.persistence.OptimisticLockException;
 import jakarta.servlet.ServletException;
 import jakarta.persistence.PersistenceException;
@@ -23,6 +25,7 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.dao.TransientDataAccessResourceException;
+import org.springframework.data.redis.RedisSystemException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.AccessDeniedException;
@@ -70,6 +73,9 @@ final class FailureClassifier {
         var visited = Collections.newSetFromMap(new IdentityHashMap<Throwable, Boolean>());
         Throwable current = failure;
         while (current != null && visited.add(current)) {
+            if (current instanceof RedisSystemException && current.getCause() != null
+                    && current.getCause().getClass() == RedisException.class
+                    && current.getCause().getCause() instanceof IOException) return 503;
             if (current instanceof DuplicateKeyException || current instanceof OptimisticLockingFailureException
                     || current instanceof OptimisticLockException) return 409;
             if (current instanceof DataAccessResourceFailureException || current instanceof QueryTimeoutException
