@@ -33,7 +33,8 @@ const startedAt = Date.parse("2026-11-14T04:30:00Z");
 const challengesPath = "/api/v1/auth/telegram/challenges";
 const challengeId = "00000000-0000-4000-8000-000000000001";
 const challengePath = `${challengesPath}/${challengeId}`;
-const phoneNumber = "+910000000001";
+const nationalPhone = "0000000001";
+const phoneNumber = `+91${nationalPhone}`;
 const code = "123456";
 const completionBody = z.object({ code: z.string(), fullName: z.string().optional() });
 let returning = false;
@@ -106,8 +107,13 @@ afterEach(() => {
 
 async function startLogin() {
   render(<Login />);
-  fireEvent.change(screen.getByRole("textbox", { name: "Phone number" }), {
-    target: { value: phoneNumber },
+  expect(screen.getByText("+91")).toBeInTheDocument();
+  const phoneInput = screen.getByRole("textbox", { name: "Phone number" });
+  expect(phoneInput).toHaveAttribute("maxlength", "10");
+  expect(phoneInput).toHaveAttribute("inputmode", "numeric");
+  expect(phoneInput).toHaveAccessibleDescription("India (+91) is added automatically.");
+  fireEvent.change(phoneInput, {
+    target: { value: nationalPhone },
   });
   await act(async () => {
     fireEvent.click(screen.getByRole("button", { name: "Continue with Telegram" }));
@@ -146,6 +152,21 @@ function resendRequests() {
     ([path, , method]) => path === `${challengePath}/resend` && method === "POST",
   );
 }
+
+it.each(["123456789", "00000000001", "+910000000001", "abcdefghij"])(
+  "rejects invalid national phone input %s before creating a challenge",
+  async (input) => {
+    const view = render(<Login />);
+    fireEvent.change(screen.getByRole("textbox", { name: "Phone number" }), {
+      target: { value: input },
+    });
+    const form = view.container.querySelector("form");
+    if (!form) throw new Error("Login form is missing");
+    await act(async () => fireEvent.submit(form));
+    expect(screen.getByRole("alert")).toHaveTextContent("Enter your 10-digit Indian mobile number.");
+    expect(challengeCreations()).toHaveLength(0);
+  },
+);
 
 it("creates a named account only after a valid OTP and reuses the same private challenge and code", async () => {
   await startLogin();
@@ -259,7 +280,7 @@ it("keeps the restart cooldown visible and clears signup data only after an allo
   expect(screen.queryByRole("textbox", { name: "Telegram code" })).not.toBeInTheDocument();
   expect(challengeCreations()).toHaveLength(1);
   fireEvent.change(screen.getByRole("textbox", { name: "Phone number" }), {
-    target: { value: phoneNumber },
+    target: { value: nationalPhone },
   });
   await act(async () => {
     fireEvent.click(screen.getByRole("button", { name: "Continue with Telegram" }));

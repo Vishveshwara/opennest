@@ -105,6 +105,10 @@ export function Login() {
   async function start(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy) return;
+    if (!/^[0-9]{10}$/.test(phone)) {
+      setError("Enter your 10-digit Indian mobile number.");
+      return;
+    }
     setOperation("STARTING");
     setError("");
     try {
@@ -112,7 +116,7 @@ export function Login() {
         "/api/v1/auth/telegram/challenges",
         challengeSchema,
         "POST",
-        { phoneNumber: phone },
+        { phoneNumber: `+91${phone}` },
       );
       setChallenge(value);
       setNow(Date.now());
@@ -227,24 +231,32 @@ export function Login() {
         <p>
           {completion === "NAME_REQUIRED"
             ? "Your Telegram code is confirmed. Add your name to finish signing up."
-            : "Use the +91 number associated with your Telegram account."}
+            : "Enter the 10-digit Indian mobile number associated with your Telegram account."}
         </p>
         {error && <Notice error>{error}</Notice>}
         {!challenge ? (
           <form onSubmit={start} className="stack">
-            <label className="field">
-              Phone number
-              <input
-                type="tel"
-                autoComplete="tel"
-                inputMode="tel"
-                pattern="\+91[0-9]{10}"
-                placeholder="+91 followed by 10 digits"
-                required
-                value={phone}
-                onChange={(event) => setPhone(event.target.value)}
-              />
-            </label>
+            <div className="field">
+              <label htmlFor="telegram-phone">Phone number</label>
+              <div className="phone-input">
+                <span aria-hidden="true">+91</span>
+                <input
+                  id="telegram-phone"
+                  type="tel"
+                  autoComplete="tel-national"
+                  inputMode="numeric"
+                  pattern="[0-9]{10}"
+                  minLength={10}
+                  maxLength={10}
+                  placeholder="10-digit mobile number"
+                  aria-describedby="telegram-phone-help"
+                  required
+                  value={phone}
+                  onChange={(event) => setPhone(event.target.value)}
+                />
+              </div>
+              <small id="telegram-phone-help">India (+91) is added automatically.</small>
+            </div>
             <Button disabled={busy} type="submit">
               {busy ? "Starting…" : "Continue with Telegram"}{" "}
               <ArrowUpRight size={16} />
