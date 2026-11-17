@@ -65,7 +65,7 @@ class IdentitySecurityConfiguration {
                 java.util.stream.Stream.of(IdentitySettings.read(environment).selected(environment).frontendOrigin()),
                 IdentitySettings.developmentFrontendOrigins(environment).stream()).toList());
         cors.setAllowCredentials(true);
-        cors.setAllowedMethods(List.of("GET", "POST", "PATCH", "OPTIONS"));
+        cors.setAllowedMethods(List.of("GET", "POST", "PATCH", "DELETE", "OPTIONS"));
         cors.setAllowedHeaders(List.of("Content-Type", "X-CSRF-TOKEN"));
         var source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/api/v1/**", cors);
@@ -103,6 +103,7 @@ class IdentitySecurityConfiguration {
                 .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/listings", "/api/v1/listings/*/publish", "/api/v1/listings/*/pause",
                         "/api/v1/listings/*/images/presign", "/api/v1/listings/*/images/complete").authenticated()
                 .requestMatchers(org.springframework.http.HttpMethod.PATCH, "/api/v1/listings/*/inventory").authenticated()
+                .requestMatchers(org.springframework.http.HttpMethod.DELETE, "/api/v1/listings/*/images/*").authenticated()
                 .anyRequest().denyAll())
                 .formLogin(AbstractHttpConfigurer::disable).httpBasic(AbstractHttpConfigurer::disable)
                 .requestCache(cache -> cache.requestCache(new NullRequestCache())).cors(AbstractHttpConfigurer::disable)

@@ -32,6 +32,7 @@ import {
 import { useSession } from "./session";
 import { AuthGate } from "./auth";
 import { Button } from "./ui/button";
+import { ConfirmDialog } from "./ui/dialog";
 import {
   Notice,
   Pagination,
@@ -523,6 +524,13 @@ function ManageListing({ id }: { id: string }) {
     [error, setError] = useState(""),
     [message, setMessage] = useState(""),
     [busy, setBusy] = useState(false);
+  const installListing = useCallback((value: OwnerListing) => {
+    setListing((current) =>
+      current && current.id === value.id && current.version > value.version
+        ? current
+        : value,
+    );
+  }, []);
   const load = useCallback(async () => {
     if (!uuid.safeParse(id).success) throw new ApiError(404);
     const value = await api.request(
@@ -530,8 +538,8 @@ function ManageListing({ id }: { id: string }) {
       ownerListingSchema,
     );
     if (value.ownerId !== account?.id) throw new ApiError(403);
-    setListing(value);
-  }, [api, id, account?.id]);
+    installListing(value);
+  }, [api, id, account?.id, installListing]);
   useEffect(() => {
     let active = true;
     if (!uuid.safeParse(id).success) return;
@@ -540,7 +548,7 @@ function ManageListing({ id }: { id: string }) {
       .then((value) => {
         if (!active) return;
         if (value.ownerId !== account?.id) throw new ApiError(403);
-        setListing(value);
+        installListing(value);
         setError("");
       })
       .catch((error) => {
@@ -549,7 +557,7 @@ function ManageListing({ id }: { id: string }) {
     return () => {
       active = false;
     };
-  }, [api, id, account?.id]);
+  }, [api, id, account?.id, installListing]);
   async function mutate(
     action: "inventory" | "publish" | "pause",
     body: unknown,
@@ -558,7 +566,7 @@ function ManageListing({ id }: { id: string }) {
     setError("");
     setMessage("");
     try {
-      setListing(
+      installListing(
         await api.request(
           `/api/v1/listings/${id}/${action}`,
           ownerListingSchema,
@@ -666,7 +674,7 @@ function ManageListing({ id }: { id: string }) {
               </Button>
             </form>
           </section>
-          <PhotoUploader listing={listing} reload={load} />
+          <PhotoUploader listing={listing} reload={load} onListingChange={installListing} />
           <section className="panel">
             <h2>Your private location</h2>
             <p>{listing.privateAddress}</p>
@@ -748,19 +756,28 @@ type PendingUploadJob = PhotoMetadata & {
   uploaded?: boolean;
   reservation?: { ticket: z.infer<typeof presignSchema>; blob: Blob };
 };
-type UploadJob = PendingUploadJob | (PhotoMetadata & { status: "complete" });
+type UploadJob = PendingUploadJob | (PhotoMetadata & { status: "complete"; imageId: string });
 function PhotoUploader({
   listing,
   reload,
+  onListingChange,
 }: {
   listing: OwnerListing;
   reload: () => Promise<void>;
+  onListingChange: (listing: OwnerListing) => void;
 }) {
   const { api, config } = useSession();
   const [segment, setSegment] = useState<ImageSegment>("ROOM"),
     [jobs, setJobs] = useState<UploadJob[]>([]),
     [busy, setBusy] = useState(false),
-    [reloadError, setReloadError] = useState("");
+    [reloadError, setReloadError] = useState(""),
+    [removeError, setRemoveError] = useState("");
+  const required: ImageSegment[] = listing.category === "FLAT"
+    ? ["ROOM", "HALL", "BATHROOM", "KITCHEN"]
+    : ["ROOM", "BATHROOM"];
+  const needsPause = (image: OwnerListing["images"][number]) =>
+    listing.status !== "PAUSED" && required.includes(image.segment) &&
+    listing.images.filter((value) => value.segment === image.segment).length === 1;
   const update = (key: string, changes: Partial<PendingUploadJob>) =>
     setJobs((current) =>
       current.map((job) =>
@@ -771,8 +788,29 @@ function PhotoUploader({
     try {
       await reload();
       setReloadError("");
+      setRemoveError("");
     } catch (error) {
       setReloadError(errorMessage(error));
+    }
+  }
+  async function removePhoto(imageId: string, jobKey?: string) {
+    setBusy(true);
+    setRemoveError("");
+    try {
+      const value = await api.request(
+        `/api/v1/listings/${listing.id}/images/${imageId}`,
+        ownerListingSchema,
+        "DELETE",
+      );
+      onListingChange(value);
+      setJobs((current) => current.filter((job) => job.imageId !== imageId && job.key !== jobKey));
+      setReloadError("");
+    } catch (error) {
+      setRemoveError(error instanceof ApiError && error.status === 409
+        ? "Pause the listing before removing its last photo of a required type. Refresh the photos if the listing changed."
+        : errorMessage(error));
+    } finally {
+      setBusy(false);
     }
   }
   async function run(job: PendingUploadJob, now: number) {
@@ -808,7 +846,7 @@ function PhotoUploader({
         update(job.key, { uploaded: true });
       }
       update(job.key, { status: "validating" });
-      await api.request(
+      const completed = await api.request(
         `/api/v1/listings/${listing.id}/images/complete`,
         imageSchema,
         "POST",
@@ -817,7 +855,7 @@ function PhotoUploader({
       setJobs((current) =>
         current.map((value) =>
           value.key === job.key
-            ? { key: value.key, name: value.name, segment: value.segment, status: "complete" }
+            ? { key: value.key, name: value.name, segment: value.segment, status: "complete", imageId: completed.imageId }
             : value,
         ),
       );
@@ -858,9 +896,17 @@ function PhotoUploader({
         each photo to lossless WebP without resizing or a target file size, then
         uploads it directly to storage. Converted files may be larger.
       </p>
+      {removeError && (
+        <Notice error>
+          {removeError}
+          <Button variant="outline" disabled={busy} onClick={() => void refreshListing()}>
+            Refresh photos
+          </Button>
+        </Notice>
+      )}
       {reloadError && (
         <Notice error>
-          {reloadError} Your photo was validated. Refresh the listing to see it.
+          {reloadError} Refresh the listing to see the current photos.
           <Button
             variant="outline"
             disabled={busy}
@@ -884,6 +930,17 @@ function PhotoUploader({
               <Check size={14} />
               {image.segment.replaceAll("_", " ")}
             </figcaption>
+            <ConfirmDialog
+              title={`Remove ${image.segment.toLowerCase().replaceAll("_", " ")} photo?`}
+              description="This photo will disappear from the listing. You can upload another photo in its place."
+              trigger="Remove photo"
+              confirmLabel="Remove photo"
+              busy={busy || needsPause(image)}
+              confirm={() => removePhoto(image.imageId)}
+            />
+            {needsPause(image) && (
+              <p className="fine-print">Pause the listing before removing its last {image.segment.toLowerCase().replaceAll("_", " ")} photo.</p>
+            )}
           </figure>
         ))}
       </div>
@@ -945,8 +1002,9 @@ function PhotoUploader({
       </div>
       <p className="fine-print">
         Up to {MAX_LISTING_PHOTOS} images per listing, 60 upload reservations
-        per rolling 24 hours. Failed local photos can be removed. Validated
-        images cannot be removed or replaced in this version.
+        per rolling 24 hours. Removing a photo frees a listing photo slot.
+        Upload reservations still count toward the daily allowance. Pause a
+        published listing before removing its last photo of a required type.
       </p>
       <ul className="upload-jobs">
         {jobs.map((job) => (
@@ -993,7 +1051,9 @@ function PhotoUploader({
                 size="small"
                 disabled={busy}
                 onClick={() =>
-                  setJobs((current) => current.filter((value) => value.key !== job.key))
+                  job.imageId
+                    ? void removePhoto(job.imageId, job.key)
+                    : setJobs((current) => current.filter((value) => value.key !== job.key))
                 }
               >
                 Remove failed photo

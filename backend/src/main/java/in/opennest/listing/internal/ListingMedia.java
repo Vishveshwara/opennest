@@ -4,6 +4,7 @@ import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -83,6 +84,24 @@ class ListingMedia implements AutoCloseable {
             });
             throw failure;
         } finally { processors.release(); }
+    }
+    Map<String, Object> remove(UUID property, UUID owner, UUID id) {
+        return store.write(() -> {
+            accounts.lockForListingMutation(owner);
+            var listing = store.owned(property, owner, true);
+            var row = image(property, id, true);
+            if (!"REJECTED".equals(row.get("validation_state"))) {
+                var remaining = store.jdbc().queryForList("select distinct segment from property_images where property_id = ? and id <> ? and validation_state = 'VALIDATED'", String.class, property, id);
+                if (!"PAUSED".equals(listing.get("status")) && !remaining.containsAll(requiredSegments((String) listing.get("category"))))
+                    throw new RequestFailure(RequestFailure.Kind.CONFLICT);
+                store.jdbc().update("update property_images set validation_state = 'REJECTED', object_key = null, content_type = null, byte_size = null, width = null, height = null where id = ?", id);
+                store.status(property, ((Number) listing.get("version")).longValue(), (String) listing.get("status"));
+            }
+            return store.response(store.property(property, false), true, store.images(List.of(property)).getOrDefault(property, List.of()), this);
+        });
+    }
+    static Set<String> requiredSegments(String category) {
+        return "FLAT".equals(category) ? Set.of("ROOM", "HALL", "BATHROOM", "KITCHEN") : Set.of("ROOM", "BATHROOM");
     }
     private static void requireUploadCapacity(long bytes) {
         if (bytes * 4L > Runtime.getRuntime().maxMemory() / 4L) throw new RequestFailure(RequestFailure.Kind.UNAVAILABLE);

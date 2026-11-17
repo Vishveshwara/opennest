@@ -30,5 +30,6 @@ class ListingController {
     @PatchMapping("/{id}/inventory") ResponseEntity<Map<String, Object>> inventory(@PathVariable UUID id, @RequestBody JsonNode body) { return ok(listings.change(id, body, "inventory")); }
     @PostMapping("/{id}/images/presign") ResponseEntity<Map<String, Object>> presign(@PathVariable UUID id, @RequestBody JsonNode body) { return ok(media.presign(id, listings.caller(), body)); }
     @PostMapping("/{id}/images/complete") ResponseEntity<Map<String, Object>> complete(@PathVariable UUID id, @RequestBody JsonNode body) { return ok(media.complete(id, listings.caller(), body)); }
+    @DeleteMapping("/{id}/images/{imageId}") ResponseEntity<Map<String, Object>> removeImage(@PathVariable UUID id, @PathVariable UUID imageId) { return ok(media.remove(id, listings.caller(), imageId)); }
     private ResponseEntity<Map<String, Object>> ok(Map<String, Object> body) { return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(body); }
 }

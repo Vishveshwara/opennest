@@ -41,11 +41,15 @@ class ListingRequestLimit extends OncePerRequestFilter {
             chain.doFilter(request, response); return;
         }
         if (!processor.processRequest(cors.getCorsConfiguration(request), request, response) || CorsUtils.isPreFlightRequest(request)) return;
-        if (!java.util.Set.of("POST", "PATCH").contains(request.getMethod())) { chain.doFilter(request, response); return; }
+        if (!java.util.Set.of("POST", "PATCH", "DELETE").contains(request.getMethod())) { chain.doFilter(request, response); return; }
         int limit = interaction ? 8192 : 32768;
         if (request.getContentLengthLong() > limit) { errors.write(response, 413); return; }
         var body = request.getInputStream().readNBytes(limit + 1);
         if (body.length > limit) { errors.write(response, 413); return; }
+        if ("DELETE".equals(request.getMethod())) {
+            if (body.length != 0) { errors.write(response, 400); return; }
+            chain.doFilter(request, response); return;
+        }
         try (var parser = strict.createParser(body)) { strict.readTree(parser); if (parser.nextToken() != null) throw new IllegalArgumentException(); }
         catch (RuntimeException failure) { errors.write(response, 400); return; }
         var wrapped = new HttpServletRequestWrapper(request) {

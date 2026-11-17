@@ -19,7 +19,7 @@ class ListingRequestLimitTests {
     private ListingRequestLimit filter() {
         var configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(List.of("https://opennest.example.invalid"));
-        configuration.setAllowedMethods(List.of("GET", "POST", "PATCH", "OPTIONS"));
+        configuration.setAllowedMethods(List.of("GET", "POST", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Content-Type", "X-CSRF-TOKEN"));
         configuration.setAllowCredentials(true);
         var source = new UrlBasedCorsConfigurationSource(); source.registerCorsConfiguration("/api/v1/**", configuration);
@@ -47,6 +47,16 @@ class ListingRequestLimitTests {
         var response = new MockHttpServletResponse(); var reached = new AtomicBoolean();
         filter().doFilter(request, response, (incoming, outgoing) -> reached.set(true));
         assertThat(reached).isTrue();
+    }
+    @ParameterizedTest @ValueSource(strings = {"", "{}", " ", "not JSON"})
+    void photoRemovalAcceptsOnlyAnEmptyBodyWithCors(String body) throws Exception {
+        var request = request("/api/v1/listings/draft/images/image", body);
+        request.setMethod("DELETE");
+        var response = new MockHttpServletResponse(); var reached = new AtomicBoolean();
+        filter().doFilter(request, response, (incoming, outgoing) -> reached.set(true));
+        assertThat(reached.get()).isEqualTo(body.isEmpty());
+        assertThat(response.getStatus()).isEqualTo(body.isEmpty() ? 200 : 400);
+        assertThat(response.getHeader("Access-Control-Allow-Origin")).isEqualTo("https://opennest.example.invalid");
     }
     private MockHttpServletRequest request(String path, String body) {
         var request = new MockHttpServletRequest("POST", path);

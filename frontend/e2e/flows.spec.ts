@@ -286,12 +286,25 @@ test("Telegram, all rental modes, direct uploads, publication, reveals, reviews,
       if (retryTransport)
         expect(reservationRequests - priorReservations).toBe(1);
     }
+    if (index === 0) {
+      await page.getByRole("figure", { name: "ROOM", exact: true })
+        .getByRole("button", { name: "Remove photo", exact: true }).click();
+      await page.getByRole("dialog").getByRole("button", { name: "Remove photo", exact: true }).click();
+      await expect(page.locator(".upload-grid figure")).toHaveCount(3);
+      await expect(page.getByRole("button", { name: "Publish listing", exact: true })).toBeDisabled();
+      await page.getByRole("combobox", { name: "Photo segment", exact: true }).selectOption("ROOM");
+      await page.getByLabel("Choose photos", { exact: true }).setInputFiles(await image(page));
+      await page.getByRole("button", { name: "Upload photo", exact: true }).click();
+      await expect(page.locator(".upload-grid figure")).toHaveCount(4);
+    }
     await page
       .getByRole("button", { name: "Publish listing", exact: true })
       .click();
     await expect(
       page.getByRole("button", { name: "Pause listing", exact: true }),
     ).toBeVisible();
+    await expect(page.locator(".upload-grid figure").first()
+      .getByRole("button", { name: "Remove photo", exact: true })).toBeDisabled();
     const publicResponse = await request.get(
       `${process.env.E2E_PRIMARY_API}/api/v1/listings/${id}`,
     );
@@ -408,6 +421,11 @@ test("Telegram, all rental modes, direct uploads, publication, reveals, reviews,
     `${process.env.E2E_PRIMARY_API}/api/v1/listings/${ids[0]}`,
   );
   expect(paused.status()).toBe(404);
+  await page.locator(".upload-grid figure").first()
+    .getByRole("button", { name: "Remove photo", exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Remove photo", exact: true }).click();
+  await expect(page.locator(".upload-grid figure")).toHaveCount(3);
+  await expect(page.getByRole("button", { name: "Publish listing", exact: true })).toBeDisabled();
 });
 
 test("sandbox URL search, back navigation, mobile controls, personas, and isolation", async ({
