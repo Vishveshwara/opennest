@@ -2,13 +2,18 @@ import { presignSchema } from "./contracts";
 import { z } from "zod";
 import { validateSource } from "./photo-policy";
 
-export async function convertToLosslessWebp(file: File): Promise<Blob> {
+export async function convertToAvif(file: File): Promise<Blob> {
   validateSource(file);
-  const worker = new Worker(new URL("./webp.worker.ts", import.meta.url), {
+  const worker = new Worker(new URL("./avif.worker.ts", import.meta.url), {
     type: "module",
   });
   return new Promise<Blob>((resolve, reject) => {
+    const deadline = setTimeout(() => {
+      worker.terminate();
+      reject(new Error("Photo preparation took too long. Try a smaller photo."));
+    }, 120_000);
     worker.onmessage = (event: MessageEvent<unknown>) => {
+      clearTimeout(deadline);
       const result = z
         .discriminatedUnion("kind", [
           z.object({
@@ -17,7 +22,7 @@ export async function convertToLosslessWebp(file: File): Promise<Blob> {
           }),
           z.object({
             kind: z.literal("failed"),
-            reason: z.enum(["dimensions", "conversion"]),
+            reason: z.literal("conversion"),
           }),
         ])
         .safeParse(event.data);
@@ -29,23 +34,26 @@ export async function convertToLosslessWebp(file: File): Promise<Blob> {
         return;
       }
       if (result.data.kind === "encoded") {
-        resolve(new Blob([result.data.bytes], { type: "image/webp" }));
+        if (!result.data.bytes.byteLength) {
+          reject(new Error("The photo encoder returned an empty image. Please try again."));
+          return;
+        }
+        resolve(new Blob([result.data.bytes], { type: "image/avif" }));
         return;
       }
       const messages = {
-        dimensions:
-          "WebP supports images up to 16,383 pixels on each side. Choose a photo within that format limit.",
         conversion:
           "Your browser could not convert this photo. It may be damaged, animated, or exceed your device's available memory.",
       };
       reject(new Error(messages[result.data.reason]));
     };
     worker.onerror = (event) => {
+      clearTimeout(deadline);
       event.preventDefault();
       worker.terminate();
       reject(
         new Error(
-          "The lossless image encoder could not start. Refresh the page and try again.",
+          "The photo encoder could not start. Refresh the page and try again.",
         ),
       );
     };

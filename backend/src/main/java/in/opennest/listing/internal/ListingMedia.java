@@ -33,7 +33,7 @@ class ListingMedia implements AutoCloseable {
         ListingInput.fields(body, Set.of("segment", "contentType", "byteSize"));
         String segment = ListingInput.enumeration(body, "segment", ListingInput.Segment.class).name();
         String type = ListingInput.text(body, "contentType", 32);
-        ListingInput.require(Set.of("image/jpeg", "image/png", "image/webp").contains(type));
+        ListingInput.require(Set.of("image/jpeg", "image/png", "image/webp", "image/avif").contains(type));
         int size = ListingInput.integer(body, "byteSize", 1, MAX_BYTES);
         requireUploadCapacity(size);
         return store.write(() -> {

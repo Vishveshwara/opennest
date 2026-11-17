@@ -31,6 +31,10 @@ jobs:
             backend/pom.xml
             backend/.mvn/wrapper/maven-wrapper.properties
             docs/verification/backend-dependencies/settings.xml
+      - name: Install native media decoder runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends --yes libxcb1 libxcb-shm0 libasound2t64 libpulse0
       - name: Verify wrapper, Java target, and context limits
         run: |
           python3 -m unittest discover --start-directory .github/scripts --pattern '*_test.py'

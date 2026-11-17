@@ -19,6 +19,7 @@ final class ImageValidator {
         ListingInput.require(bytes.length > 0 && bytes.length <= ListingMedia.MAX_BYTES);
         String type = signature(bytes);
         ListingInput.require(type.equals(declaredType));
+        if (type.equals("image/avif")) return AvifImage.validate(bytes);
         if (type.equals("image/webp")) return LosslessWebp.validate(bytes);
         rejectAnimation(bytes, type);
         int orientation = type.equals("image/jpeg") ? jpegOrientation(bytes) : 1;
@@ -100,6 +101,7 @@ final class ImageValidator {
         return 1;
     }
     private static String signature(byte[] data) {
+        if (data.length >= 16 && ascii(data, 4).equals("ftyp") && ascii(data, 8).equals("avif")) return "image/avif";
         if (data.length >= 3 && (data[0] & 255) == 255 && (data[1] & 255) == 216 && (data[2] & 255) == 255) return "image/jpeg";
         if (data.length >= 8 && java.util.Arrays.equals(java.util.Arrays.copyOf(data, 8), new byte[]{(byte)137,80,78,71,13,10,26,10})) return "image/png";
         if (data.length >= 12 && ascii(data, 0).equals("RIFF") && ascii(data, 8).equals("WEBP")) return "image/webp";

@@ -80,7 +80,7 @@ class SchemaMigrationIT {
                     var context = application.run(arguments.toArray(String[]::new));
                     contexts.add(context);
                     var flyway = context.getBean(Flyway.class);
-                    assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("8");
+                    assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("10");
                     assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
                     assertThat(flyway.migrate().migrationsExecuted).isZero();
                     assertThat(flyway.getConfiguration().isCleanDisabled()).isTrue();
@@ -102,13 +102,14 @@ class SchemaMigrationIT {
         containers.forEach(PostgreSQLContainer::stop);
     }
 
-    @Test
-    void commitsConstraintReplacementBeforeSeparateValidationTransactions() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {"8", "9", "10"})
+    void commitsConstraintReplacementBeforeSeparateValidationTransactions(String version) throws Exception {
         try (var container = new PostgreSQLContainer(DockerImageName.parse("postgis/postgis:17-3.5").asCompatibleSubstituteFor("postgres"))
                 .withDatabaseName("opennest_migration_schema_test").withUsername("migration_test").withPassword("fabricated-migration-test")) {
             container.start();
             Flyway.configure().dataSource(container.getJdbcUrl(), container.getUsername(), container.getPassword())
-                    .target("7").load().migrate();
+                    .target(Integer.toString(Integer.parseInt(version) - 1)).load().migrate();
             try (var connection = DriverManager.getConnection(container.getJdbcUrl(), container.getUsername(), container.getPassword())) {
                 execute(connection, "CREATE SCHEMA migration_probe");
                 execute(connection, "CREATE TABLE migration_probe.statements (transaction_id bigint, statement text, validated_count bigint)");
@@ -124,7 +125,7 @@ class SchemaMigrationIT {
                         $$
                         """);
                 execute(connection, "CREATE EVENT TRIGGER migration_trace ON ddl_command_end WHEN TAG IN ('ALTER TABLE') EXECUTE FUNCTION migration_probe.trace()");
-                var flyway = Flyway.configure().dataSource(container.getJdbcUrl(), container.getUsername(), container.getPassword()).load();
+                var flyway = Flyway.configure().dataSource(container.getJdbcUrl(), container.getUsername(), container.getPassword()).target(version).load();
                 assertThat(flyway.migrate().migrationsExecuted).isEqualTo(1);
                 assertThat(value(connection, "SELECT count(*) FROM migration_probe.statements")).isEqualTo(3L);
                 assertThat(value(connection, "SELECT count(DISTINCT transaction_id) FROM migration_probe.statements")).isEqualTo(3L);
@@ -134,6 +135,44 @@ class SchemaMigrationIT {
                 assertThat(flyway.migrate().migrationsExecuted).isZero();
             }
         }
+    }
+
+    @Test
+    void upgradesPopulatedV9WithoutChangingLegacyImagesOrChecksums() throws Exception {
+        try (var container = new PostgreSQLContainer(DockerImageName.parse("postgis/postgis:17-3.5").asCompatibleSubstituteFor("postgres"))
+                .withDatabaseName("opennest_avif_upgrade").withUsername("avif_upgrade").withPassword("fabricated-avif-upgrade")) {
+            container.start();
+            Flyway.configure().dataSource(container.getJdbcUrl(), container.getUsername(), container.getPassword()).target("9").load().migrate();
+            try (var connection = DriverManager.getConnection(container.getJdbcUrl(), container.getUsername(), container.getPassword())) {
+                var history = strings(connection, "SELECT version || ':' || checksum FROM flyway_schema_history ORDER BY installed_rank");
+                UUID owner = user(connection), property = property(connection, owner, "FLAT", "ENTIRE_FLAT", "PUNE");
+                UUID image = UUID.randomUUID();
+                insert(connection, "property_images", row("id", image, "property_id", property, "upload_object_key", "upgrade/staging",
+                        "object_key", "upgrade/final", "segment", "ROOM", "upload_expires_at", OffsetDateTime.now().plusHours(1),
+                        "validation_state", "VALIDATED", "declared_content_type", "image/webp", "declared_byte_size", 50000000L,
+                        "content_type", "image/webp", "byte_size", 50000000L, "width", 6000, "height", 4000));
+                var flyway = Flyway.configure().dataSource(container.getJdbcUrl(), container.getUsername(), container.getPassword()).load();
+                assertThat(flyway.migrate().migrationsExecuted).isEqualTo(1);
+                assertThat(strings(connection, "SELECT version || ':' || checksum FROM flyway_schema_history WHERE version <> '10' ORDER BY installed_rank")).isEqualTo(history);
+                assertThat(value(connection, "SELECT content_type || ':' || byte_size || ':' || width || ':' || height || ':' || object_key FROM property_images WHERE id=?", image))
+                        .isEqualTo("image/webp:50000000:6000:4000:upgrade/final");
+                execute(connection, "UPDATE property_images SET declared_content_type='image/avif',content_type='image/avif',width=2048,height=1365 WHERE id=?", image);
+                assertThat(value(connection, "SELECT byte_size FROM property_images WHERE id=?", image)).isEqualTo(50000000L);
+                assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
+                assertThat(flyway.migrate().migrationsExecuted).isZero();
+            }
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1})
+    void allowsAvifAboveFourMegabytesWhileEnforcingTransportAndDimensions(int target) throws Exception {
+        fixture(target, f -> {
+            UUID image = image(f, "staging/avif-contract");
+            execute(f.db(), "UPDATE property_images SET declared_content_type='image/avif',declared_byte_size=50000000,validation_state='VALIDATED',object_key='final/avif-contract',content_type='image/avif',byte_size=50000000,width=2048,height=2048 WHERE id=?", image);
+            for (String change : List.of("declared_byte_size=2147483640", "byte_size=2147483640", "width=2049", "height=2049", "declared_byte_size=NULL", "content_type=NULL"))
+                reject(f.db(), "23514", "UPDATE property_images SET " + change + " WHERE id=?", image);
+        });
     }
 
     @TestFactory
@@ -194,7 +233,7 @@ class SchemaMigrationIT {
                 current += String.join("\n", strings(connection, "SELECT indexdef FROM pg_indexes WHERE schemaname='public' AND indexname LIKE 'ix_%' ORDER BY indexname"));
                 current += "\n" + ownerProfileViewFingerprint(connection);
                 var currentHistory = strings(connection, "SELECT version || ':' || checksum || ':' || success FROM public.flyway_schema_history WHERE version IS NOT NULL ORDER BY installed_rank");
-                assertThat(currentHistory).hasSize(8);
+                assertThat(currentHistory).hasSize(10);
                 if (fingerprint != null) {
                     assertThat(current).isEqualTo(fingerprint);
                     assertThat(currentHistory).isEqualTo(history);

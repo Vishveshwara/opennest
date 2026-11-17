@@ -4,7 +4,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { OwnerPage } from "./owner";
 import { ApiError } from "@/lib/api";
 import { ownerListingSchema } from "@/lib/contracts";
-import { convertToLosslessWebp, uploadDirect } from "@/lib/uploads";
+import { convertToAvif, uploadDirect } from "@/lib/uploads";
 
 let search = new URLSearchParams();
 const request = vi.fn();
@@ -13,7 +13,7 @@ const router = { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() };
 vi.mock("./area-map", () => ({ default: () => null }));
 vi.mock("@/lib/uploads", async (original) => ({
   ...await original<typeof import("@/lib/uploads")>(),
-  convertToLosslessWebp: vi.fn(), uploadDirect: vi.fn(),
+  convertToAvif: vi.fn(), uploadDirect: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => router,
@@ -32,7 +32,7 @@ vi.mock("./session", () => ({
 beforeEach(() => {
   search = new URLSearchParams();
   request.mockReset();
-  vi.mocked(convertToLosslessWebp).mockReset();
+  vi.mocked(convertToAvif).mockReset();
   vi.mocked(uploadDirect).mockReset();
 });
 
@@ -87,13 +87,13 @@ function photoRequests(photoCount = 0) {
     if (path.endsWith("/complete")) { completions++; return image; }
     return { ...listing(photoCount), images: [...listing(photoCount).images, ...(completions ? [image] : [])] };
   });
-  vi.mocked(convertToLosslessWebp).mockResolvedValue(new Blob(["webp"], { type: "image/webp" }));
+  vi.mocked(convertToAvif).mockResolvedValue(new Blob(["avif"], { type: "image/avif" }));
   vi.mocked(uploadDirect).mockResolvedValue(undefined);
 }
 
 it("removes a failed local photo to release the final slot for a replacement", async () => {
   photoRequests(19);
-  vi.mocked(convertToLosslessWebp).mockRejectedValueOnce(new Error("Unsupported photo"));
+  vi.mocked(convertToAvif).mockRejectedValueOnce(new Error("Unsupported photo"));
   render(<OwnerPage id={listingId} />);
   const input = await screen.findByLabelText("Choose photos");
   fireEvent.change(input, { target: { files: [new File(["bad"], "failed.png", { type: "image/png" })] } });
@@ -117,7 +117,7 @@ it("retains retry payloads for unfinished uploads without converting or reservin
   fireEvent.click(screen.getByRole("button", { name: "Upload photo" }));
   fireEvent.click(await screen.findByRole("button", { name: "Retry photo" }));
   expect(await screen.findByText("Validated")).toBeInTheDocument();
-  expect(convertToLosslessWebp).toHaveBeenCalledTimes(1);
+  expect(convertToAvif).toHaveBeenCalledTimes(1);
   expect(request.mock.calls.filter(([path]) => String(path).endsWith("/presign"))).toHaveLength(1);
   expect(uploadDirect).toHaveBeenCalledTimes(2);
 });

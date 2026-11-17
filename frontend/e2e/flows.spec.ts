@@ -241,21 +241,20 @@ test("Telegram, all rental modes, direct uploads, publication, reveals, reviews,
       `${process.env.E2E_PRIMARY_API}/api/v1/listings/${id}`,
     );
     expect(publicDraft.status()).toBe(404);
+    let sourcePhotoBytes = 0;
     for (const segment of category === "FLAT"
       ? ["ROOM", "HALL", "BATHROOM", "KITCHEN"]
       : ["ROOM", "BATHROOM"]) {
       await page
         .getByRole("combobox", { name: "Photo segment", exact: true })
         .selectOption(segment);
-      await page
-        .getByLabel("Choose photos", { exact: true })
-        .setInputFiles(
-          await image(
-            page,
-            index === 2 && segment === "ROOM" ? 6000 : 40,
-            index === 2 && segment === "ROOM" ? 4000 : 40,
-          ),
-        );
+      const sourcePhoto = await image(
+        page,
+        index === 2 && segment === "ROOM" ? 6000 : 40,
+        index === 2 && segment === "ROOM" ? 4000 : 40,
+      );
+      if (segment === "ROOM") sourcePhotoBytes = sourcePhoto.buffer.length;
+      await page.getByLabel("Choose photos", { exact: true }).setInputFiles(sourcePhoto);
       const retryTransport = index === 0 && segment === "ROOM";
       const priorReservations = reservationRequests;
       if (retryTransport)
@@ -309,17 +308,26 @@ test("Telegram, all rental modes, direct uploads, publication, reveals, reviews,
         }),
       )
       .parse(body.images);
-    expect(photos.every((photo) => photo.contentType === "image/webp")).toBe(
+    expect(photos.every((photo) => photo.contentType === "image/avif")).toBe(
       true,
     );
     const first = photos.at(0);
     if (!first) throw new Error("Validated photo missing");
-    expect(first.width).toBe(index === 2 ? 6000 : 40);
-    expect(first.height).toBe(index === 2 ? 4000 : 40);
+    expect(first.width).toBe(index === 2 ? 2048 : 40);
+    expect(first.height).toBe(index === 2 ? 1365 : 40);
     const finalPhoto = await request.get(first.url);
     const photoBytes = await finalPhoto.body();
-    expect(photoBytes.toString("ascii", 8, 12)).toBe("WEBP");
-    expect(photoBytes.toString("ascii", 12, 16)).toBe("VP8L");
+    expect(photoBytes.toString("ascii", 4, 8)).toBe("ftyp");
+    expect(photoBytes.toString("ascii", 8, 12)).toBe("avif");
+    expect(photoBytes.length).toBeGreaterThan(0);
+    if (index === 2) expect(photoBytes.length).toBeLessThan(sourcePhotoBytes);
+    const rendered = await page.evaluate(async (url) => {
+      const photo = new Image();
+      photo.src = url;
+      await photo.decode();
+      return { width: photo.naturalWidth, height: photo.naturalHeight };
+    }, first.url);
+    expect(rendered).toEqual({ width: first.width, height: first.height });
     expect(body).not.toHaveProperty("privateAddress");
     expect(body).not.toHaveProperty("latitude");
     expect(body).not.toHaveProperty("phoneNumber");

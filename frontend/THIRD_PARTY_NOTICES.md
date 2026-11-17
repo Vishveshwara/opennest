@@ -8,5 +8,6 @@ Each production build runs scripts/license-notices.mjs and publishes the install
 - MapLibre GL JS retains its BSD-3-Clause license. MapTiler styles, tiles and data have separate service terms and require visible attribution. MapLibre does not supply unlimited map hosting.
 - Montserrat is licensed under the SIL Open Font License. The downloaded OFL notice is included at public/fonts/OFL.txt and is served with the font files.
 - Theme variables originate from the maintainer-specified TweakCN registry item. Its original JSON is retained at src/theme.json.
+- @jsquash/avif 2.1.1 uses Apache-2.0 for its JavaScript wrapper. Its pinned libavif/libaom/libsharpyuv codec notices and patent grants are retained in third-party/AVIF_CODEC_NOTICES.txt, appended to the generated notices and served with the WASM at /codecs/avif/LICENSE.codec.txt. These notices must accompany the encoder; the package wrapper license alone does not cover the bundled native codec sources.
 
 For corresponding OpenNest source, use the repository link in the application footer and the exact revision identified by the release. Phase 5 does not deploy a running release.
