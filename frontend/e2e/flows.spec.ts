@@ -94,10 +94,15 @@ test("public search is keyboard accessible in both themes and survives map failu
       await page
         .getByRole("button", { name: "Use dark theme", exact: true })
         .click();
-    const logo = dark ? "/opennest-logo-dark.png" : "/opennest-logo.png";
-    await expect(page.locator(".site-header .brand-mark")).toHaveAttribute("src", logo);
-    await expect(page.locator(".site-footer .brand-mark")).toHaveAttribute("src", logo);
-    expect((await page.request.get(new URL(logo, sandboxUi).href)).ok()).toBe(true);
+    const headerLogo = page.locator(".site-header .brand-mark");
+    const logoPath = dark ? /\/opennest-logo-dark\.[^/]+\.webp$/ : /\/opennest-logo\.[^/]+\.webp$/;
+    await expect(headerLogo).toHaveAttribute("src", logoPath);
+    const logo = await headerLogo.evaluate((image: HTMLImageElement) => image.src);
+    await expect(page.locator(".site-footer .brand-mark")).toHaveAttribute("src", logoPath);
+    const asset = await page.request.get(logo);
+    expect(asset.ok()).toBe(true);
+    expect(asset.headers()["cache-control"]).toContain("immutable");
+    expect((await asset.body()).length).toBeLessThan(10_000);
     await expect
       .poll(() =>
         page.evaluate(
@@ -127,6 +132,56 @@ test("public search is keyboard accessible in both themes and survives map failu
     ),
   ).toBeVisible();
   await expect(page.locator(".listing-card:visible")).not.toHaveCount(0);
+});
+
+test("public search works without JavaScript at a narrow viewport", async ({ browser }) => {
+  const context = await browser.newContext({
+    javaScriptEnabled: false,
+    viewport: { width: 320, height: 720 },
+  });
+  try {
+    const page = await context.newPage();
+    await page.goto(`${sandboxUi}/recruiter-sandbox/`);
+    await expect(page.locator(".listing-card").first()).toBeVisible();
+    await page.getByText("All filters", { exact: true }).click();
+    await expect(page.getByLabel("Minimum quoted rent, INR")).toBeVisible();
+    await page.getByLabel("Where are you looking?").fill(" Pune ");
+    await page.getByRole("button", { name: "Find my place" }).click();
+    await expect(page).toHaveURL(/city=Pune/);
+    expect(new URL(page.url()).searchParams.has("searchForm")).toBe(false);
+    await expect(page.getByRole("heading", { name: "Places in Pune" })).toBeVisible();
+    await page.getByLabel("Sort listings").selectOption("RENT_ASC");
+    await page.getByRole("button", { name: "Apply", exact: true }).click();
+    await expect(page).toHaveURL(/sort=RENT_ASC/);
+    await expect(page).toHaveURL(/city=Pune/);
+    await expect(page.locator(".listing-card h3")).toHaveText([
+      "OpenNest fabricated PG in PUNE",
+      "OpenNest fabricated room in PUNE",
+      "OpenNest fabricated entire flat in PUNE",
+    ]);
+
+    await page.goto(`${sandboxUi}/recruiter-sandbox/?city=Pune&category=PG_HOSTEL`);
+    await page.getByLabel("Place type").selectOption("FLAT");
+    await page.getByText("All filters", { exact: true }).click();
+    await page.getByLabel("Flat rental mode").selectOption("ENTIRE_FLAT");
+    await page.getByLabel("Minimum bedrooms / BHK").fill("2");
+    await page.getByRole("button", { name: "Find my place" }).click();
+    await expect(page.locator(".listing-card h3")).toHaveText("OpenNest fabricated entire flat in PUNE");
+
+    await page.getByText("All filters", { exact: true }).click();
+    await page.getByLabel("Flat rental mode").selectOption("ROOM");
+    await page.getByLabel("Minimum available rooms").fill("2");
+    await page.getByRole("button", { name: "Find my place" }).click();
+    await expect(page.locator(".listing-card h3")).toHaveText("OpenNest fabricated room in PUNE");
+    expect(new URL(page.url()).searchParams.get("minTotalRooms")).toBe("2");
+
+    const longCity = "W".repeat(120);
+    await page.goto(`${sandboxUi}/recruiter-sandbox/?city=${longCity}`);
+    await expect(page.getByRole("heading", { name: `Places in ${longCity}` })).toBeVisible();
+    expect(await page.locator("html").evaluate((root) => root.scrollWidth)).toBe(320);
+  } finally {
+    await context.close();
+  }
 });
 
 const ownerPhone = "+910000000001",
@@ -203,6 +258,7 @@ test("Telegram, all rental modes, direct uploads, publication, reveals, reviews,
     if (request.url().endsWith("/images/presign")) reservationRequests++;
   });
   const ids: string[] = [];
+  const longTitle = `OpenNest ${"W".repeat(150)}`;
   for (const [index, category, mode, city] of [
     [0, "FLAT", "ENTIRE_FLAT", "Pune"],
     [1, "FLAT", "ROOM", "Delhi"],
@@ -211,7 +267,7 @@ test("Telegram, all rental modes, direct uploads, publication, reveals, reviews,
     await page.goto("/my-listings/new");
     await page
       .getByLabel("Listing title", { exact: true })
-      .fill(`OpenNest fabricated place ${index}`);
+      .fill(index === 0 ? longTitle : `OpenNest fabricated place ${index}`);
     await page
       .getByRole("combobox", { name: "Category", exact: true })
       .selectOption(category);
@@ -250,6 +306,7 @@ test("Telegram, all rental modes, direct uploads, publication, reveals, reviews,
       `${process.env.E2E_PRIMARY_API}/api/v1/listings/${id}`,
     );
     expect(publicDraft.status()).toBe(404);
+    expect((await request.get(`/listings/${id}`)).status()).toBe(404);
     let sourcePhotoBytes = 0;
     for (const segment of category === "FLAT"
       ? ["ROOM", "HALL", "BATHROOM", "KITCHEN"]
@@ -370,7 +427,46 @@ test("Telegram, all rental modes, direct uploads, publication, reveals, reviews,
   const seekerPage = await seeker.newPage();
   await controlledMap(seekerPage);
   await signIn(seekerPage, request, seekerPhone);
+  await seekerPage.setViewportSize({ width: 320, height: 720 });
+  let mapRequests = 0;
+  seekerPage.on("request", (request) => {
+    if (new URL(request.url()).hostname === "api.maptiler.com") mapRequests++;
+  });
+  await seekerPage.route("**/storage/final/**", (route) => route.fulfill({ status: 403 }));
   await seekerPage.goto(`/listings/${ids[0]}`);
+  await expect(seekerPage).toHaveTitle(`${longTitle} in FABRICATED NEIGHBORHOOD, PUNE | OpenNest`);
+  expect(await seekerPage.locator("html").evaluate((root) => root.scrollWidth)).toBe(320);
+  const contact = seekerPage.getByRole("button", { name: "Reveal owner contact", exact: true });
+  const mapToggle = seekerPage.getByRole("button", { name: "Show approximate map" });
+  await expect(contact).toBeEnabled();
+  await contact.focus();
+  await seekerPage.keyboard.press("Tab");
+  await expect(mapToggle).toBeFocused();
+  expect(mapRequests).toBe(0);
+  const webglAvailable = await seekerPage.evaluate(
+    () => Boolean(document.createElement("canvas").getContext("webgl2")),
+  );
+  const mapResponse = webglAvailable ? seekerPage.waitForResponse("https://api.maptiler.com/**") : null;
+  await mapToggle.click();
+  await expect(seekerPage.getByRole("button", { name: "Hide approximate map" })).toHaveAttribute("aria-expanded", "true");
+  if (mapResponse) expect((await mapResponse).ok()).toBe(true);
+
+  await seekerPage.unroute("**/storage/final/**");
+  const refresh = seekerPage.getByRole("button", { name: "Refresh photos", exact: true }).first();
+  await expect(refresh).toBeVisible();
+  const freshListing = seekerPage.waitForResponse((response) =>
+    new URL(response.url()).pathname === `/api/v1/listings/${ids[0]}`,
+  );
+  await refresh.click();
+  const freshResponse = await freshListing;
+  expect(freshResponse.ok()).toBe(true);
+  expect(freshResponse.headers()["cache-control"]).toContain("no-store");
+  expect(await freshResponse.request().headerValue("cookie")).toBeNull();
+  await expect.poll(async () =>
+    seekerPage.locator(".photo-gallery img").first().evaluate((image: HTMLImageElement) => image.naturalWidth),
+  ).toBeGreaterThan(0);
+  await expect(seekerPage.locator(".photo-gallery img").first()).toHaveAttribute("fetchpriority", "high");
+  await seekerPage.setViewportSize({ width: 1280, height: 800 });
   await seekerPage
     .getByRole("button", { name: "Reveal owner contact", exact: true })
     .click();
@@ -438,7 +534,7 @@ test("sandbox URL search, back navigation, mobile controls, personas, and isolat
 }) => {
   await page.goto(`${sandboxUi}/recruiter-sandbox`);
   await expect(page.locator(".listing-card:visible")).not.toHaveCount(0);
-  await page.getByRole("button", { name: "All filters", exact: true }).click();
+  await page.getByText("All filters", { exact: true }).click();
   await page
     .getByRole("textbox", { name: "Where are you looking?", exact: true })
     .fill("Pune");
@@ -446,15 +542,26 @@ test("sandbox URL search, back navigation, mobile controls, personas, and isolat
     .getByRole("button", { name: "Find my place", exact: true })
     .click();
   await expect(page).toHaveURL(/city=Pune/);
-  await page
-    .getByRole("combobox", { name: "Sort listings", exact: true })
-    .selectOption("RENT_ASC");
+  const sortControl = page.getByRole("combobox", { name: "Sort listings", exact: true });
+  await sortControl.focus();
+  await sortControl.selectOption("RENT_ASC");
   await expect(page).toHaveURL(/sort=RENT_ASC/);
   await expect(page).toHaveURL(/page=0/);
+  await expect(sortControl).toBeFocused();
   await page.goBack();
   await expect(
     page.getByRole("combobox", { name: "Sort listings", exact: true }),
   ).toHaveValue("NEWEST");
+  await page.evaluate(() => {
+    for (const [id, value] of [["sort", "RENT_DESC"], ["size", "10"]]) {
+      const field = document.getElementById(id);
+      if (!(field instanceof HTMLSelectElement)) throw new Error("Search select missing");
+      field.value = value;
+      field.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+  });
+  await expect(page).toHaveURL(/sort=RENT_DESC/);
+  await expect(page).toHaveURL(/size=10/);
   await page.goto(`${sandboxUi}/recruiter-sandbox/?page=1&size=1`);
   await expect(
     page.getByRole("link", { name: "Page 2", exact: true }),
@@ -490,6 +597,17 @@ test("sandbox URL search, back navigation, mobile controls, personas, and isolat
   }
   expect(workerErrors).toEqual([]);
   await expect(page.locator(".listing-card").first()).toBeVisible();
+  await page.goto(`${sandboxUi}/recruiter-sandbox/?size=1`);
+  await page.getByRole("button", { name: "Map view", exact: true }).click();
+  const firstCard = page.locator(".listing-card h3 a").first();
+  await firstCard.focus();
+  await expect(page.locator(".listing-selected")).toHaveCount(1);
+  const previousTitle = await firstCard.textContent();
+  await page.getByRole("link", { name: "Next page", exact: true }).press("Enter");
+  await expect(page).toHaveURL(/page=1/);
+  await expect(firstCard).not.toHaveText(previousTitle ?? "");
+  await expect(page.getByRole("button", { name: "List view", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".listing-selected")).toHaveCount(0);
   await page.goto(`${sandboxUi}/recruiter-sandbox/personas`);
   await page
     .getByRole("button")
@@ -529,7 +647,7 @@ test("sandbox URL search, back navigation, mobile controls, personas, and isolat
   ).toHaveCount(0);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${sandboxUi}/recruiter-sandbox/`);
-  await page.getByRole("button", { name: "All filters", exact: true }).click();
+  await page.getByText("All filters", { exact: true }).click();
   await page
     .getByRole("combobox", { name: "Place type", exact: true })
     .selectOption("PG_HOSTEL");

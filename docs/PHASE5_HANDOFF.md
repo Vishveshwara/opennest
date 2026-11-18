@@ -63,6 +63,18 @@ Original TweakCN variables remain unchanged. Component text uses derived semanti
 
 Every application-data request and response remains no-store. Public server reads omit credentials; private browser calls use backend-owned cookies. Signed image URLs bypass Next.js image optimization. Phone numbers, codes and tokens are not put into metadata, logs, browser storage or browser-test recordings.
 
+## Public browsing after the frontend audit
+
+Search and listing detail use dedicated routes. You can submit filters and sorting, open listings, or paginate with JavaScript disabled. Filter forms redirect to a shareable results URL. Search remains nationwide when you omit the city.
+
+Each listing has its own page title. A public request for an unavailable listing returns HTTP 404. The detail page loads the approximate map after you select **Show approximate map**. If a photo fails, select **Refresh photos** to fetch current URLs through `GET /api/v1/listings/{id}`. The browser downloads the images directly from storage.
+
+Listing responses and signed images remain no-store. Fingerprinted static build assets, including the 5.2 KB light logo WebP and 3.5 KB dark logo WebP, use immutable caching.
+
+Local verification on 18 November 2026 passed 99 frontend tests and all five Chromium scenarios against isolated PostGIS and Redis stores. The browser suite checks JavaScript-free search, 320 px reflow, listing titles and 404 responses, map activation, and photo recovery after a simulated storage rejection. Production build, TypeScript, lint, and the dependency gate also passed.
+
+The review follow-up passed 107 frontend tests and the same five Chromium scenarios. Coverage now includes native rent sorting and dependent filters, map pagination, sort focus, contact retry and Kolkata midnight, review pagination failures, and an overlapping photo refresh and route update. Standalone type checks passed in both build modes with deliberately stale development validators present.
+
 ## Configure photo uploads
 
 The current owner flow accepts JPEG, PNG, WebP or AVIF sources through 40,000,000 bytes and prepares AVIF in a browser WASM worker. It applies orientation, fits the longest side within 2,048 pixels without upscaling and flattens transparency onto white. Encoding is lossy: quality 60/speed 8, then one quality-45 retry above a soft 1 MB target, retaining the smaller output. Converted output is uploaded without a 4 MB product limit; shared server transport/memory checks remain. The source bitmap is released before encoding; source decoding still needs device memory. The backend validates a normalized metadata-free container and one bounded AV1 frame, preserving accepted bytes without re-encoding. Twenty photos are allowed per listing, with 60 reservations per rolling 24 hours. Existing JPEG/PNG/WebP photos and validation paths remain supported.

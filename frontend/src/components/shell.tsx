@@ -4,6 +4,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { Moon, Sun, ArrowUpRight } from "lucide-react";
+import lightLogo from "@/assets/opennest-logo.webp";
+import darkLogo from "@/assets/opennest-logo-dark.webp";
 import { useSession } from "./session";
 import { Button } from "./ui/button";
 
@@ -120,10 +122,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
 function BrandMark({ dark }: { dark: boolean }) {
   return (
     <Image
-      src={dark ? "/opennest-logo-dark.png" : "/opennest-logo.png"}
+      src={dark ? darkLogo : lightLogo}
       className="brand-mark"
-      width={37}
-      height={37}
+      width={56}
+      height={53}
       alt=""
       unoptimized
     />

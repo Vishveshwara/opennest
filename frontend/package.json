@@ -17,7 +17,7 @@
     "build": "node scripts/prepare-codecs.mjs && node scripts/license-notices.mjs && next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --project tsconfig.typecheck.json",
     "test": "vitest run",
     "test:e2e": "playwright test",
     "check:lan": "node scripts/check-lan-session.mjs",

@@ -167,6 +167,17 @@ export function compatibleSearch(params: URLSearchParams) {
   return query;
 }
 
+export const searchFormKey = "searchForm";
+
+export function searchFormQuery(data: Iterable<[string, FormDataEntryValue]>) {
+  const query = new URLSearchParams();
+  for (const [key, value] of data) {
+    if (key !== searchFormKey && typeof value === "string" && value.trim())
+      query.append(key, value.trim());
+  }
+  return compatibleSearch(query);
+}
+
 export function searchParamsObject(
   values: Record<string, string | string[] | undefined>,
 ) {
