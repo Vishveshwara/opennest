@@ -1,15 +1,5 @@
 import Link from "next/link";
-import {
-  ArrowLeft,
-  ArrowRight,
-  AlertCircle,
-  MapPin,
-  BedDouble,
-  Users,
-  Wifi,
-  Dumbbell,
-  Waves,
-} from "lucide-react";
+import { ArrowLeft, ArrowRight, AlertCircle } from "lucide-react";
 import type { Badge, Listing } from "@/lib/contracts";
 import { Button } from "./ui/button";
 
@@ -62,102 +52,16 @@ export function modeLabel(listing: Listing) {
       : "Room in a flat";
 }
 export function imageUrl(value: string, apiOrigin: string) {
-  const url = new URL(value, apiOrigin || undefined);
-  return ["https:", "http:"].includes(url.protocol) &&
-    !url.username &&
-    !url.password
-    ? url.href
-    : "";
-}
-
-export function ListingCard({
-  listing,
-  basePath,
-  apiOrigin,
-  selected = false,
-  onSelect,
-}: {
-  listing: Listing;
-  basePath: string;
-  apiOrigin: string;
-  selected?: boolean;
-  onSelect?: () => void;
-}) {
-  const image = listing.images.find((value) => value.url)?.url;
-  return (
-    <article
-      className={`listing-card ${selected ? "listing-selected" : ""}`}
-      onMouseEnter={onSelect}
-      onFocus={onSelect}
-    >
-      <Link
-        href={`${basePath}/listings/${listing.id}`}
-        className="listing-photo-link"
-      >
-        {image ? (
-          <img
-            className="listing-photo"
-            src={imageUrl(image, apiOrigin)}
-            alt={`${listing.title}, ${listing.locality}`}
-            loading="lazy"
-            referrerPolicy="no-referrer"
-          />
-        ) : (
-          <div className="listing-placeholder">
-            <HouseIcon />
-          </div>
-        )}
-        <span className="photo-badge">{modeLabel(listing)}</span>
-        {listing.status === "FULL_OCCUPIED" && (
-          <span className="occupied-badge">Fully occupied</span>
-        )}
-      </Link>
-      <div className="listing-body">
-        <div className="card-location">
-          <MapPin size={13} aria-hidden />
-          {listing.locality}, {listing.city}
-        </div>
-        <h3>
-          <Link href={`${basePath}/listings/${listing.id}`}>
-            {listing.title}
-          </Link>
-        </h3>
-        <div className="listing-specs">
-          {listing.bedrooms !== null && (
-            <span>
-              <BedDouble size={15} aria-hidden />
-              {listing.bedrooms === 0 ? "Studio" : `${listing.bedrooms} BHK`}
-            </span>
-          )}
-          <span>
-            <Users size={15} aria-hidden />
-            {capacityLabel(listing)}
-          </span>
-        </div>
-        <p className="vacancy">
-          {listing.flatRentalMode === "ENTIRE_FLAT"
-            ? listing.wholeFlatAvailable
-              ? "Whole flat available"
-              : "Whole flat occupied"
-            : `${listing.totalRoomsAvailable} rooms available`}
-        </p>
-        <div className="card-price">{rentLabel(listing)}</div>
-        <div className="card-bottom">
-          <TrustBadge value={listing.owner.trustBadge} />
-          <span className="amenity-icons">
-            {listing.hasWifi && <Wifi aria-label="Wi-Fi" size={16} />}
-            {listing.hasGym && <Dumbbell aria-label="Gym" size={16} />}
-            {listing.hasSwimmingPool && (
-              <Waves aria-label="Swimming pool" size={16} />
-            )}
-          </span>
-        </div>
-      </div>
-    </article>
-  );
-}
-function HouseIcon() {
-  return <BedDouble size={40} strokeWidth={1} aria-hidden />;
+  try {
+    const url = new URL(value, apiOrigin || undefined);
+    return ["https:", "http:"].includes(url.protocol) &&
+      !url.username &&
+      !url.password
+      ? url.href
+      : "";
+  } catch {
+    return "";
+  }
 }
 
 export function Pagination({

@@ -10,7 +10,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 
 type Point = { latitude: number; longitude: number };
 type MapProps = {
-  listings?: Listing[];
+  listings?: Pick<Listing, "id" | "publicLocation">[];
   onSelect?: (id: string) => void;
   selectedId?: string;
   point?: Point;

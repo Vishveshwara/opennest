@@ -1,6 +1,14 @@
 "use client";
 
-import { useCallback, useState, type FormEvent } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -15,12 +23,46 @@ import {
   Map as MapIcon,
   LayoutGrid,
 } from "lucide-react";
-import { compatibleSearch, parseSearch } from "@/lib/search";
-import type { ListingPage } from "@/lib/contracts";
+import {
+  compatibleSearch,
+  parseSearch,
+  searchFormKey,
+  searchFormQuery,
+} from "@/lib/search";
+import type { Listing } from "@/lib/contracts";
 import { useSession } from "./session";
 import { Button } from "./ui/button";
-import { ListingCard, Notice, Pagination } from "./common";
-import AreaMap from "./area-map";
+import { Notice } from "./common";
+
+const AreaMap = dynamic(() => import("./area-map"), {
+  loading: () => <p role="status">Loading map…</p>,
+});
+
+const MapSelection = createContext<{
+  id: string;
+  select: (id: string) => void;
+} | null>(null);
+
+export function SearchListing({
+  id,
+  children,
+}: {
+  id: string;
+  children: ReactNode;
+}) {
+  const selection = useContext(MapSelection);
+  return (
+    <article
+      className={
+        selection?.id === id ? "listing-card listing-selected" : "listing-card"
+      }
+      onMouseEnter={() => selection?.select(id)}
+      onFocus={() => selection?.select(id)}
+    >
+      {children}
+    </article>
+  );
+}
 
 const sortLabels = [
   ["NEWEST", "Newest first"],
@@ -34,15 +76,21 @@ export function SearchView({
   result,
   query,
   error,
+  pagination,
+  children,
 }: {
-  result: ListingPage | null;
+  result: {
+    totalElements: number;
+    mapListings: Pick<Listing, "id" | "publicLocation">[];
+  } | null;
   query: string;
   error?: string;
+  pagination?: ReactNode;
+  children?: ReactNode;
 }) {
   const { config } = useSession();
   const router = useRouter();
-  const [advanced, setAdvanced] = useState(false),
-    [map, setMap] = useState(false),
+  const [map, setMap] = useState(false),
     [selected, setSelected] = useState(""),
     [notice, setNotice] = useState("");
   const initial = new URLSearchParams(query);
@@ -71,7 +119,7 @@ export function SearchView({
   const onSelect = useCallback((id: string) => setSelected(id), []);
   function navigate(params: URLSearchParams) {
     try {
-      const valid = parseSearch(compatibleSearch(params));
+      const valid = parseSearch(params);
       setNotice("");
       router.push(`${config.basePath}/?${valid}`);
     } catch (error) {
@@ -82,17 +130,12 @@ export function SearchView({
   }
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const params = new URLSearchParams();
-    new FormData(event.currentTarget).forEach((value, key) => {
-      if (typeof value === "string" && value.trim())
-        params.set(key, value.trim());
-    });
-    navigate(params);
+    navigate(searchFormQuery(new FormData(event.currentTarget)));
   }
   function update(key: string, value: string) {
     const params = new URLSearchParams(query);
     params.set(key, value);
-    navigate(params);
+    navigate(compatibleSearch(params));
   }
   function locate() {
     if (!navigator.geolocation) {
@@ -173,7 +216,13 @@ export function SearchView({
               </span>
             </div>
           </div>
-          <form className="search-form" onSubmit={submit} key={query}>
+          <form
+            action={`${config.basePath}/`}
+            method="get"
+            className="search-form"
+            onSubmit={submit}
+          >
+            <input type="hidden" name={searchFormKey} value="1" />
             <div className="search-main">
               <label className="search-location">
                 <MapPin size={21} aria-hidden />
@@ -208,162 +257,154 @@ export function SearchView({
                 <Search size={19} /> Find my place
               </Button>
             </div>
-            <div className="filter-toolbar">
-              <Button
-                type="button"
-                variant="ghost"
-                size="small"
-                aria-expanded={advanced}
-                onClick={() => setAdvanced(!advanced)}
-              >
-                <SlidersHorizontal size={15} /> All filters
-              </Button>
-              <span>No city selected? Explore all of India.</span>
-            </div>
-            <div
-              className={
-                advanced ? "advanced-filters" : "advanced-filters collapsed"
-              }
-              inert={!advanced}
-              aria-hidden={!advanced}
-            >
-              {field("Locality", "locality", { maxLength: 120 })}
-              {category !== "PG_HOSTEL" && (
-                <label className="field">
-                  Flat rental mode
-                  <select
-                    name="flatRentalMode"
-                    value={mode}
-                    onChange={(event) => setMode(event.target.value)}
-                  >
-                    <option value="">Any flat mode</option>
-                    <option value="ENTIRE_FLAT">Entire flat</option>
-                    <option value="ROOM">Room in a flat</option>
-                  </select>
-                </label>
-              )}
-              {choice("Availability", "status", [
-                ["ACTIVE", "Available"],
-                ["FULL_OCCUPIED", "Fully occupied"],
-              ])}
-              {field("Minimum quoted rent, INR", "minRent", {
-                type: "number",
-                min: 0,
-                step: 1,
-              })}
-              {field("Maximum quoted rent, INR", "maxRent", {
-                type: "number",
-                min: 0,
-                step: 1,
-              })}
-              {category !== "PG_HOSTEL" && (
-                <>
-                  {field("Minimum bedrooms / BHK", "minBedrooms", {
-                    type: "number",
-                    min: 0,
-                    step: 1,
-                  })}
-                  {field("Maximum bedrooms / BHK", "maxBedrooms", {
-                    type: "number",
-                    min: 0,
-                    step: 1,
-                  })}
-                </>
-              )}
-              {mode !== "ENTIRE_FLAT" && (
-                <>
-                  {field("Minimum available rooms", "minTotalRooms", {
-                    type: "number",
-                    min: 0,
-                    step: 1,
-                  })}
-                  {field("Maximum available rooms", "maxTotalRooms", {
-                    type: "number",
-                    min: 0,
-                    step: 1,
-                  })}
-                  {field("Maximum occupants per room", "maxSharingPerRoom", {
-                    type: "number",
-                    min: 1,
-                    max: 10,
-                    step: 1,
-                  })}
-                  {choice("Room vacancy", "genderRoomAvailable", [
-                    ["MALE", "Male rooms"],
-                    ["FEMALE", "Female rooms"],
-                    ["SHARED", "Shared rooms"],
-                  ])}
-                </>
-              )}
-              {[
-                ["Wi-Fi", "hasWifi"],
-                ["Gym", "hasGym"],
-                ["Swimming pool", "hasSwimmingPool"],
-              ].map(([label, key]) => (
-                <div key={key}>
-                  {choice(label, key, [
-                    ["true", "Required"],
-                    ["false", "Absent"],
-                  ])}
-                </div>
-              ))}
-              {(
-                [
-                  ["Latitude", "lat"],
-                  ["Longitude", "lng"],
-                  ["Radius in km", "radiusKm"],
-                ] satisfies [string, keyof typeof geo][]
-              ).map(([label, name]) => (
-                <label className="field" key={name}>
-                  {label}
-                  <input
-                    name={name}
-                    type="number"
-                    step="any"
-                    value={geo[name]}
-                    onChange={(event) =>
-                      setGeo({ ...geo, [name]: event.target.value })
-                    }
-                  />
-                </label>
-              ))}
-              <div className="field">
-                <span>Nearby search</span>
-                <Button type="button" variant="outline" onClick={locate}>
-                  <LocateFixed size={16} /> Use my location
-                </Button>
-              </div>
-              <div className="field field-wide">
-                <Button
-                  type="button"
-                  variant="outline"
-                  aria-expanded={picker}
-                  onClick={() => setPicker(!picker)}
-                >
-                  Choose nearby point on map
-                </Button>
-                {picker && (
-                  <AreaMap
-                    onPoint={setPoint}
-                    point={
-                      geo.lat && geo.lng
-                        ? {
-                            latitude: Number(geo.lat),
-                            longitude: Number(geo.lng),
-                          }
-                        : undefined
-                    }
-                    pointHint="Choose a search center. These coordinates become part of the shareable search URL."
-                  />
+            <details>
+              <summary className="filter-toolbar">
+                <span className="button button-ghost button-small">
+                  <SlidersHorizontal size={15} /> All filters
+                </span>
+                <span className="filter-scope" aria-hidden="true">
+                  No city selected? Explore all of India.
+                </span>
+              </summary>
+              <div className="advanced-filters">
+                {field("Locality", "locality", { maxLength: 120 })}
+                {category !== "PG_HOSTEL" && (
+                  <label className="field">
+                    Flat rental mode
+                    <select
+                      name="flatRentalMode"
+                      value={mode}
+                      onChange={(event) => setMode(event.target.value)}
+                    >
+                      <option value="">Any flat mode</option>
+                      <option value="ENTIRE_FLAT">Entire flat</option>
+                      <option value="ROOM">Room in a flat</option>
+                    </select>
+                  </label>
                 )}
+                {choice("Availability", "status", [
+                  ["ACTIVE", "Available"],
+                  ["FULL_OCCUPIED", "Fully occupied"],
+                ])}
+                {field("Minimum quoted rent, INR", "minRent", {
+                  type: "number",
+                  min: 0,
+                  step: 1,
+                })}
+                {field("Maximum quoted rent, INR", "maxRent", {
+                  type: "number",
+                  min: 0,
+                  step: 1,
+                })}
+                {category !== "PG_HOSTEL" && (
+                  <>
+                    {field("Minimum bedrooms / BHK", "minBedrooms", {
+                      type: "number",
+                      min: 0,
+                      step: 1,
+                    })}
+                    {field("Maximum bedrooms / BHK", "maxBedrooms", {
+                      type: "number",
+                      min: 0,
+                      step: 1,
+                    })}
+                  </>
+                )}
+                {mode !== "ENTIRE_FLAT" && (
+                  <>
+                    {field("Minimum available rooms", "minTotalRooms", {
+                      type: "number",
+                      min: 0,
+                      step: 1,
+                    })}
+                    {field("Maximum available rooms", "maxTotalRooms", {
+                      type: "number",
+                      min: 0,
+                      step: 1,
+                    })}
+                    {field("Maximum occupants per room", "maxSharingPerRoom", {
+                      type: "number",
+                      min: 1,
+                      max: 10,
+                      step: 1,
+                    })}
+                    {choice("Room vacancy", "genderRoomAvailable", [
+                      ["MALE", "Male rooms"],
+                      ["FEMALE", "Female rooms"],
+                      ["SHARED", "Shared rooms"],
+                    ])}
+                  </>
+                )}
+                {[
+                  ["Wi-Fi", "hasWifi"],
+                  ["Gym", "hasGym"],
+                  ["Swimming pool", "hasSwimmingPool"],
+                ].map(([label, key]) => (
+                  <div key={key}>
+                    {choice(label, key, [
+                      ["true", "Required"],
+                      ["false", "Absent"],
+                    ])}
+                  </div>
+                ))}
+                {(
+                  [
+                    ["Latitude", "lat"],
+                    ["Longitude", "lng"],
+                    ["Radius in km", "radiusKm"],
+                  ] satisfies [string, keyof typeof geo][]
+                ).map(([label, name]) => (
+                  <label className="field" key={name}>
+                    {label}
+                    <input
+                      name={name}
+                      type="number"
+                      step="any"
+                      value={geo[name]}
+                      onChange={(event) =>
+                        setGeo({ ...geo, [name]: event.target.value })
+                      }
+                    />
+                  </label>
+                ))}
+                <div className="field">
+                  <span>Nearby search</span>
+                  <Button type="button" variant="outline" onClick={locate}>
+                    <LocateFixed size={16} /> Use my location
+                  </Button>
+                </div>
+                <div className="field field-wide">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    aria-expanded={picker}
+                    onClick={() => setPicker(!picker)}
+                  >
+                    Choose nearby point on map
+                  </Button>
+                  {picker && (
+                    <AreaMap
+                      onPoint={setPoint}
+                      point={
+                        geo.lat && geo.lng
+                          ? {
+                              latitude: Number(geo.lat),
+                              longitude: Number(geo.lng),
+                            }
+                          : undefined
+                      }
+                      pointHint="Choose a search center. These coordinates become part of the shareable search URL."
+                    />
+                  )}
+                </div>
+                <p className="filter-help">
+                  BHK describes the flat layout. Available rooms describe
+                  vacancies. Rent is quoted per person, room, or property, as
+                  shown on each listing. Nearby coordinates become part of the
+                  shareable URL.
+                </p>
               </div>
-              <p className="filter-help">
-                BHK describes the flat layout. Available rooms describe
-                vacancies. Rent is quoted per person, room, or property, as
-                shown on each listing. Nearby coordinates become part of the
-                shareable URL.
-              </p>
-            </div>
+            </details>
             <input
               type="hidden"
               name="sort"
@@ -403,8 +444,28 @@ export function SearchView({
                 : "Flats, rooms, and PG accommodation, in one place."}
             </p>
           </div>
-          <div className="results-tools">
+          <form
+            action={`${config.basePath}/`}
+            method="get"
+            className="results-tools"
+            onSubmit={submit}
+          >
+            <input type="hidden" name={searchFormKey} value="1" />
+            {[...initial]
+              .filter(
+                ([name]) =>
+                  ![searchFormKey, "page", "sort", "size"].includes(name),
+              )
+              .map(([name, value], index) => (
+                <input
+                  key={`${name}-${index}`}
+                  type="hidden"
+                  name={name}
+                  value={value}
+                />
+              ))}
             <Button
+              type="button"
               variant="outline"
               size="small"
               onClick={() => setMap(!map)}
@@ -418,6 +479,7 @@ export function SearchView({
             </label>
             <select
               id="sort"
+              name="sort"
               value={initial.get("sort") ?? "NEWEST"}
               onChange={(event) => update("sort", event.target.value)}
             >
@@ -443,6 +505,7 @@ export function SearchView({
             </label>
             <select
               id="size"
+              name="size"
               value={initial.get("size") ?? "20"}
               onChange={(event) => update("size", event.target.value)}
             >
@@ -457,7 +520,12 @@ export function SearchView({
                 </option>
               )}
             </select>
-          </div>
+            <noscript>
+              <Button type="submit" size="small">
+                Apply
+              </Button>
+            </noscript>
+          </form>
         </div>
         <div className="results-subline">
           <span>Quoted monthly rent · Basis shown on every place</span>
@@ -476,12 +544,12 @@ export function SearchView({
         )}
         {map && result && (
           <AreaMap
-            listings={result.items}
+            listings={result.mapListings}
             onSelect={onSelect}
             selectedId={selected}
           />
         )}
-        {result && result.items.length === 0 && (
+        {result && result.mapListings.length === 0 && (
           <div className="empty-state">
             <Search size={35} />
             <h3>
@@ -505,19 +573,12 @@ export function SearchView({
             </Button>
           </div>
         )}
-        <div className="listing-grid">
-          {result?.items.map((listing) => (
-            <ListingCard
-              key={listing.id}
-              listing={listing}
-              basePath={config.basePath}
-              apiOrigin={config.apiOrigin}
-              selected={selected === listing.id}
-              onSelect={() => setSelected(listing.id)}
-            />
-          ))}
-        </div>
-        {result && <Pagination {...result} href={href} />}
+        <MapSelection.Provider
+          value={map ? { id: selected, select: onSelect } : null}
+        >
+          <div className="listing-grid">{children}</div>
+        </MapSelection.Provider>
+        {pagination}
       </section>
       <section className="container reassurance">
         <div className="reassurance-icon">

@@ -25,9 +25,12 @@ const config: NextConfig = {
   async headers() {
     return [
       {
+        source: "/((?!_next/static/).*)",
+        headers: [{ key: "Cache-Control", value: "no-store" }],
+      },
+      {
         source: "/:path*",
         headers: [
-          { key: "Cache-Control", value: "no-store" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "X-Content-Type-Options", value: "nosniff" },
           {
