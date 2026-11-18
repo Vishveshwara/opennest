@@ -179,7 +179,7 @@ hr {
   color: var(--text-primary);
 }
 .brand-mark {
-  border: 1px solid var(--border);
+  border: 0;
   background: var(--background);
   object-fit: contain;
   flex-shrink: 0;
