@@ -2,7 +2,6 @@
 
 import {
   createContext,
-  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -22,7 +21,6 @@ type Session = {
   epoch: number;
   api: ReturnType<typeof browserApi>;
   rotate: () => void;
-  refresh: () => Promise<Account>;
   logout: () => Promise<void>;
 };
 const Context = createContext<Session | null>(null);
@@ -110,15 +108,16 @@ export function SessionProvider({
       },
     });
   }, [config.browserApiOrigin]);
-  const refresh = useCallback(() => {
+  const startProfileCheck = () => {
     setStatus("checking");
-    return checkSession(true);
-  }, [checkSession]);
+    void checkSession(true).catch(() => {});
+  };
   const rotate = () => {
-    cancelCheck();
     api.clear();
     setAccount(null);
+    setNotice("");
     setEpoch((value) => value + 1);
+    startProfileCheck();
   };
   useEffect(() => {
     void checkSession().catch(() => {});
@@ -148,7 +147,6 @@ export function SessionProvider({
         epoch,
         api,
         rotate,
-        refresh,
         logout,
       }}
     >
@@ -156,7 +154,7 @@ export function SessionProvider({
         <p role="alert" className="notice">
           {notice}
           {status === "unavailable" && (
-            <Button type="button" variant="outline" onClick={() => void refresh().catch(() => {})}>
+            <Button type="button" variant="outline" onClick={startProfileCheck}>
               Retry session check
             </Button>
           )}

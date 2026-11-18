@@ -186,6 +186,25 @@ class ListingLifecycleIT {
                 }));
         assertThat(results).containsExactlyInAnyOrder(true, false);
     }
+    @Test void nonOwnersAreRejectedWhileAccountAndListingRowsAreLocked() {
+        UUID owner = owner(0, false), stranger = owner(0, false);
+        UUID id = (UUID) as(owner, () -> service().create(draft("ROOM", "Kochi", 7000))).get("id");
+        var transactions = new org.springframework.transaction.support.TransactionTemplate(
+                apps.getFirst().getBean(org.springframework.transaction.PlatformTransactionManager.class));
+        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            transactions.executeWithoutResult(status -> {
+                jdbc(0).queryForObject("select id from users where id=? for update", UUID.class, stranger);
+                jdbc(0).queryForObject("select id from properties where id=? for update", UUID.class, id);
+                var rejected = executor.submit(() -> {
+                    assertThatThrownBy(() -> as(stranger, () -> service().delete(id, 0)))
+                            .isInstanceOfSatisfying(RequestFailure.class, failure -> assertThat(failure.kind()).isEqualTo(RequestFailure.Kind.FORBIDDEN));
+                    assertThatThrownBy(() -> as(stranger, () -> service().change(id, inventory("ROOM", 0, true), "inventory")))
+                            .isInstanceOfSatisfying(RequestFailure.class, failure -> assertThat(failure.kind()).isEqualTo(RequestFailure.Kind.FORBIDDEN));
+                });
+                assertThatCode(() -> rejected.get(5, TimeUnit.SECONDS)).doesNotThrowAnyException();
+            });
+        }
+    }
     @Test void listingDeletionKeepsTrustAndContactHistoryWhileRetryingStoragePurge() throws Exception {
         UUID owner = owner(0, true), seeker = owner(0, false);
         UUID id = (UUID) as(owner, () -> service().create(draft("PG_HOSTEL", "Visakhapatnam", 7100))).get("id");

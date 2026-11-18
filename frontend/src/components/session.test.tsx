@@ -4,10 +4,11 @@ import { expect, it, vi } from "vitest";
 import { getConfig } from "@/lib/config";
 import { SessionProvider, useSession } from "./session";
 import { Shell } from "./shell";
-import { AuthGate } from "./auth";
+import { AuthGate, Personas } from "./auth";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: vi.fn(), refresh: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 const profile = {
@@ -121,4 +122,61 @@ it("treats an anonymous 401 as an ordinary signed-out session", async () => {
   mount();
   expect(await screen.findByText("Session check complete")).toBeInTheDocument();
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+});
+
+function RefreshCsrf() {
+  const { api } = useSession();
+  return <button onClick={() => void api.token().catch(() => {})}>Request CSRF</button>;
+}
+
+it.each([200, 503])("checks the selected persona immediately and handles a %s profile response despite failed CSRF refresh", async (status) => {
+  const previousProfile = Promise.withResolvers<Response>();
+  const selectedProfile = Promise.withResolvers<Response>();
+  let profileReads = 0;
+  let csrfReads = 0;
+  let previousSignal: AbortSignal | null | undefined;
+  vi.stubGlobal("fetch", vi.fn(async (url: string, options: RequestInit) => {
+    if (url.endsWith("/api/v1/users/me")) {
+      profileReads++;
+      if (profileReads === 1) {
+        previousSignal = options.signal;
+        return previousProfile.promise;
+      }
+      if (profileReads === 2) return selectedProfile.promise;
+      return Response.json(profile);
+    }
+    if (url.endsWith("/api/v1/auth/csrf")) {
+      return ++csrfReads === 1
+        ? Response.json({ token: "test-csrf", headerName: "X-CSRF-TOKEN" })
+        : new Response(null, { status: 503 });
+    }
+    if (url.endsWith("/api/v1/sandbox/personas"))
+      return Response.json({ personas: [{ key: "resident", displayName: "Select Test Resident" }] });
+    if (url.endsWith("/api/v1/sandbox/personas/select"))
+      return Response.json({ status: "AUTHENTICATED" });
+    throw new Error("Unexpected session request");
+  }));
+  render(
+    <SessionProvider config={{ ...getConfig(), mode: "SANDBOX", basePath: "/recruiter-sandbox" }}>
+      <Shell>
+        <Personas />
+        <RefreshCsrf />
+      </Shell>
+    </SessionProvider>,
+  );
+  const persona = await screen.findByRole("button", { name: /Select Test Resident/ });
+  await act(async () => fireEvent.click(persona));
+  expect(previousSignal?.aborted).toBe(true);
+  expect(profileReads).toBe(2);
+  expect(csrfReads).toBe(1);
+  await act(async () => fireEvent.click(screen.getByRole("button", { name: "Request CSRF" })));
+  expect(csrfReads).toBe(2);
+  await act(async () => previousProfile.resolve(Response.json({ ...profile, fullName: "Previous persona" })));
+  expect(screen.queryByRole("link", { name: "My account: Previous persona" })).not.toBeInTheDocument();
+  await act(async () => selectedProfile.resolve(status === 200 ? Response.json(profile) : new Response(null, { status })));
+  if (status === 503) {
+    fireEvent.click(await screen.findByRole("button", { name: "Retry session check" }));
+    expect(profileReads).toBe(3);
+  }
+  expect(await screen.findByRole("link", { name: "My account: Test Resident" })).toBeInTheDocument();
 });

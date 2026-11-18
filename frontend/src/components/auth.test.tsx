@@ -11,7 +11,6 @@ import { Login, Personas } from "./auth";
 
 const doubles = vi.hoisted(() => ({
   api: { request: vi.fn(), token: vi.fn() },
-  refresh: vi.fn(),
   rotate: vi.fn(),
   router: { replace: vi.fn(), refresh: vi.fn() },
 }));
@@ -23,7 +22,6 @@ vi.mock("next/navigation", () => ({
 vi.mock("./session", () => ({
   useSession: () => ({
     api: doubles.api,
-    refresh: doubles.refresh,
     rotate: doubles.rotate,
     config: { basePath: "", mode: "PRIMARY" },
   }),
@@ -58,7 +56,6 @@ beforeEach(() => {
   resendsRemaining = 3;
   resendAt = new Date(startedAt + 30_000).toISOString();
   doubles.api.token.mockResolvedValue(undefined);
-  doubles.refresh.mockResolvedValue(undefined);
   doubles.api.request.mockImplementation(
     async (path: string, schema: z.ZodType, method = "GET", body?: unknown) => {
       if (path === challengesPath && method === "POST") {
@@ -187,7 +184,6 @@ it("creates a named account only after a valid OTP and reuses the same private c
   expect(fullName).toHaveAttribute("autocomplete", "name");
   expect(screen.queryByRole("textbox", { name: "Telegram code" })).not.toBeInTheDocument();
   expect(doubles.rotate).not.toHaveBeenCalled();
-  expect(doubles.refresh).not.toHaveBeenCalled();
   fireEvent.change(fullName, { target: { value: "  Fabricated OpenNest user  " } });
   await act(async () => {
     fireEvent.click(screen.getByRole("button", { name: "Create account" }));
@@ -198,7 +194,6 @@ it("creates a named account only after a valid OTP and reuses the same private c
   expect(challengeCreations()).toHaveLength(1);
   expect(doubles.rotate).toHaveBeenCalledOnce();
   expect(doubles.api.token).not.toHaveBeenCalled();
-  expect(doubles.refresh).toHaveBeenCalledOnce();
   expect(doubles.router.replace).toHaveBeenCalledWith("/account");
 });
 
@@ -231,8 +226,6 @@ it("offers manual command copying when the clipboard is unavailable and removes 
 
 it("signs an existing account in without asking for a name or submitting a replacement name", async () => {
   returning = true;
-  const profile = Promise.withResolvers<void>();
-  doubles.refresh.mockReturnValueOnce(profile.promise);
   await startLogin();
   await submitCode();
   expect(screen.queryByRole("textbox", { name: "Full name" })).not.toBeInTheDocument();
@@ -241,23 +234,18 @@ it("signs an existing account in without asking for a name or submitting a repla
     `${challengePath}/complete`, loginCompletionSchema, "POST", { code },
   );
   expect(doubles.rotate).toHaveBeenCalledOnce();
-  expect(doubles.refresh).toHaveBeenCalledOnce();
   expect(doubles.router.replace).toHaveBeenCalledWith("/account");
-  await act(async () => profile.resolve());
 });
 
-it("starts the selected persona's profile without fetching CSRF or waiting to navigate", async () => {
-  const profile = Promise.withResolvers<void>();
-  doubles.refresh.mockReturnValueOnce(profile.promise);
+it("rotates and navigates after selecting a persona", async () => {
   doubles.api.request
     .mockResolvedValueOnce({ personas: [{ key: "owner", displayName: "Test owner" }] })
     .mockResolvedValueOnce({ status: "AUTHENTICATED" });
   await act(async () => render(<Personas />));
   await act(async () => fireEvent.click(screen.getByRole("button", { name: /Test owner/ })));
-  expect(doubles.rotate).toHaveBeenCalledBefore(doubles.refresh);
+  expect(doubles.rotate).toHaveBeenCalledBefore(doubles.router.replace);
   expect(doubles.api.token).not.toHaveBeenCalled();
   expect(doubles.router.replace).toHaveBeenCalledWith("/account");
-  await act(async () => profile.reject(new ApiError(503)));
 });
 
 it("waits for the resend deadline then posts an empty body, retains the challenge and replaces the cooldown", async () => {

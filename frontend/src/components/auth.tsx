@@ -19,7 +19,7 @@ import { Button } from "./ui/button";
 import { Notice, TrustBadge } from "./common";
 
 export function Login() {
-  const { api, refresh, rotate, config, account, status: sessionStatus } = useSession();
+  const { api, rotate, config, account, status: sessionStatus } = useSession();
   const router = useRouter(),
     params = useSearchParams();
   const [challenge, setChallenge] = useState<z.infer<
@@ -165,7 +165,6 @@ export function Login() {
       setCode("");
       setFullName("");
       rotate();
-      void refresh().catch(() => {});
       router.replace(safeReturnPath(params.get("returnTo"), config.basePath));
       router.refresh();
     } catch (error) {
@@ -525,7 +524,7 @@ export function AccountView() {
 }
 
 export function Personas() {
-  const { api, config, refresh, rotate } = useSession();
+  const { api, config, rotate } = useSession();
   const router = useRouter(),
     params = useSearchParams();
   const [personas, setPersonas] = useState<
@@ -558,7 +557,6 @@ export function Personas() {
         { personaKey: key },
       );
       rotate();
-      void refresh().catch(() => {});
       router.replace(safeReturnPath(params.get("returnTo"), config.basePath));
       router.refresh();
     } catch (error) {

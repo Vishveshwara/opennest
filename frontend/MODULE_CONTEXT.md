@@ -15,6 +15,7 @@
 - Owners can remove validated photos or permanently delete a listing after confirmation. Removing the last required photo pauses publication. Listing deletion uses the current version and returns to My listings. On version conflict the owner must confirm again. Completed upload jobs retain display metadata without File/Blob payloads.
 - The shared header and footer use the supplied dark logo when the theme toggle enables dark mode.
 - Profile checks time out after eight seconds and offer a retry. The header displays a status while a check is pending. The login page offers to continue when the browser already has a session.
+- Session rotation after Telegram sign-in or persona selection starts GET /api/v1/users/me immediately. The next mutation fetches fresh CSRF independently.
 - Real-store browser harness lives in backend isolation-test sources. It invokes Playwright and supplies only fabricated Telegram/storage providers. Production artifacts contain neither fixture nor control endpoint.
 - Setup, checks, limitations and remaining live-provider gates: docs/PHASE5_HANDOFF.md. Hosting remains Phase 6.
 - Optional OPENNEST_DEV_LAN_ORIGINS in .env.development.local enables exact private-IPv4 development hosts and same-origin /api/v1/... rewrites to the fixed loopback API. Browser configuration uses a relative API base; server reads retain the configured origin. Production builds and SANDBOX reject this opt-in. npm run check:lan verifies cookies/CSRF/logout/no-store through real browser requests.
