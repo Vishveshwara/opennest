@@ -193,6 +193,11 @@ test("Telegram, all rental modes, direct uploads, publication, reveals, reviews,
 }) => {
   test.setTimeout(240000);
   await signIn(page, request, ownerPhone);
+  await page.goto("/login?returnTo=%2Fmy-listings");
+  await expect(page.getByRole("heading", { name: "You’re signed in" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: /mobile number/i })).toHaveCount(0);
+  await page.getByRole("link", { name: "Continue", exact: true }).click();
+  await expect(page).toHaveURL(/\/my-listings$/);
   let reservationRequests = 0;
   page.on("request", (request) => {
     if (request.url().endsWith("/images/presign")) reservationRequests++;

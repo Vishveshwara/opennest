@@ -8,7 +8,7 @@ import { useSession } from "./session";
 import { Button } from "./ui/button";
 
 export function Shell({ children }: { children: React.ReactNode }) {
-  const { config, account, ready, status, logout } = useSession();
+  const { config, account, status, logout } = useSession();
   const [dark, setDark] = useState(false);
   const path = (value: string) => `${config.basePath}${value}`;
   function toggleTheme() {
@@ -66,6 +66,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
                   Sign out
                 </Button>
               </>
+            ) : status === "checking" ? (
+              <span className="nav-link" role="status">Checking sign-in…</span>
             ) : status === "unavailable" ? (
               <span className="nav-link">Sign-in unavailable</span>
             ) : (
@@ -73,7 +75,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 href={path(config.mode === "SANDBOX" ? "/personas" : "/login")}
                 className="nav-link"
               >
-                {ready ? "Sign in" : "Checking sign-in…"}
+                Sign in
               </Link>
             )}
             <Button

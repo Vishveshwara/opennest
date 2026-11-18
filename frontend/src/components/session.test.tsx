@@ -1,5 +1,5 @@
 import { StrictMode } from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import { getConfig } from "@/lib/config";
 import { SessionProvider, useSession } from "./session";
@@ -9,6 +9,12 @@ import { AuthGate } from "./auth";
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: vi.fn(), refresh: vi.fn() }),
 }));
+
+const profile = {
+  id: "00000000-0000-4000-8000-000000000001", fullName: "Test Resident", role: "USER",
+  phoneNumber: null, phoneVerified: false, averageRating: null, reviewCount: 0,
+  brokerReportCount: 0, trustBadge: "STANDARD",
+};
 
 function Status() {
   const { ready, status } = useSession();
@@ -34,13 +40,36 @@ it("labels an unfinished session check without implying the visitor is signed in
       </Shell>
     </SessionProvider>,
   );
-  expect(
-    screen.getByRole("link", { name: "Checking sign-in…" }),
-  ).toBeInTheDocument();
+  expect(screen.getByRole("status")).toHaveTextContent("Checking sign-in…");
+  expect(screen.queryByRole("link", { name: /sign.in/i })).not.toBeInTheDocument();
   pending.resolve(new Response(null, { status: 401 }));
   expect(
     await screen.findByRole("link", { name: "Sign in" }),
   ).toBeInTheDocument();
+});
+
+it("lets a stalled check time out and retry into the existing account", async () => {
+  vi.useFakeTimers();
+  try {
+    const fetch = vi.fn()
+      .mockImplementationOnce((_url: string, { signal }: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          signal?.addEventListener("abort", () => reject(signal.reason), { once: true });
+        }),
+      )
+      .mockResolvedValueOnce(Response.json(profile));
+    vi.stubGlobal("fetch", fetch);
+    render(<SessionProvider config={getConfig()}><Shell><AuthGate>Private content</AuthGate></Shell></SessionProvider>);
+    await act(() => vi.advanceTimersByTimeAsync(8_000));
+    expect(screen.getByText("Sign-in unavailable")).toBeInTheDocument();
+    expect(screen.queryByText("Sign in to continue")).not.toBeInTheDocument();
+    const retry = screen.getByRole("button", { name: "Retry session check" });
+    await act(async () => fireEvent.click(retry));
+    expect(screen.getByRole("link", { name: "My account: Test Resident" })).toBeInTheDocument();
+    expect(screen.getByText("Private content")).toBeInTheDocument();
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 it("shows a handled outage when the browser fetch rejects", async () => {
@@ -60,11 +89,7 @@ it.each(["network", "503"])("keeps a failed %s probe out of sign-in paths and re
   const fetch = vi.fn();
   if (failure === "network") fetch.mockRejectedValueOnce(new TypeError("Failed to fetch"));
   else fetch.mockResolvedValueOnce(new Response(null, { status: 503 }));
-  fetch.mockResolvedValueOnce(Response.json({
-    id: "00000000-0000-4000-8000-000000000001", fullName: "Test Resident", role: "USER",
-    phoneNumber: null, phoneVerified: false, averageRating: null, reviewCount: 0,
-    brokerReportCount: 0, trustBadge: "STANDARD",
-  }));
+  fetch.mockResolvedValueOnce(Response.json(profile));
   vi.stubGlobal("fetch", fetch);
   render(<SessionProvider config={getConfig()}><Shell><AuthGate><p>Private content</p></AuthGate></Shell></SessionProvider>);
   expect(await screen.findByText("Sign-in unavailable")).toBeInTheDocument();

@@ -19,7 +19,7 @@ import { Button } from "./ui/button";
 import { Notice, TrustBadge } from "./common";
 
 export function Login() {
-  const { api, refresh, rotate, config } = useSession();
+  const { api, refresh, rotate, config, account, status: sessionStatus } = useSession();
   const router = useRouter(),
     params = useSearchParams();
   const [challenge, setChallenge] = useState<z.infer<
@@ -212,6 +212,27 @@ export function Login() {
     } catch {
       setCommandCopy("MANUAL");
     }
+  }
+  if (sessionStatus === "checking" || sessionStatus === "unavailable") {
+    return (
+      <div className="container section">
+        <p role="status">
+          {sessionStatus === "checking"
+            ? "Checking your session…"
+            : "Your session could not be checked. Retry the session check to continue."}
+        </p>
+      </div>
+    );
+  }
+  if (account) {
+    return (
+      <div className="container section">
+        <h1>You’re signed in</h1>
+        <Button asChild>
+          <Link href={safeReturnPath(params.get("returnTo"), config.basePath)}>Continue</Link>
+        </Button>
+      </div>
+    );
   }
   return (
     <div className="container section auth-layout">

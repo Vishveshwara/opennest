@@ -131,8 +131,8 @@ export function browserApi(origin: string, onExpired: () => void) {
     clear();
     return true;
   }
-  const probe = <T>(path: string, schema: z.ZodType<T>) =>
-    request(path, schema, "GET", undefined, undefined, false);
+  const probe = <T>(path: string, schema: z.ZodType<T>, signal?: AbortSignal) =>
+    request(path, schema, "GET", undefined, signal, false);
   return { request, probe, clear, token, logout };
 }
 
