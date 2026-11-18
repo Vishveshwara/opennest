@@ -29,7 +29,6 @@ export async function SearchPage({ searchParams }: SearchPageProps) {
   } catch (error) {
     return (
       <SearchView
-        key={input.toString()}
         result={null}
         query={input.toString()}
         error={
@@ -63,7 +62,6 @@ export async function SearchPage({ searchParams }: SearchPageProps) {
   }
   return (
     <SearchView
-      key={query.toString()}
       result={
         result && {
           totalElements: result.totalElements,

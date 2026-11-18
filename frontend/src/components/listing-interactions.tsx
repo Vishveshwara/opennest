@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Phone, Star } from "lucide-react";
@@ -19,57 +26,109 @@ import { ConfirmDialog } from "./ui/dialog";
 import { Notice } from "./common";
 
 type ListingIdentity = Pick<Listing, "id" | "ownerId">;
+type InteractionState = z.infer<typeof stateSchema>;
+
+const ReviewEligibility = createContext<{
+  revision: number;
+  refresh: () => void;
+}>({ revision: 0, refresh: () => {} });
+
+export function ListingInteractionScope({
+  id,
+  children,
+}: {
+  id: string;
+  children: ReactNode;
+}) {
+  const { epoch } = useSession();
+  return <InteractionScope key={`${id}-${epoch}`}>{children}</InteractionScope>;
+}
+
+function InteractionScope({ children }: { children: ReactNode }) {
+  const [revision, setRevision] = useState(0);
+  return (
+    <ReviewEligibility.Provider
+      value={{ revision, refresh: () => setRevision((value) => value + 1) }}
+    >
+      <div className="detail-columns">{children}</div>
+    </ReviewEligibility.Provider>
+  );
+}
+
+function quotaEndsAt(date: string) {
+  return Date.parse(`${date}T00:00:00+05:30`) + 86_400_000;
+}
 
 export function ListingContact({ listing }: { listing: ListingIdentity }) {
-  const { epoch } = useSession();
-  return <Contact key={`${listing.id}-${epoch}`} listing={listing} />;
-}
-
-export function ListingReviews({ listing }: { listing: ListingIdentity }) {
-  const { epoch } = useSession();
-  return <Reviews key={`${listing.id}-${epoch}`} listing={listing} />;
-}
-
-function Contact({ listing }: { listing: ListingIdentity }) {
   const { api, account, config } = useSession();
-  const [state, setState] = useState<z.infer<typeof stateSchema> | null>(null),
-    [contact, setContact] = useState<z.infer<typeof revealSchema> | null>(null),
-    [error, setError] = useState(""),
-    [busy, setBusy] = useState(false);
+  const { refresh: refreshEligibility } = useContext(ReviewEligibility);
+  const [attempt, setAttempt] = useState(0);
+  const [settled, setSettled] = useState<
+    { attempt: number } & ({ state: InteractionState } | { error: string })
+  >();
+  const current = settled?.attempt === attempt ? settled : undefined;
+  const state = current && "state" in current ? current.state : undefined;
+  const readError = current && "error" in current ? current.error : undefined;
+  const [contact, setContact] = useState<z.infer<typeof revealSchema> | null>(
+    null,
+  );
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const canReveal = Boolean(
+    account && account.id !== listing.ownerId && config.mode !== "SANDBOX",
+  );
   useEffect(() => {
-    if (!account) return;
+    if (!canReveal) return;
     let alive = true;
     void api
       .request(`/api/v1/interactions/listings/${listing.id}/state`, stateSchema)
-      .then((value) => {
-        if (alive) setState(value);
+      .then((state) => {
+        if (alive) setSettled({ attempt, state });
       })
       .catch((error) => {
-        if (alive) setError(errorMessage(error));
+        if (alive) setSettled({ attempt, error: errorMessage(error) });
       });
     return () => {
       alive = false;
     };
-  }, [api, account, listing.id]);
+  }, [api, canReveal, listing.id, attempt]);
+
+  const quotaDate = state?.quotaDate;
+  useEffect(() => {
+    if (!quotaDate || contact) return;
+    const expires = quotaEndsAt(quotaDate);
+    const refreshExpired = () => {
+      if (Date.now() >= expires) setAttempt((value) => value + 1);
+    };
+    const remaining = expires - Date.now();
+    const timer =
+      remaining > 0 ? window.setTimeout(refreshExpired, remaining) : undefined;
+    window.addEventListener("focus", refreshExpired);
+    document.addEventListener("visibilitychange", refreshExpired);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("focus", refreshExpired);
+      document.removeEventListener("visibilitychange", refreshExpired);
+    };
+  }, [quotaDate, contact]);
+
   async function reveal() {
+    if (!state || busy) return;
+    if (Date.now() >= quotaEndsAt(state.quotaDate)) {
+      setAttempt((value) => value + 1);
+      return;
+    }
     setBusy(true);
     setError("");
     try {
-      setContact(
-        await api.request(
-          `/api/v1/interactions/listings/${listing.id}/reveal-phone`,
-          revealSchema,
-          "POST",
-          {},
-        ),
+      const revealed = await api.request(
+        `/api/v1/interactions/listings/${listing.id}/reveal-phone`,
+        revealSchema,
+        "POST",
+        {},
       );
-      setState(
-        await api.request(
-          `/api/v1/interactions/listings/${listing.id}/state`,
-          stateSchema,
-        ),
-      );
-      window.dispatchEvent(new Event("opennest:interaction"));
+      setContact(revealed);
+      refreshEligibility();
     } catch (error) {
       setError(errorMessage(error));
     } finally {
@@ -121,6 +180,18 @@ function Contact({ listing }: { listing: ListingIdentity }) {
         </div>
       ) : (
         <>
+          {readError && (
+            <>
+              <Notice error>{readError}</Notice>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setAttempt((value) => value + 1)}
+              >
+                Retry contact status
+              </Button>
+            </>
+          )}
           <Button
             disabled={
               busy ||
@@ -148,52 +219,71 @@ function Contact({ listing }: { listing: ListingIdentity }) {
   );
 }
 
-function Reviews({ listing }: { listing: ListingIdentity }) {
+const reviewPageSchema = pageSchema(reviewSchema);
+type ReviewPage = z.infer<typeof reviewPageSchema>;
+type PageRequest = { page: number };
+
+export function ListingReviews({ listing }: { listing: ListingIdentity }) {
   const { api, account } = useSession();
+  const { revision, refresh: refreshEligibility } =
+    useContext(ReviewEligibility);
   const router = useRouter();
-  const [page, setPage] = useState(0),
-    [reviews, setReviews] = useState<z.infer<
-      ReturnType<typeof pageSchema<typeof reviewSchema>>
-    > | null>(null),
-    [state, setState] = useState<z.infer<typeof stateSchema> | null>(null),
-    [error, setError] = useState(""),
-    [busy, setBusy] = useState(false),
-    [reload, setReload] = useState(0);
-  useEffect(() => {
-    const listener = () => setReload((value) => value + 1);
-    window.addEventListener("opennest:interaction", listener);
-    return () => window.removeEventListener("opennest:interaction", listener);
-  }, []);
+  const [request, setRequest] = useState<PageRequest>({ page: 0 });
+  const [loaded, setLoaded] = useState<{
+    request: PageRequest;
+    reviews?: ReviewPage;
+    error?: string;
+  }>();
+  const reviews = loaded?.reviews;
+  const loadingPage = loaded?.request !== request;
+  const [state, setState] = useState<InteractionState | null>(null);
+  const [eligibilityError, setEligibilityError] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
   useEffect(() => {
     let active = true;
     void api
       .request(
-        `/api/v1/interactions/listings/${listing.id}/reviews?page=${page}&size=5`,
-        pageSchema(reviewSchema),
+        `/api/v1/interactions/listings/${listing.id}/reviews?page=${request.page}&size=5`,
+        reviewPageSchema,
       )
-      .then((value) => {
-        if (active) setReviews(value);
+      .then((reviews) => {
+        if (active) setLoaded({ request, reviews });
       })
       .catch((error) => {
-        if (active) setError(errorMessage(error));
+        if (active)
+          setLoaded((previous) => ({
+            request,
+            reviews: previous?.reviews,
+            error: errorMessage(error),
+          }));
       });
-    if (account)
-      void api
-        .request(
-          `/api/v1/interactions/listings/${listing.id}/state`,
-          stateSchema,
-        )
-        .then((value) => {
-          if (active) setState(value);
-        })
-        .catch((error) => {
-          if (active && !(error instanceof ApiError && error.status === 401))
-            setError(errorMessage(error));
-        });
     return () => {
       active = false;
     };
-  }, [api, listing.id, page, account, reload]);
+  }, [api, listing.id, request]);
+
+  useEffect(() => {
+    if (!account) return;
+    let active = true;
+    void api
+      .request(`/api/v1/interactions/listings/${listing.id}/state`, stateSchema)
+      .then((value) => {
+        if (active) {
+          setState(value);
+          setEligibilityError("");
+        }
+      })
+      .catch((error) => {
+        if (active && !(error instanceof ApiError && error.status === 401))
+          setEligibilityError(errorMessage(error));
+      });
+    return () => {
+      active = false;
+    };
+  }, [api, account, listing.id, revision]);
+
   async function write(body: unknown, report = false) {
     setBusy(true);
     setError("");
@@ -204,12 +294,15 @@ function Reviews({ listing }: { listing: ListingIdentity }) {
         "POST",
         body,
       );
-      setReload((value) => value + 1);
+      setRequest({ page: reviews?.page ?? 0 });
+      refreshEligibility();
       router.refresh();
     } catch (error) {
       setError(errorMessage(error));
-      if (error instanceof ApiError && error.status === 409)
-        setReload((value) => value + 1);
+      if (error instanceof ApiError && error.status === 409) {
+        setRequest({ page: reviews?.page ?? 0 });
+        refreshEligibility();
+      }
     } finally {
       setBusy(false);
     }
@@ -230,7 +323,9 @@ function Reviews({ listing }: { listing: ListingIdentity }) {
         Experiences shared by people who previously revealed this listing’s
         contact.
       </p>
-      {error && <Notice error>{error}</Notice>}
+      {(error || eligibilityError || (!loadingPage && loaded?.error)) && (
+        <Notice error>{error || eligibilityError || loaded?.error}</Notice>
+      )}
       {reviews?.items.map((review) => (
         <article className="review" key={review.id}>
           <div className="review-header">
@@ -256,24 +351,28 @@ function Reviews({ listing }: { listing: ListingIdentity }) {
         <p>No reviews yet. Owners without reviews are unrated.</p>
       )}
       {reviews && (
-        <nav className="actions" aria-label="Review pagination">
+        <nav
+          className="actions"
+          aria-label="Review pagination"
+          aria-busy={loadingPage}
+        >
           <Button
             variant="outline"
             size="small"
-            disabled={!reviews.hasPrevious}
-            onClick={() => setPage((value) => value - 1)}
+            disabled={loadingPage || !reviews.hasPrevious}
+            onClick={() => setRequest({ page: reviews.page - 1 })}
           >
             Previous reviews
           </Button>
           <span>
-            Page {reviews.totalPages === 0 ? 0 : page + 1} of{" "}
+            Page {reviews.totalPages === 0 ? 0 : reviews.page + 1} of{" "}
             {reviews.totalPages}
           </span>
           <Button
             variant="outline"
             size="small"
-            disabled={!reviews.hasNext}
-            onClick={() => setPage((value) => value + 1)}
+            disabled={loadingPage || !reviews.hasNext}
+            onClick={() => setRequest({ page: reviews.page + 1 })}
           >
             Next reviews
           </Button>

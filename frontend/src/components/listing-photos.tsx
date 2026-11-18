@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { BedDouble } from "lucide-react";
 import { z } from "zod";
@@ -32,6 +32,12 @@ export function ListingPhotos({
   }>();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+  const latestImages = useRef(images);
+  const inFlight = useRef<AbortController | null>(null);
+  useLayoutEffect(() => {
+    latestImages.current = images;
+  }, [images]);
+  useLayoutEffect(() => () => inFlight.current?.abort(), []);
   const current = refreshed?.base === images ? refreshed : undefined;
   const photos = (current?.photos ?? images).flatMap((photo) => {
     const src = photo.url && imageUrl(photo.url, config.apiOrigin);
@@ -39,24 +45,39 @@ export function ListingPhotos({
   });
 
   async function refresh() {
+    if (inFlight.current) return;
+    const controller = new AbortController();
+    inFlight.current = controller;
     setPending(true);
     setError("");
     try {
-      const { images: photos } = await readApi(
-        config.browserApiOrigin,
-        `/api/v1/listings/${id}`,
-        photoResponse,
-        { credentials: "omit" },
-      );
-      setRefreshed({
-        base: images,
-        photos,
-        version: (current?.version ?? 0) + 1,
-      });
-    } catch (cause) {
-      setError(errorMessage(cause));
+      while (!controller.signal.aborted) {
+        const base = latestImages.current;
+        const result = await readApi(
+          config.browserApiOrigin,
+          `/api/v1/listings/${id}`,
+          photoResponse,
+          { credentials: "omit", signal: controller.signal },
+        ).then(
+          ({ images: photos }) => ({ photos }),
+          (cause: unknown) => ({ error: errorMessage(cause) }),
+        );
+        if (controller.signal.aborted) return;
+        if (base !== latestImages.current) continue;
+        if ("photos" in result) {
+          setRefreshed((previous) => ({
+            base,
+            photos: result.photos,
+            version: (previous?.version ?? 0) + 1,
+          }));
+        } else {
+          setError(result.error);
+        }
+        return;
+      }
     } finally {
-      setPending(false);
+      inFlight.current = null;
+      if (!controller.signal.aborted) setPending(false);
     }
   }
 

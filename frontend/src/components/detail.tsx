@@ -2,7 +2,11 @@ import Link from "next/link";
 import { ArrowLeft, Dumbbell, MapPin, Star, Waves, Wifi } from "lucide-react";
 import type { Listing } from "@/lib/contracts";
 import { TrustBadge, capacityLabel, modeLabel, rentLabel } from "./common";
-import { ListingContact, ListingReviews } from "./listing-interactions";
+import {
+  ListingContact,
+  ListingInteractionScope,
+  ListingReviews,
+} from "./listing-interactions";
 import { ListingMap } from "./listing-map";
 import { ListingPhotos } from "./listing-photos";
 
@@ -34,11 +38,12 @@ export function Detail({
         <TrustBadge value={listing.owner.trustBadge} />
       </div>
       <ListingPhotos
+        key={listing.id}
         id={listing.id}
         title={listing.title}
         images={listing.images}
       />
-      <div className="detail-columns">
+      <ListingInteractionScope id={listing.id}>
         <aside className="detail-aside">
           <div className="panel contact-panel">
             <p className="eyebrow">Your next place</p>
@@ -126,7 +131,7 @@ export function Detail({
           </section>
           <ListingReviews listing={listingIdentity} />
         </div>
-      </div>
+      </ListingInteractionScope>
     </div>
   );
 }

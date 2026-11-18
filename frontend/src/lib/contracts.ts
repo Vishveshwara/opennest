@@ -142,7 +142,7 @@ export const reviewSchema = z.object({
 export const stateSchema = z.object({
   hasHistoricalReveal: z.boolean(),
   revealedToday: z.boolean(),
-  quotaDate: z.string(),
+  quotaDate: z.iso.date(),
   remainingReveals: z.number().int(),
   contactActionsEnabled: z.boolean(),
   canReview: z.boolean(),
