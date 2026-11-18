@@ -3,13 +3,18 @@ package in.opennest.common.internal.configuration;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.postgresql.Driver;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.boot.test.system.CapturedOutput;
@@ -68,6 +73,39 @@ class DeploymentEnvironmentPostProcessorTests {
         process(environment);
         assertThat(environment.getProperty("spring.datasource.url")).endsWith("/opennest");
         assertThat(environment.getProperty("spring.data.redis.password")).isEqualTo("fabricated-redis-secret");
+    }
+
+    @Test
+    void configuresVerifiedPostgresTlsThroughTheSelectedDatabase(@TempDir Path directory) throws IOException {
+        Path certificate = Files.writeString(directory.resolve("ca &sslmode=disable+name.crt"), "fixture");
+        var values = production();
+        values.put("DB_SSL_ROOT_CERT", certificate.toString());
+        var environment = environment(values);
+        process(environment);
+
+        var connection = Driver.parseURL(environment.getRequiredProperty("spring.datasource.url"), new Properties());
+        assertThat(connection).containsEntry("sslmode", "verify-full")
+                .containsEntry("sslrootcert", certificate.toString())
+                .doesNotContainKeys("user", "password");
+    }
+
+    @Test
+    void keepsThePrimaryCertificateOutOfSandboxConnections() throws IOException {
+        var environment = environment(Map.of("OPENNEST_DATA_MODE", "SANDBOX",
+                "SANDBOX_DB_PASSWORD", "fabricated-sandbox-secret",
+                "DB_SSL_ROOT_CERT", "fabricated-inactive-path"));
+        process(environment);
+        assertThat(environment.getProperty("spring.datasource.url"))
+                .isEqualTo("jdbc:postgresql://127.0.0.1:5433/opennest_sandbox");
+    }
+
+    @Test
+    void rejectsAnInvalidOrMissingCertificateWithoutLoggingItsPath(@TempDir Path directory) throws IOException {
+        for (String path : new String[] {"fabricated-relative-ca.crt", directory.resolve("fabricated-missing-ca.crt").toString()}) {
+            var values = production();
+            values.put("DB_SSL_ROOT_CERT", path);
+            assertRejected(values, "PostgreSQL CA certificate must be a readable file at an absolute path");
+        }
     }
 
     @ParameterizedTest
@@ -216,7 +254,7 @@ class DeploymentEnvironmentPostProcessorTests {
 
     @Test
     void redactsDatastoreDescriptions() {
-        var database = new DeploymentProperties.Database("127.0.0.1", 5432, "private-name", "private-user", "private-secret");
+        var database = new DeploymentProperties.Database("127.0.0.1", 5432, "private-name", "private-user", "private-secret", "private-ca");
         var redis = new DeploymentProperties.Redis("127.0.0.1", 6379, "private-redis-user", "private-redis-secret");
         assertThat(database.toString() + redis + new DeploymentProperties.Stores(database, redis))
                 .doesNotContain("private-");

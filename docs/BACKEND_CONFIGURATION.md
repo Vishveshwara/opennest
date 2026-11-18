@@ -28,11 +28,13 @@ The root [.env.example](../.env.example) is a development template. Docker Compo
 | `OPENNEST_DEVELOPMENT_AUTH` | false; true is allowed only in DEVELOPMENT. This reserves policy for later substitutes; it does not implement authentication. |
 | `OPENNEST_PERSONA_SWITCHING`, `OPENNEST_DEMO_RESET`, `OPENNEST_DEMO_TELEMETRY` | false; true requires SANDBOX and is forbidden in PRODUCTION. Respectively enable persona APIs, scheduled/operator CLI resets, and operator CLI telemetry; reset and telemetry have no HTTP routes. |
 | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Primary PostgreSQL; defaults `127.0.0.1`, 5432, `opennest`, `opennest`, blank password. |
+| `DB_SSL_ROOT_CERT` | Optional absolute path to a readable PostgreSQL CA certificate file. Enables `sslmode=verify-full` for the primary database. |
 | `REDIS_HOST`, `REDIS_PORT`, `REDIS_USER`, `REDIS_PASSWORD` | Primary Redis; defaults `127.0.0.1`, 6379, blank ACL username/password. Production requires a password; an optional username requires a password in every environment. |
 | `SANDBOX_DB_HOST`, `SANDBOX_DB_PORT`, `SANDBOX_DB_NAME`, `SANDBOX_DB_USER`, `SANDBOX_DB_PASSWORD` | Sandbox PostgreSQL; defaults `127.0.0.1`, 5433, `opennest_sandbox`, `opennest_sandbox`, blank password. |
+| `SANDBOX_DB_SSL_ROOT_CERT` | Optional CA certificate file for the sandbox database. Uses the same verification rules as `DB_SSL_ROOT_CERT`. |
 | `SANDBOX_REDIS_HOST`, `SANDBOX_REDIS_PORT`, `SANDBOX_REDIS_USER`, `SANDBOX_REDIS_PASSWORD` | Sandbox Redis; defaults `127.0.0.1`, 6380, blank ACL username/password. |
 
-Hostnames or IP literals and ports 1..65535 are accepted; do not supply URLs, user-info, or query strings as hosts. Database names use letters, digits, underscores, or hyphens. JDBC URLs are derived from host/port/name without credentials or query parameters.
+Supply a hostname or IP literal and a port from 1 to 65535. Database names use letters, digits, underscores, or hyphens. OpenNest builds the JDBC URL from these values and passes credentials separately. With a CA file configured, pgJDBC verifies the certificate chain and the database hostname for both Flyway and application connections. The default JDBC behavior applies when the CA setting is empty. [pgJDBC TLS](https://jdbc.postgresql.org/documentation/ssl/)
 
 Configure primary and sandbox PostgreSQL on distinct host/port targets with different database names and users. If both passwords are supplied, they must differ. Redis also requires distinct host/port targets; logical databases alone do not provide isolation, so both clients use database 0. Redis passwords must differ when both are supplied. Host comparisons are case-insensitive and recognize common localhost/IPv4/IPv6 loopback aliases.
 
@@ -63,7 +65,7 @@ Phase 1.5 passed 52 unit/context/module and 25 database tests; Phase 1.6 passed 
 
 Phase 1.8's [container-only isolation suite](BACKEND_ISOLATION.md) passed all 23 isolation tests on Linux amd64 Docker on 30 October 2026. It exercises actual PostgreSQL/Redis reads/writes, credential rejection, header handling, production guards, and migration/dependency failures. Redis still connects lazily, so unavailable Redis or a wrong password fails on use rather than necessarily preventing startup.
 
-Deployed network rejection and restricted server privileges remain deployment tasks. Phase 4 implements sandbox session/cookie separation and demo operations; hosted storage/network isolation still requires deployment verification. The local Compose stores are development-only; production credentials, image architecture, runtime TLS options, and public routing require the separate [deployment plan](DEPLOYMENT_STACK.md).
+Deployed network rejection and restricted server privileges remain deployment tasks. Phase 4 implements sandbox session/cookie separation and demo operations; hosted storage/network isolation still requires deployment verification. The local Compose stores are development-only. The [deployment plan](DEPLOYMENT_STACK.md) covers production credentials, mounted CA files, and public routing.
 
 Framework references: [externalized configuration](https://docs.spring.io/spring-boot/reference/features/external-config.html), [config-data processing order](https://docs.spring.io/spring-boot/api/java/org/springframework/boot/context/config/ConfigDataEnvironmentPostProcessor.html), and [common application properties](https://docs.spring.io/spring-boot/appendix/application-properties/index.html). The checked backend uses Boot 4.1.1.
 

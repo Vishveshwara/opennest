@@ -2,6 +2,11 @@ package in.opennest.common.internal.configuration;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
+import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Set;
 
@@ -64,18 +69,29 @@ record DeploymentProperties(RuntimeEnvironment environment, DataMode dataMode, F
         }
     }
 
-    record Database(String host, int port, String name, String username, String password) {
+    record Database(String host, int port, String name, String username, String password, String sslRootCert) {
 
         void validate() {
             validateEndpoint(host, port);
             require(present(name) && name.matches("[A-Za-z0-9_-]+"), "Database name is invalid");
             require(present(username), "Active database username is required");
             require(present(password), "Active database password is required");
+            if (sslRootCert != null && !sslRootCert.isEmpty()) {
+                String message = "PostgreSQL CA certificate must be a readable file at an absolute path";
+                try {
+                    Path certificate = Path.of(sslRootCert);
+                    require(certificate.isAbsolute() && Files.isRegularFile(certificate) && Files.isReadable(certificate), message);
+                } catch (InvalidPathException exception) {
+                    throw new IllegalStateException(message);
+                }
+            }
         }
 
         String jdbcUrl() {
             try {
-                return "jdbc:" + new URI("postgresql", null, host, port, "/" + name, null, null).toASCIIString();
+                String url = "jdbc:" + new URI("postgresql", null, host, port, "/" + name, null, null).toASCIIString();
+                if (!present(sslRootCert)) return url;
+                return url + "?sslmode=verify-full&sslrootcert=" + URLEncoder.encode(sslRootCert, StandardCharsets.UTF_8);
             } catch (URISyntaxException exception) {
                 throw new IllegalStateException("Database endpoint is invalid");
             }
