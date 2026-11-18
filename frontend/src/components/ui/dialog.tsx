@@ -10,17 +10,23 @@ export function ConfirmDialog({
   trigger,
   confirm,
   busy = false,
+  confirmLabel = "Confirm report",
+  triggerVariant = "outline",
+  triggerSize = "default",
 }: {
   title: string;
   description: string;
   trigger: string;
   confirm: () => Promise<void>;
   busy?: boolean;
+  confirmLabel?: string;
+  triggerVariant?: "outline" | "destructive";
+  triggerSize?: "default" | "small";
 }) {
   return (
     <DialogPrimitive.Root>
       <DialogPrimitive.Trigger asChild>
-        <Button variant="outline" disabled={busy}>
+        <Button variant={triggerVariant} size={triggerSize} disabled={busy}>
           {trigger}
         </Button>
       </DialogPrimitive.Trigger>
@@ -37,7 +43,7 @@ export function ConfirmDialog({
             </DialogPrimitive.Close>
             <DialogPrimitive.Close asChild>
               <Button variant="destructive" onClick={() => void confirm()}>
-                Confirm report
+                {confirmLabel}
               </Button>
             </DialogPrimitive.Close>
           </div>

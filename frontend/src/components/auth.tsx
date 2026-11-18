@@ -33,10 +33,15 @@ export function Login() {
     [resendsRemaining, setResendsRemaining] = useState<number | null>(null),
     [now, setNow] = useState<number | null>(null),
     [status, setStatus] = useState(""),
+    [commandCopy, setCommandCopy] = useState<"IDLE" | "COPIED" | "MANUAL">("IDLE"),
     [error, setError] = useState(""),
     [operation, setOperation] = useState<"IDLE" | "STARTING" | "COMPLETING" | "RESENDING">("IDLE"),
     [expired, setExpired] = useState(false);
   const busy = operation !== "IDLE";
+  const startToken = challenge ? new URL(challenge.botUrl).searchParams.get("start") : null;
+  const startCommand = startToken && /^[A-Za-z0-9_-]{43}$/.test(startToken)
+    ? `/start ${startToken}`
+    : null;
   const challengeExpired =
     expired ||
     (challenge !== null && now !== null && now >= Date.parse(challenge.expiresAt));
@@ -105,6 +110,10 @@ export function Login() {
   async function start(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy) return;
+    if (!/^[0-9]{10}$/.test(phone)) {
+      setError("Enter your 10-digit Indian mobile number.");
+      return;
+    }
     setOperation("STARTING");
     setError("");
     try {
@@ -112,7 +121,7 @@ export function Login() {
         "/api/v1/auth/telegram/challenges",
         challengeSchema,
         "POST",
-        { phoneNumber: phone },
+        { phoneNumber: `+91${phone}` },
       );
       setChallenge(value);
       setNow(Date.now());
@@ -124,6 +133,7 @@ export function Login() {
       setCompletion("CODE");
       setResendAt(null);
       setResendsRemaining(null);
+      setCommandCopy("IDLE");
     } catch (error) {
       setError(errorMessage(error));
     } finally {
@@ -194,6 +204,15 @@ export function Login() {
       setOperation("IDLE");
     }
   }
+  async function copyStartCommand() {
+    if (!startCommand || challengeExpired) return;
+    try {
+      await navigator.clipboard.writeText(startCommand);
+      setCommandCopy("COPIED");
+    } catch {
+      setCommandCopy("MANUAL");
+    }
+  }
   return (
     <div className="container section auth-layout">
       <div className="auth-intro">
@@ -227,24 +246,32 @@ export function Login() {
         <p>
           {completion === "NAME_REQUIRED"
             ? "Your Telegram code is confirmed. Add your name to finish signing up."
-            : "Use the +91 number associated with your Telegram account."}
+            : "Enter the 10-digit Indian mobile number associated with your Telegram account."}
         </p>
         {error && <Notice error>{error}</Notice>}
         {!challenge ? (
           <form onSubmit={start} className="stack">
-            <label className="field">
-              Phone number
-              <input
-                type="tel"
-                autoComplete="tel"
-                inputMode="tel"
-                pattern="\+91[0-9]{10}"
-                placeholder="+91 followed by 10 digits"
-                required
-                value={phone}
-                onChange={(event) => setPhone(event.target.value)}
-              />
-            </label>
+            <div className="field">
+              <label htmlFor="telegram-phone">Phone number</label>
+              <div className="phone-input">
+                <span aria-hidden="true">+91</span>
+                <input
+                  id="telegram-phone"
+                  type="tel"
+                  autoComplete="tel-national"
+                  inputMode="numeric"
+                  pattern="[0-9]{10}"
+                  minLength={10}
+                  maxLength={10}
+                  placeholder="10-digit mobile number"
+                  aria-describedby="telegram-phone-help"
+                  required
+                  value={phone}
+                  onChange={(event) => setPhone(event.target.value)}
+                />
+              </div>
+              <small id="telegram-phone-help">India (+91) is added automatically.</small>
+            </div>
             <Button disabled={busy} type="submit">
               {busy ? "Starting…" : "Continue with Telegram"}{" "}
               <ArrowUpRight size={16} />
@@ -260,7 +287,7 @@ export function Login() {
             {completion === "CODE" && (
               <>
                 <ol className="login-steps">
-                  <li>Open the Telegram bot and press Start.</li>
+                  <li>Open Telegram using the button below, then press Start if shown.</li>
                   <li>Use its button to share your own +91 contact.</li>
                   <li>Enter the six-digit code here, in this browser.</li>
                 </ol>
@@ -269,6 +296,41 @@ export function Login() {
                     Open Telegram <ArrowUpRight size={16} />
                   </a>
                 </Button>
+                {status === "WAITING_BOT" && startCommand && !challengeExpired && (
+                  <details className="telegram-recovery">
+                    <summary>Chat already open or no Start button?</summary>
+                    <p>
+                      Copy this sign-in command, paste it into the OpenNest bot
+                      chat, and send it. This connects Telegram to this browser.
+                      Sending just /start does not connect a new sign-in.
+                    </p>
+                    <label className="field">
+                      Telegram sign-in command
+                      <input
+                        value={startCommand}
+                        readOnly
+                        autoComplete="off"
+                        spellCheck={false}
+                        onFocus={(event) => event.currentTarget.select()}
+                      />
+                    </label>
+                    <Button type="button" variant="outline" onClick={() => void copyStartCommand()}>
+                      {commandCopy === "COPIED" ? "Command copied" : "Copy sign-in command"}
+                    </Button>
+                    {commandCopy !== "IDLE" && (
+                      <p role="status">
+                        {commandCopy === "COPIED"
+                          ? "Paste the command into the OpenNest bot chat and send it."
+                          : "Select and copy the command above, then send it in the OpenNest bot chat."}
+                      </p>
+                    )}
+                    <p className="fine-print">
+                      After sharing your contact, enter the code in this browser,
+                      not in Telegram. If the bot does not reply, return here and
+                      try again shortly.
+                    </p>
+                  </details>
+                )}
               </>
             )}
             <p role="status" className="fine-print">

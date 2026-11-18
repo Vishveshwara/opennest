@@ -1,8 +1,9 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
-import { House, Moon, Sun, ArrowUpRight } from "lucide-react";
+import { Moon, Sun, ArrowUpRight } from "lucide-react";
 import { useSession } from "./session";
 import { Button } from "./ui/button";
 
@@ -29,9 +30,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <header className="site-header">
         <div className="container header-inner">
           <Link href={path("/")} className="brand" aria-label="OpenNest home">
-            <span className="brand-mark">
-              <House size={23} strokeWidth={1.7} />
-            </span>
+            <BrandMark />
             OpenNest<span className="brand-dot">.</span>
           </Link>
           <nav aria-label="Main navigation">
@@ -95,6 +94,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <div className="container footer-inner">
           <div>
             <Link href={path("/")} className="brand">
+              <BrandMark />
               OpenNest<span className="brand-dot">.</span>
             </Link>
             <p>A place for your next chapter.</p>
@@ -112,5 +112,18 @@ export function Shell({ children }: { children: React.ReactNode }) {
         </div>
       </footer>
     </>
+  );
+}
+
+function BrandMark() {
+  return (
+    <Image
+      src="/opennest-logo.png"
+      className="brand-mark"
+      width={37}
+      height={37}
+      alt=""
+      unoptimized
+    />
   );
 }

@@ -105,6 +105,34 @@ class ListingLifecycleIT {
         for (int i = 0; i < 24; i++) creates.add(() -> attempt(other, () -> service().create(draft("ROOM", "Delhi", 8000))));
         assertThat(race(creates).stream().filter(Boolean::booleanValue).count()).isEqualTo(20);
     }
+    @Test void photoDeletionRetainsRateAccountingAndSerializesRequiredPhotoRemoval() throws Exception {
+        UUID owner = owner(0, true), stranger = owner(0, false);
+        UUID id = (UUID) as(owner, () -> service().create(draft("PG_HOSTEL", "Indore", 6000))).get("id");
+        images(id, owner, "PG_HOSTEL"); images(id, owner, "PG_HOSTEL");
+        as(owner, () -> service().change(id, node("{\"version\":0}"), "publish"));
+        var rooms = jdbc(0).queryForList("select id from property_images where property_id=? and segment='ROOM'", UUID.class, id);
+        assertThatThrownBy(() -> media().delete(id, rooms.getFirst(), stranger)).isInstanceOfSatisfying(RequestFailure.class,
+                failure -> assertThat(failure.kind()).isEqualTo(RequestFailure.Kind.FORBIDDEN));
+        var paused = race(rooms.stream().<Callable<Boolean>>map(image -> () -> Boolean.TRUE.equals(media().delete(id, image, owner).get("listingPaused"))).toList());
+        assertThat(paused).containsExactlyInAnyOrder(true, false);
+        assertThat(jdbc(0).queryForObject("select status from properties where id=?", String.class, id)).isEqualTo("PAUSED");
+        assertThat(jdbc(0).queryForObject("select count(*) from property_images where property_id=?", Long.class, id)).isEqualTo(4L);
+        assertThat(jdbc(0).queryForObject("select count(*) from property_images where property_id=? and segment='ROOM' and validation_state='REJECTED' and object_key is null and content_type is null", Long.class, id)).isEqualTo(2L);
+        for (int i = 0; i < 56; i++) {
+            var reserved = media().presign(id, owner, node("{\"segment\":\"ROOM\",\"contentType\":\"image/png\",\"byteSize\":100}"));
+            jdbc(0).update("update property_images set created_at=current_timestamp - interval '2 hours',upload_expires_at=current_timestamp - interval '1 hour' where id=?", reserved.get("imageId"));
+        }
+        assertThatThrownBy(() -> media().presign(id, owner, node("{\"segment\":\"ROOM\",\"contentType\":\"image/png\",\"byteSize\":100}")))
+                .isInstanceOfSatisfying(RequestFailure.class, failure -> assertThat(failure.kind()).isEqualTo(RequestFailure.Kind.RATE_LIMITED));
+        String cookie = session(0, owner, "production:primary");
+        String csrf = json.readTree(send(0, "GET", "/api/v1/auth/csrf", cookie, null, null).body()).get("token").asString();
+        String path = "/api/v1/listings/" + id + "/images/" + rooms.getFirst();
+        assertThat(send(0, "DELETE", path, cookie, null, null).statusCode()).isEqualTo(403);
+        assertThat(send(0, "DELETE", path, null, null, null).statusCode()).isGreaterThanOrEqualTo(400);
+        var deleted = send(0, "DELETE", path, cookie, csrf, null);
+        assertThat(deleted.statusCode()).isEqualTo(200);
+        assertThat(deleted.headers().firstValue("Cache-Control")).hasValue("no-store");
+    }
     @Test void simultaneousInventoryWritesHaveOneWinner() throws Exception {
         UUID owner = owner(0, false);
         UUID id = (UUID) as(owner, () -> service().create(draft("ROOM", "Hyderabad", 5000))).get("id");

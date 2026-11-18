@@ -34,6 +34,10 @@ export const imageSchema = z.object({
   url: z.string().nullable(),
   expiresAt: z.string().nullable(),
 });
+export const deletedImageSchema = z.object({
+  deletedImageId: uuid,
+  listingPaused: z.boolean(),
+});
 const commonListing = z.object({
   id: uuid,
   ownerId: uuid,

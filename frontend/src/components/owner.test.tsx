@@ -1,5 +1,5 @@
 import { StrictMode } from "react";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { OwnerPage } from "./owner";
 import { ApiError } from "@/lib/api";
@@ -32,6 +32,9 @@ vi.mock("./session", () => ({
 beforeEach(() => {
   search = new URLSearchParams();
   request.mockReset();
+  router.push.mockReset();
+  router.replace.mockReset();
+  router.refresh.mockReset();
   vi.mocked(convertToAvif).mockReset();
   vi.mocked(uploadDirect).mockReset();
 });
@@ -139,6 +142,63 @@ it("keeps a validated job completed when reloading the listing fails", async () 
   expect(screen.getByText(/completed.png/)).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Retry photo" })).not.toBeInTheDocument();
   expect(request.mock.calls.filter(([path]) => String(path).endsWith("/complete"))).toHaveLength(1);
+});
+
+it("deletes a validated photo and reloads the listing", async () => {
+  let deleted = false;
+  request.mockImplementation(async (path: string, _schema: unknown, method?: string) => {
+    if (method === "DELETE" && path.endsWith(`/images/${image.imageId}`)) {
+      deleted = true;
+      return { deletedImageId: image.imageId, listingPaused: false };
+    }
+    return { ...listing(), images: deleted ? [] : [image] };
+  });
+  render(<OwnerPage id={listingId} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Delete photo" }));
+  const dialog = await screen.findByRole("dialog");
+  fireEvent.click(within(dialog).getByRole("button", { name: "Delete photo" }));
+  await waitFor(() =>
+    expect(request).toHaveBeenCalledWith(
+      `/api/v1/listings/${listingId}/images/${image.imageId}`,
+      expect.anything(),
+      "DELETE",
+    ),
+  );
+  expect(await screen.findByText("Photo deleted.")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Delete photo" })).not.toBeInTheDocument();
+});
+
+
+it("reports a rejected photo deletion without claiming upload success", async () => {
+  request.mockImplementation(async (_path: string, _schema: unknown, method?: string) => {
+    if (method === "DELETE") throw new ApiError(403);
+    return { ...listing(), images: [image] };
+  });
+  render(<OwnerPage id={listingId} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Delete photo" }));
+  fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Delete photo" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("The photo could not be deleted.");
+  expect(screen.getByRole("alert")).not.toHaveTextContent("Your photo was validated");
+  expect(screen.queryByRole("button", { name: "Refresh photos" })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Delete photo" })).toBeEnabled();
+});
+
+it("reports successful deletion separately from a failed listing refresh", async () => {
+  let deleted = false;
+  request.mockImplementation(async (_path: string, _schema: unknown, method?: string) => {
+    if (method === "DELETE") {
+      deleted = true;
+      return { deletedImageId: image.imageId, listingPaused: false };
+    }
+    if (deleted) throw new ApiError(503);
+    return { ...listing(), images: [image] };
+  });
+  render(<OwnerPage id={listingId} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Delete photo" }));
+  fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Delete photo" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("The photo was deleted. The listing could not be refreshed.");
+  expect(screen.getByRole("alert")).not.toHaveTextContent("Your photo was validated");
+  expect(screen.getByRole("button", { name: "Refresh photos" })).toBeEnabled();
 });
 
 it("ignores superseded owner reads without aborting navigation or Strict Mode cleanup", async () => {

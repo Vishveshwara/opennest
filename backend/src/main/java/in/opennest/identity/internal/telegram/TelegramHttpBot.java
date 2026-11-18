@@ -41,7 +41,7 @@ class TelegramHttpBot implements TelegramBot, AutoCloseable {
     }
     @Override public void hint(long chat, Hint hint) {
         String text = switch (hint) {
-            case OPEN_BROWSER -> "Open OpenNest in your browser and use its Open Telegram button to start or restart sign-in.";
+            case OPEN_BROWSER -> "Open OpenNest in your browser and use its Open Telegram button to start or restart sign-in. If this chat is already open or Start is missing, copy the sign-in command from that browser and send it here. Enter the code only in the browser.";
             case WAIT_FOR_RESEND -> "Use the latest OpenNest code, or request another in your browser when Resend code becomes available. Each challenge allows three resends.";
             case FINISH_BROWSER -> "Your code was verified. Return to the browser where you started to finish your OpenNest account.";
         };

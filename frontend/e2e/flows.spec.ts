@@ -133,7 +133,7 @@ async function signIn(
   phoneNumber: string,
 ) {
   await page.goto("/login");
-  await page.getByLabel("Phone number", { exact: true }).fill(phoneNumber);
+  await page.getByLabel("Phone number", { exact: true }).fill(phoneNumber.slice(3));
   await page.getByRole("button", { name: "Continue with Telegram" }).click();
   const link = page.getByRole("link", { name: "Open Telegram" });
   await expect(link).toBeVisible();
