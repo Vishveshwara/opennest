@@ -94,6 +94,10 @@ test("public search is keyboard accessible in both themes and survives map failu
       await page
         .getByRole("button", { name: "Use dark theme", exact: true })
         .click();
+    const logo = dark ? "/opennest-logo-dark.png" : "/opennest-logo.png";
+    await expect(page.locator(".site-header .brand-mark")).toHaveAttribute("src", logo);
+    await expect(page.locator(".site-footer .brand-mark")).toHaveAttribute("src", logo);
+    expect((await page.request.get(new URL(logo, sandboxUi).href)).ok()).toBe(true);
     await expect
       .poll(() =>
         page.evaluate(
@@ -189,6 +193,11 @@ test("Telegram, all rental modes, direct uploads, publication, reveals, reviews,
 }) => {
   test.setTimeout(240000);
   await signIn(page, request, ownerPhone);
+  await page.goto("/login?returnTo=%2Fmy-listings");
+  await expect(page.getByRole("heading", { name: "You’re signed in" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: /mobile number/i })).toHaveCount(0);
+  await page.getByRole("link", { name: "Continue", exact: true }).click();
+  await expect(page).toHaveURL(/\/my-listings$/);
   let reservationRequests = 0;
   page.on("request", (request) => {
     if (request.url().endsWith("/images/presign")) reservationRequests++;
@@ -416,6 +425,11 @@ test("Telegram, all rental modes, direct uploads, publication, reveals, reviews,
     `${process.env.E2E_PRIMARY_API}/api/v1/listings/${ids[0]}`,
   );
   expect(paused.status()).toBe(404);
+  await page.getByRole("button", { name: "Delete listing", exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Delete listing", exact: true }).click();
+  await expect(page).toHaveURL(/\/my-listings$/);
+  await expect(page.locator(`h2 a[href="/my-listings/${ids[1]}"]`)).toBeVisible();
+  await expect(page.locator(`a[href="/my-listings/${ids[0]}"]`)).toHaveCount(0);
 });
 
 test("sandbox URL search, back navigation, mobile controls, personas, and isolation", async ({

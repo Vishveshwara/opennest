@@ -168,6 +168,94 @@ it("deletes a validated photo and reloads the listing", async () => {
   expect(screen.queryByRole("button", { name: "Delete photo" })).not.toBeInTheDocument();
 });
 
+it("permanently deletes a listing after confirmation", async () => {
+  request.mockImplementation(async (_path: string, _schema: unknown, method?: string) =>
+    method === "DELETE"
+      ? { deletedListingId: listingId }
+      : listing(),
+  );
+  render(<OwnerPage id={listingId} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Delete listing" }));
+  const dialog = await screen.findByRole("dialog");
+  fireEvent.click(within(dialog).getByRole("button", { name: "Delete listing" }));
+  await waitFor(() =>
+    expect(request).toHaveBeenCalledWith(
+      `/api/v1/listings/${listingId}?version=0`,
+      expect.anything(),
+      "DELETE",
+    ),
+  );
+  expect(router.replace).toHaveBeenCalledWith("/my-listings");
+  expect(router.refresh).toHaveBeenCalled();
+});
+
+it.each(["older first", "newer first"])("keeps the refreshed deletion version when reads finish %s", async (order) => {
+  const older = Promise.withResolvers<ReturnType<typeof listing>>();
+  const newer = Promise.withResolvers<ReturnType<typeof listing>>();
+  let reads = 0;
+  request.mockImplementation(async (path: string, _schema: unknown, method?: string) => {
+    if (method === "DELETE" && path.endsWith(`/images/${image.imageId}`))
+      return { deletedImageId: image.imageId, listingPaused: false };
+    if (method === "DELETE") {
+      if (path.endsWith("?version=0")) throw new ApiError(409);
+      return { deletedListingId: listingId };
+    }
+    reads++;
+    if (reads === 1) return { ...listing(), images: [image] };
+    return reads === 2 ? older.promise : newer.promise;
+  });
+  render(<OwnerPage id={listingId} />);
+  await confirmOwnerAction("Delete photo");
+  await waitFor(() => expect(reads).toBe(2));
+  await confirmOwnerAction("Delete listing");
+  await waitFor(() => expect(reads).toBe(3));
+  if (order === "older first") await act(async () => older.resolve(listing()));
+  await act(async () => newer.resolve({ ...listing(), version: 1 }));
+  if (order === "newer first") await act(async () => older.resolve(listing()));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Review the refreshed version");
+  expect(router.replace).not.toHaveBeenCalled();
+  await confirmOwnerAction("Delete listing");
+  await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/my-listings"));
+  expect(request).toHaveBeenCalledWith(`/api/v1/listings/${listingId}?version=1`, expect.anything(), "DELETE");
+});
+
+async function confirmOwnerAction(name: string) {
+  fireEvent.click(await screen.findByRole("button", { name }));
+  fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name }));
+}
+
+it.each(["missing", "still owned", "unavailable"])("checks whether a listing is %s after an uncertain delete", async (outcome) => {
+  let deletes = 0;
+  request.mockImplementation(async (_path: string, _schema: unknown, method?: string) => {
+    if (method === "DELETE") {
+      if (++deletes === 1) throw new ApiError(503);
+      return { deletedListingId: listingId };
+    }
+    if (deletes && outcome === "missing") throw new ApiError(404);
+    if (deletes && outcome === "unavailable") throw new ApiError(502);
+    return { ...listing(), version: deletes ? 1 : 0 };
+  });
+  const view = render(<OwnerPage id={listingId} />);
+  await confirmOwnerAction("Delete listing");
+  if (outcome === "missing") {
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/my-listings?deleted=1"));
+    search = new URLSearchParams("deleted=1");
+    request.mockResolvedValue({ items: [], page: 0, size: 20, totalElements: 0, totalPages: 0 });
+    view.rerender(<OwnerPage />);
+    expect(await screen.findByText("Listing deleted.")).toBeInTheDocument();
+    expect(request).toHaveBeenLastCalledWith("/api/v1/listings/mine?", expect.anything());
+  } else if (outcome === "still owned") {
+    expect(await screen.findByRole("alert")).toHaveTextContent("The listing is still available");
+    expect(router.replace).not.toHaveBeenCalled();
+    await confirmOwnerAction("Delete listing");
+    await waitFor(() =>
+      expect(request).toHaveBeenCalledWith(`/api/v1/listings/${listingId}?version=1`, expect.anything(), "DELETE"),
+    );
+  } else {
+    expect(await screen.findByRole("alert")).toHaveTextContent(new ApiError(503).message);
+    expect(router.replace).not.toHaveBeenCalled();
+  }
+});
 
 it("reports a rejected photo deletion without claiming upload success", async () => {
   request.mockImplementation(async (_path: string, _schema: unknown, method?: string) => {

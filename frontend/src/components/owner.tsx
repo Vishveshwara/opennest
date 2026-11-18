@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { z } from "zod";
@@ -20,6 +20,7 @@ import {
   presignSchema,
   imageSchema,
   deletedImageSchema,
+  deletedListingSchema,
   uuid,
   type OwnerListing,
   type ImageSegment,
@@ -59,7 +60,7 @@ export function OwnerPage({ id }: { id?: string }) {
 function OwnerContent({ id }: { id?: string }) {
   const { config } = useSession();
   if (id === "new") return <CreateDraft />;
-  if (id) return <ManageListing id={id} />;
+  if (id) return <ManageListing key={id} id={id} />;
   return (
     <>
       <div className="page-heading">
@@ -90,7 +91,10 @@ function OwnerCollection() {
       ReturnType<typeof pageSchema<typeof ownerListingSchema>>
     > | null>(null),
     [error, setError] = useState("");
-  const query = params.toString();
+  const filters = new URLSearchParams(params);
+  const deleted = filters.get("deleted") === "1";
+  filters.delete("deleted");
+  const query = filters.toString();
   function filter(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
@@ -117,12 +121,13 @@ function OwnerCollection() {
     };
   }, [api, query]);
   const href = (page: number) => {
-    const query = new URLSearchParams(params);
+    const query = new URLSearchParams(filters);
     query.set("page", String(page));
     return `${config.basePath}/my-listings?${query}`;
   };
   return (
     <>
+      {deleted && <Notice>Listing deleted.</Notice>}
       {error && <Notice error>{error}</Notice>}
       <form className="actions owner-filters" onSubmit={filter}>
         <label className="field">
@@ -520,38 +525,37 @@ function CreateDraft() {
 
 function ManageListing({ id }: { id: string }) {
   const { api, account, config } = useSession();
+  const ownerId = account?.id;
   const router = useRouter();
   const [listing, setListing] = useState<OwnerListing | null>(null),
     [error, setError] = useState(""),
     [message, setMessage] = useState(""),
     [busy, setBusy] = useState(false);
-  const load = useCallback(async () => {
-    if (!uuid.safeParse(id).success) throw new ApiError(404);
-    const value = await api.request(
-      `/api/v1/listings/${id}`,
-      ownerListingSchema,
-    );
-    if (value.ownerId !== account?.id) throw new ApiError(403);
-    setListing(value);
-  }, [api, id, account?.id]);
-  useEffect(() => {
-    let active = true;
-    if (!uuid.safeParse(id).success) return;
-    void api
+  const readId = useRef(0);
+  const load = useCallback(() => {
+    const started = ++readId.current;
+    if (!uuid.safeParse(id).success) return Promise.reject(new ApiError(404));
+    return api
       .request(`/api/v1/listings/${id}`, ownerListingSchema)
       .then((value) => {
-        if (!active) return;
-        if (value.ownerId !== account?.id) throw new ApiError(403);
-        setListing(value);
+        if (started !== readId.current) return false;
+        if (value.ownerId !== ownerId) throw new ApiError(403);
+        setListing((current) => current && current.version > value.version ? current : value);
         setError("");
+        return true;
       })
-      .catch((error) => {
-        if (active) setError(errorMessage(error));
+      .catch((failure) => {
+        if (started === readId.current) throw failure;
+        return false;
       });
-    return () => {
-      active = false;
-    };
-  }, [api, id, account?.id]);
+  }, [api, id, ownerId]);
+  const invalidateReads = useCallback(() => {
+    readId.current++;
+  }, []);
+  useEffect(() => {
+    void load().catch((failure) => setError(errorMessage(failure)));
+    return invalidateReads;
+  }, [invalidateReads, load]);
   async function mutate(
     action: "inventory" | "publish" | "pause",
     body: unknown,
@@ -560,14 +564,13 @@ function ManageListing({ id }: { id: string }) {
     setError("");
     setMessage("");
     try {
-      setListing(
-        await api.request(
-          `/api/v1/listings/${id}/${action}`,
-          ownerListingSchema,
-          action === "inventory" ? "PATCH" : "POST",
-          body,
-        ),
+      const updated = await api.request(
+        `/api/v1/listings/${id}/${action}`,
+        ownerListingSchema,
+        action === "inventory" ? "PATCH" : "POST",
+        body,
       );
+      setListing((current) => current && current.version > updated.version ? current : updated);
       setMessage(
         action === "inventory"
           ? "Availability saved."
@@ -585,6 +588,42 @@ function ManageListing({ id }: { id: string }) {
         );
       }
     } finally {
+      setBusy(false);
+    }
+  }
+  async function deleteListing() {
+    if (!listing) return;
+    setBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      await api.request(
+        `/api/v1/listings/${id}?version=${listing.version}`,
+        deletedListingSchema,
+        "DELETE",
+      );
+      router.replace(`${config.basePath}/my-listings`);
+      router.refresh();
+    } catch (error) {
+      const stale = error instanceof ApiError && error.status === 409;
+      try {
+        if (await load()) {
+          setError(stale
+            ? "The listing changed. Review the refreshed version before trying again."
+            : "The listing is still available. Review the refreshed version before trying again.");
+          setBusy(false);
+          return;
+        }
+      } catch (readError) {
+        if (!stale && readError instanceof ApiError && readError.status === 404) {
+          router.replace(`${config.basePath}/my-listings?deleted=1`);
+          router.refresh();
+          return;
+        }
+      }
+      setError(stale
+        ? "The listing changed and could not be refreshed. Reload the page before trying again."
+        : errorMessage(error));
       setBusy(false);
     }
   }
@@ -677,6 +716,19 @@ function ManageListing({ id }: { id: string }) {
               exact values.
             </p>
           </section>
+          <section className="panel danger-zone">
+            <h2>Delete listing</h2>
+            <p>This permanently removes the listing and its photos.</p>
+            <ConfirmDialog
+              title="Delete this listing?"
+              description="OpenNest will remove the listing and queue its photos for deletion. Existing reviews still count toward your owner rating."
+              trigger="Delete listing"
+              triggerVariant="destructive"
+              confirmLabel="Delete listing"
+              busy={busy}
+              confirm={deleteListing}
+            />
+          </section>
         </div>
         <aside>
           <section className="panel publication-panel">
@@ -756,7 +808,7 @@ function PhotoUploader({
   reload,
 }: {
   listing: OwnerListing;
-  reload: () => Promise<void>;
+  reload: () => Promise<boolean>;
 }) {
   const { api, config } = useSession();
   const [segment, setSegment] = useState<ImageSegment>("ROOM"),

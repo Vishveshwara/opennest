@@ -2,7 +2,6 @@
 
 import {
   createContext,
-  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -22,10 +21,62 @@ type Session = {
   epoch: number;
   api: ReturnType<typeof browserApi>;
   rotate: () => void;
-  refresh: () => Promise<Account>;
   logout: () => Promise<void>;
 };
 const Context = createContext<Session | null>(null);
+const SESSION_CHECK_TIMEOUT_MS = 8_000;
+
+function createSessionClient(
+  origin: string,
+  update: {
+    ready: (account: Account | null) => void;
+    expired: () => void;
+    unavailable: (error: unknown) => void;
+  },
+) {
+  let activeCheck: AbortController | null = null;
+  function cancelCheck() {
+    activeCheck?.abort();
+    activeCheck = null;
+  }
+  const api = browserApi(origin, () => {
+    cancelCheck();
+    update.expired();
+  });
+  function checkSession(refreshing = false) {
+    cancelCheck();
+    const check = new AbortController();
+    activeCheck = check;
+    const timeout = setTimeout(() => check.abort(), SESSION_CHECK_TIMEOUT_MS);
+    return api
+      .probe("/api/v1/users/me", accountSchema, check.signal)
+      .then((profile) => {
+        check.signal.throwIfAborted();
+        update.ready(profile);
+        return profile;
+      })
+      .catch((error) => {
+        if (activeCheck !== check) throw error;
+        const failure = check.signal.aborted ? new ApiError(503) : error;
+        if (failure instanceof ApiError && failure.status === 401) {
+          if (refreshing) {
+            api.clear();
+            update.expired();
+          } else {
+            update.ready(null);
+          }
+        } else {
+          update.unavailable(failure);
+        }
+        throw failure;
+      })
+      .finally(() => {
+        clearTimeout(timeout);
+        if (activeCheck === check) activeCheck = null;
+      });
+  }
+  return { api, cancelCheck, checkSession };
+}
 
 export function SessionProvider({
   config,
@@ -39,67 +90,43 @@ export function SessionProvider({
     [epoch, setEpoch] = useState(0),
     [notice, setNotice] = useState("");
   const router = useRouter();
-  const api = useMemo(
-    () =>
-      browserApi(config.browserApiOrigin, () => {
-        setAccount(null);
-        setStatus("ready");
-        setNotice("");
-        setEpoch((value) => value + 1);
-      }),
-    [config.browserApiOrigin],
-  );
-  const refresh = useCallback(async () => {
-    setStatus("checking");
-    try {
-      const profile = await api.request("/api/v1/users/me", accountSchema);
+  const { api, cancelCheck, checkSession } = useMemo(() => {
+    function ready(profile: Account | null) {
       setAccount(profile);
       setStatus("ready");
       setNotice("");
-      return profile;
-    } catch (error) {
-      if (error instanceof ApiError && error.status === 401) {
-        setAccount(null);
-        setStatus("ready");
-        setNotice("");
-      } else {
+    }
+    return createSessionClient(config.browserApiOrigin, {
+      ready,
+      expired: () => {
+        ready(null);
+        setEpoch((value) => value + 1);
+      },
+      unavailable: (error) => {
         setStatus("unavailable");
         setNotice(errorMessage(error));
-      }
-      throw error;
-    }
-  }, [api]);
+      },
+    });
+  }, [config.browserApiOrigin]);
+  const startProfileCheck = () => {
+    setStatus("checking");
+    void checkSession(true).catch(() => {});
+  };
   const rotate = () => {
     api.clear();
     setAccount(null);
+    setNotice("");
     setEpoch((value) => value + 1);
+    startProfileCheck();
   };
   useEffect(() => {
-    let alive = true;
-    void api
-      .probe("/api/v1/users/me", accountSchema)
-      .then((profile) => {
-        if (alive) {
-          setAccount(profile);
-          setStatus("ready");
-        }
-      })
-      .catch((error) => {
-        if (!alive) return;
-        if (error instanceof ApiError && error.status === 401) {
-          setStatus("ready");
-        } else {
-          setStatus("unavailable");
-          setNotice(errorMessage(error));
-        }
-      });
-    return () => {
-      alive = false;
-    };
-  }, [api]);
+    void checkSession().catch(() => {});
+    return cancelCheck;
+  }, [cancelCheck, checkSession]);
   const logout = async () => {
     try {
       if (!(await api.logout())) return;
+      cancelCheck();
       setAccount(null);
       setStatus("ready");
       setEpoch((value) => value + 1);
@@ -120,7 +147,6 @@ export function SessionProvider({
         epoch,
         api,
         rotate,
-        refresh,
         logout,
       }}
     >
@@ -128,7 +154,7 @@ export function SessionProvider({
         <p role="alert" className="notice">
           {notice}
           {status === "unavailable" && (
-            <Button type="button" variant="outline" onClick={() => void refresh().catch(() => {})}>
+            <Button type="button" variant="outline" onClick={startProfileCheck}>
               Retry session check
             </Button>
           )}

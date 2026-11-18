@@ -10,6 +10,7 @@
 - Owner-row lock serializes all review/report writes. Review and recomputed aggregates commit together; conversion preserves UUID/time/comment; repeated reports mutate nothing.
 - Public review reads require published listings; state for paused listings requires ownership or reveal history. Responses exclude account IDs/contact data and use no-store.
 - Brokerage notices describe allegations. No ratings/reports change listing status. Editing/deletion/moderation APIs are absent.
+- Listing deletion preserves contact reveals and reviews through the retained listing record. The daily contact quota and trust counts remain intact. Review writes recheck the listing under the owner lock before changing reviews or aggregates.
 - SandboxBoundary guards transactions against reset and stale session generations. Repeatable-read sandbox reads permit metadata row locking to reject snapshots predating reset.
 - Validation allows ratings 1..5, four ordinary issue tags, nullable nonblank comments up to 2000 characters, and bounded page/size only. JSON bodies are limited to 8 KiB with duplicate keys rejected.
 - Verification: InteractionInputTests, Phase4IT and controlled Telegram-session interaction coverage in TelegramContactIT. Current execution evidence is recorded in docs/PHASE4_HANDOFF.md.

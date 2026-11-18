@@ -89,7 +89,7 @@ class SandboxOperations implements ApplicationRunner {
         var previous = jdbc.queryForList("select generation from sandbox_state where id = 1", Long.class);
         if (previous.isEmpty() && jdbc.queryForObject("select count(*) from users", Long.class) != 0)
             throw new IllegalStateException("OpenNest sandbox initialization requires an empty dedicated database");
-        for (String table : new String[] {"telegram_login_receipts", "contact_verifications", "owner_reviews", "contact_reveals", "property_images", "properties", "auth_identities", "users"})
+        for (String table : new String[] {"telegram_login_receipts", "contact_verifications", "owner_reviews", "contact_reveals", "property_images", "properties", "listing_records", "auth_identities", "users"})
             jdbc.update("delete from " + table);
         new SandboxFixtures(jdbc).seed(now);
         long generation = previous.isEmpty() ? 1 : Math.addExact(previous.getFirst(), 1);

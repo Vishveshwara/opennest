@@ -103,7 +103,7 @@ class IdentitySecurityConfiguration {
                 .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/listings", "/api/v1/listings/*/publish", "/api/v1/listings/*/pause",
                         "/api/v1/listings/*/images/presign", "/api/v1/listings/*/images/complete").authenticated()
                 .requestMatchers(org.springframework.http.HttpMethod.PATCH, "/api/v1/listings/*/inventory").authenticated()
-                .requestMatchers(org.springframework.http.HttpMethod.DELETE, "/api/v1/listings/*/images/*").authenticated()
+                .requestMatchers(org.springframework.http.HttpMethod.DELETE, "/api/v1/listings/*", "/api/v1/listings/*/images/*").authenticated()
                 .anyRequest().denyAll())
                 .formLogin(AbstractHttpConfigurer::disable).httpBasic(AbstractHttpConfigurer::disable)
                 .requestCache(cache -> cache.requestCache(new NullRequestCache())).cors(AbstractHttpConfigurer::disable)

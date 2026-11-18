@@ -26,7 +26,7 @@ Challenges expire five minutes after creation, including time spent finding the 
 Import [OpenNest-Listings.postman_collection.json](postman/OpenNest-Listings.postman_collection.json). Its requests share the localhost cookie jar with the login collection but have their own variables. Send them individually; the media steps require your file input.
 
 1. Send listing request 1 to fetch CSRF into this collection, then request 2 to confirm the authenticated profile.
-2. Inspect the fabricated PG example in request 3, then send it once. It creates a retained PAUSED draft and saves listingId/version. Any Indian city is supported; the example city is not a default or allowlist. Deletion is not implemented, so reuse the saved ID instead of creating repeated drafts.
+2. Inspect the fabricated PG example in request 3, then send it once. It creates a retained PAUSED draft and saves listingId/version. Any Indian city is supported. Reuse the saved ID for the rest of this walkthrough.
 3. Send requests 4 and 5 for GET /api/v1/listings/mine and GET /api/v1/listings/{id}. Your draft is visible to you; its owner response includes version and private address/coordinates.
 4. Send request 6 for nationwide search. PAUSED drafts are excluded even when their owner searches. Search/detail responses remain no-store, and anonymous public data omits contact/private address/precise coordinates.
 5. For media, configure R2 explicitly as described in [the listing handoff](LISTINGS_HANDOFF.md). With storage disabled, requests 7 and 9 return 503 by design. Do not enable it with placeholder credentials or use a backend upload proxy.
@@ -41,6 +41,7 @@ Import [OpenNest-Listings.postman_collection.json](postman/OpenNest-Listings.pos
 9. Send request 10 with the saved current version to publish. A prepared PG becomes ACTIVE when rooms are available. A missing required photo/contact or a quota conflict returns 409 or the documented contact-required 403. Do not bypass these checks.
 10. Request 11 sets the PG room counters to zero. A published PG becomes FULL_OCCUPIED, with a new saved version. To find it through search, explicitly use status=FULL_OCCUPIED. ENTIRE_FLAT uses wholeFlatAvailable/maxOccupants rather than this room payload.
 11. Request 12 pauses the listing, saving its latest version. Anonymous detail becomes 404 and public search excludes it; you can still read it through mine/detail. The retained draft is not deleted.
+12. To remove the fabricated listing, send DELETE /api/v1/listings/{id}?version={version} with the saved version, owner session, and current CSRF header. Expect 200 with deletedListingId, then 404 on owner detail. Cloudflare R2 cleanup runs asynchronously.
 12. When finished, return to the login collection, refresh CSRF with request 5 and send logout request 7. Request 8 should return 401. Public listing browsing remains available after logout.
 
 Inventory bodies and all mode-specific fields are defined in [LISTING_MODEL.md](LISTING_MODEL.md). Filters, sorting and pagination are defined in [LISTING_SEARCH.md](LISTING_SEARCH.md). Prices are INR per person/month for PG, per room/month for FLAT ROOM and per property/month for ENTIRE_FLAT. Occupancy capacity does not multiply the price.

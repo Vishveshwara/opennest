@@ -49,6 +49,7 @@ class ListingService {
                 "femaleRoomsAvailable", "sharedRoomsAvailable", "maxSharingPerRoom") : Set.of("version"));
         long version = ListingInput.version(body);
         return store.write(() -> {
+            store.owned(id, owner, false);
             accounts.lockForListingMutation(owner);
             var row = store.owned(id, owner, true);
             store.version(row, version);
@@ -70,6 +71,17 @@ class ListingService {
                 default -> throw new IllegalArgumentException();
             }
             return render(store.property(id, false), true);
+        });
+    }
+    Map<String, Object> delete(UUID id, long version) {
+        ListingInput.require(version >= 0);
+        var owner = caller();
+        return store.write(() -> {
+            store.owned(id, owner, false);
+            accounts.lockForListingMutation(owner);
+            store.version(store.owned(id, owner, true), version);
+            store.delete(id);
+            return Map.of("deletedListingId", id);
         });
     }
     private Map<String, Object> render(Map<String, Object> row, boolean owner) {

@@ -57,7 +57,7 @@ This uses a fresh browser session for each address and checks the Sign in link, 
 - Owners use /my-listings to create PAUSED drafts, add segmented photos, validate them and explicitly publish. Direct uploads never pass through Next.js or Spring as a byte proxy. Version conflicts reload current data before another user submission. Transient PUT retries reuse an unexpired reservation and its converted AVIF bytes; terminal/expired uploads renew the reservation. Completion retries retain the existing image ID when retryable.
 - Prices/deposits show their person, room or property basis. Capacity remains distinct from vacancy/BHK and never multiplies rent.
 - Reveal is an explicit authenticated action with a ten-distinct-listing Kolkata daily allowance. Reviews/reports require historical reveal eligibility. Reports remain allegations and preserve prior review text.
-- Owners can remove validated photos after confirmation. Removing the last required photo pauses publication. No text/price edits, image replacement, whole-listing deletion, contact changes, messaging or moderation endpoint is exposed.
+- Owners can remove validated photos after confirmation. Removing the last required photo pauses publication. The owner can also confirm permanent listing deletion using the current version. A stale version refreshes the listing for another confirmation. Deletion returns the owner to My listings.
 
 Original TweakCN variables remain unchanged. Component text uses derived semantic color mixes where necessary to meet contrast in both themes.
 

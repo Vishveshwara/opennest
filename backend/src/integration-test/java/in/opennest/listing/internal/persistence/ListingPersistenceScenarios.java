@@ -211,6 +211,7 @@ public final class ListingPersistenceScenarios {
             try (var cleanup = factory.createEntityManager()) {
                 cleanup.getTransaction().begin();
                 cleanup.createNativeQuery("DELETE FROM public.properties WHERE id=:id").setParameter("id", id).executeUpdate();
+                cleanup.createNativeQuery("DELETE FROM public.listing_records WHERE id=:id").setParameter("id", id).executeUpdate();
                 cleanup.createNativeQuery("DELETE FROM public.users WHERE id=:id").setParameter("id", owner).executeUpdate();
                 cleanup.getTransaction().commit();
             }

@@ -23,6 +23,7 @@ import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.scheduling.support.NoOpTaskScheduler;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.context.SecurityContextImpl;
@@ -100,10 +101,17 @@ class ListingLifecycleIT {
         assertThat(race(ids.stream().<java.util.concurrent.Callable<Boolean>>map(id -> () -> attempt(owner, () -> service().change(id, node("{\"version\":0}"), "publish"))).toList()))
                 .containsExactlyInAnyOrder(true, true, true, true, true, false);
         assertThat(jdbc(0).queryForObject("select count(*) from properties where owner_id = ? and status <> 'PAUSED'", Long.class, owner)).isEqualTo(5L);
+        UUID published = jdbc(0).queryForObject("select id from properties where owner_id=? and status='ACTIVE' limit 1", UUID.class, owner);
+        UUID draft = jdbc(0).queryForObject("select id from properties where owner_id=? and status='PAUSED'", UUID.class, owner);
+        as(owner, () -> service().delete(published, 1));
+        assertThat(as(owner, () -> service().change(draft, node("{\"version\":0}"), "publish"))).containsEntry("status", "ACTIVE");
         UUID other = owner(0, false);
         var creates = new ArrayList<java.util.concurrent.Callable<Boolean>>();
         for (int i = 0; i < 24; i++) creates.add(() -> attempt(other, () -> service().create(draft("ROOM", "Delhi", 8000))));
         assertThat(race(creates).stream().filter(Boolean::booleanValue).count()).isEqualTo(20);
+        UUID retained = jdbc(0).queryForObject("select id from properties where owner_id=? limit 1", UUID.class, other);
+        as(other, () -> service().delete(retained, 0));
+        assertThat(as(other, () -> service().create(draft("ROOM", "Delhi", 8000)))).containsEntry("status", "PAUSED");
     }
     @Test void photoDeletionRetainsRateAccountingAndSerializesRequiredPhotoRemoval() throws Exception {
         UUID owner = owner(0, true), stranger = owner(0, false);
@@ -111,6 +119,9 @@ class ListingLifecycleIT {
         images(id, owner, "PG_HOSTEL"); images(id, owner, "PG_HOSTEL");
         as(owner, () -> service().change(id, node("{\"version\":0}"), "publish"));
         var rooms = jdbc(0).queryForList("select id from property_images where property_id=? and segment='ROOM'", UUID.class, id);
+        var roomFinals = jdbc(0).queryForList("select object_key from property_images where property_id=? and segment='ROOM'", String.class, id);
+        var otherFinals = jdbc(0).queryForList("select object_key from property_images where property_id=? and segment='BATHROOM'", String.class, id);
+        var roomStaging = jdbc(0).queryForList("select upload_object_key from property_images where property_id=? and segment='ROOM'", String.class, id);
         assertThatThrownBy(() -> media().delete(id, rooms.getFirst(), stranger)).isInstanceOfSatisfying(RequestFailure.class,
                 failure -> assertThat(failure.kind()).isEqualTo(RequestFailure.Kind.FORBIDDEN));
         var paused = race(rooms.stream().<Callable<Boolean>>map(image -> () -> Boolean.TRUE.equals(media().delete(id, image, owner).get("listingPaused"))).toList());
@@ -118,6 +129,20 @@ class ListingLifecycleIT {
         assertThat(jdbc(0).queryForObject("select status from properties where id=?", String.class, id)).isEqualTo("PAUSED");
         assertThat(jdbc(0).queryForObject("select count(*) from property_images where property_id=?", Long.class, id)).isEqualTo(4L);
         assertThat(jdbc(0).queryForObject("select count(*) from property_images where property_id=? and segment='ROOM' and validation_state='REJECTED' and object_key is null and content_type is null", Long.class, id)).isEqualTo(2L);
+        var storage = apps.getFirst().getBean(ControlledStorage.class);
+        media().purgeDeletedObjects();
+        assertThat(storage.finals.keySet()).doesNotContainAnyElementsOf(roomFinals).containsAll(otherFinals);
+        assertThat(storage.staging.keySet()).containsAll(roomStaging);
+        for (String key : roomStaging) {
+            assertThat(jdbc(0).queryForObject("""
+                    select d.next_attempt_at >= i.upload_expires_at + interval '5 minutes'
+                    from listing_object_deletions d join property_images i on i.upload_object_key=d.object_key
+                    where d.bucket='STAGING' and d.object_key=?
+                    """, Boolean.class, key)).isTrue();
+            jdbc(0).update("update listing_object_deletions set next_attempt_at=statement_timestamp() where bucket='STAGING' and object_key=?", key);
+        }
+        media().purgeDeletedObjects();
+        assertThat(storage.staging.keySet()).doesNotContainAnyElementsOf(roomStaging);
         for (int i = 0; i < 56; i++) {
             var reserved = media().presign(id, owner, node("{\"segment\":\"ROOM\",\"contentType\":\"image/png\",\"byteSize\":100}"));
             jdbc(0).update("update property_images set created_at=current_timestamp - interval '2 hours',upload_expires_at=current_timestamp - interval '1 hour' where id=?", reserved.get("imageId"));
@@ -132,6 +157,10 @@ class ListingLifecycleIT {
         var deleted = send(0, "DELETE", path, cookie, csrf, null);
         assertThat(deleted.statusCode()).isEqualTo(200);
         assertThat(deleted.headers().firstValue("Cache-Control")).hasValue("no-store");
+        var retryKey = jdbc(0).queryForObject("select upload_object_key from property_images where id=?", String.class, rooms.getFirst());
+        var queuedAt = jdbc(0).queryForObject("select next_attempt_at from listing_object_deletions where bucket='STAGING' and object_key=?", Timestamp.class, retryKey);
+        assertThat(media().delete(id, rooms.getFirst(), owner)).containsEntry("listingPaused", false);
+        assertThat(jdbc(0).queryForObject("select next_attempt_at from listing_object_deletions where bucket='STAGING' and object_key=?", Timestamp.class, retryKey)).isEqualTo(queuedAt);
     }
     @Test void simultaneousInventoryWritesHaveOneWinner() throws Exception {
         UUID owner = owner(0, false);
@@ -140,6 +169,97 @@ class ListingLifecycleIT {
                 () -> attempt(owner, () -> service().change(id, inventory("ROOM", 0, true), "inventory")),
                 () -> attempt(owner, () -> service().change(id, inventory("ROOM", 0, false), "inventory")));
         assertThat(race(requests)).containsExactlyInAnyOrder(true, false);
+    }
+    @Test void listingDeletionAndInventoryUpdatesHaveOneWinnerAtTheSameVersion() throws Exception {
+        UUID owner = owner(0, false);
+        UUID id = (UUID) as(owner, () -> service().create(draft("ROOM", "Kochi", 7000))).get("id");
+        var results = race(List.of(
+                () -> attempt(owner, () -> service().delete(id, 0)),
+                () -> {
+                    try {
+                        as(owner, () -> service().change(id, inventory("ROOM", 0, true), "inventory"));
+                        return true;
+                    } catch (RequestFailure failure) {
+                        assertThat(failure.kind()).isEqualTo(RequestFailure.Kind.NOT_FOUND);
+                        return false;
+                    }
+                }));
+        assertThat(results).containsExactlyInAnyOrder(true, false);
+    }
+    @Test void nonOwnersAreRejectedWhileAccountAndListingRowsAreLocked() {
+        UUID owner = owner(0, false), stranger = owner(0, false);
+        UUID id = (UUID) as(owner, () -> service().create(draft("ROOM", "Kochi", 7000))).get("id");
+        var transactions = new org.springframework.transaction.support.TransactionTemplate(
+                apps.getFirst().getBean(org.springframework.transaction.PlatformTransactionManager.class));
+        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            transactions.executeWithoutResult(status -> {
+                jdbc(0).queryForObject("select id from users where id=? for update", UUID.class, stranger);
+                jdbc(0).queryForObject("select id from properties where id=? for update", UUID.class, id);
+                var rejected = executor.submit(() -> {
+                    assertThatThrownBy(() -> as(stranger, () -> service().delete(id, 0)))
+                            .isInstanceOfSatisfying(RequestFailure.class, failure -> assertThat(failure.kind()).isEqualTo(RequestFailure.Kind.FORBIDDEN));
+                    assertThatThrownBy(() -> as(stranger, () -> service().change(id, inventory("ROOM", 0, true), "inventory")))
+                            .isInstanceOfSatisfying(RequestFailure.class, failure -> assertThat(failure.kind()).isEqualTo(RequestFailure.Kind.FORBIDDEN));
+                });
+                assertThatCode(() -> rejected.get(5, TimeUnit.SECONDS)).doesNotThrowAnyException();
+            });
+        }
+    }
+    @Test void listingDeletionKeepsTrustAndContactHistoryWhileRetryingStoragePurge() throws Exception {
+        UUID owner = owner(0, true), seeker = owner(0, false);
+        UUID id = (UUID) as(owner, () -> service().create(draft("PG_HOSTEL", "Visakhapatnam", 7100))).get("id");
+        images(id, owner, "PG_HOSTEL");
+        as(owner, () -> service().change(id, node("{\"version\":0}"), "publish"));
+        UUID revealId = UUID.randomUUID();
+        var revealedDate = jdbc(0).queryForObject("""
+                insert into contact_reveals (id,tenant_id,property_id,owner_id) values (?,?,?,?) returning revealed_date
+                """, LocalDate.class, revealId, seeker, id, owner);
+        jdbc(0).update("insert into owner_reviews (id,property_id,owner_id,reviewer_id,rating,issue_tag,is_auto_broker_report) values (?,?,?,?,1,'ASKED_BROKERAGE',true)",
+                UUID.randomUUID(), id, owner, seeker);
+        jdbc(0).update("update users set average_rating=1,review_count=1,broker_report_count=1 where id=?", owner);
+        var finals = jdbc(0).queryForList("select object_key from property_images where property_id = ? order by object_key", String.class, id);
+        var staging = jdbc(0).queryForList("select upload_object_key from property_images where property_id = ?", String.class, id);
+        var storage = apps.getFirst().getBean(ControlledStorage.class);
+        String firstFinal = finals.getFirst();
+        storage.unavailableDeletes.add(firstFinal);
+        var transactions = new org.springframework.transaction.support.TransactionTemplate(
+                apps.getFirst().getBean(org.springframework.transaction.PlatformTransactionManager.class));
+        try {
+            transactions.executeWithoutResult(status -> {
+                assertThat(as(owner, () -> service().delete(id, 1))).containsEntry("deletedListingId", id);
+                status.setRollbackOnly();
+            });
+            assertThat(service().detail(id)).containsEntry("id", id);
+            assertThat(jdbc(0).queryForObject("select count(*) from listing_object_deletions where object_key like ?", Long.class, "listings/" + id + "/%")).isZero();
+            assertThat(as(owner, () -> service().delete(id, 1))).containsEntry("deletedListingId", id);
+            assertThatThrownBy(() -> service().detail(id)).isInstanceOfSatisfying(RequestFailure.class,
+                    failure -> assertThat(failure.kind()).isEqualTo(RequestFailure.Kind.NOT_FOUND));
+            assertThat(service().search(query("city", "Visakhapatnam"), false)).containsEntry("totalElements", 0L);
+            assertThat(as(owner, () -> service().search(query(), true))).containsEntry("totalElements", 0L);
+            assertThat(jdbc(0).queryForObject("select count(*) from property_images where property_id=? and validation_state='REJECTED' and object_key is null and content_type is null", Long.class, id)).isEqualTo(2L);
+            assertThat(jdbc(0).queryForObject("select revealed_date from contact_reveals where id=? and property_id=? and tenant_id=?", LocalDate.class, revealId, id, seeker)).isEqualTo(revealedDate);
+            assertThat(jdbc(0).queryForObject("select is_auto_broker_report from owner_reviews where property_id=?", Boolean.class, id)).isTrue();
+            assertThat(jdbc(0).queryForMap("select review_count,broker_report_count from users where id=?", owner))
+                    .containsEntry("review_count", 1L).containsEntry("broker_report_count", 1L);
+            media().purgeDeletedObjects();
+            assertThat(storage.finals).containsKey(firstFinal);
+            assertThat(storage.finals).doesNotContainKey(finals.getLast());
+            assertThat(jdbc(0).queryForObject("select next_attempt_at > statement_timestamp() from listing_object_deletions where object_key=?", Boolean.class, firstFinal)).isTrue();
+            assertThat(storage.staging.keySet()).containsAll(staging);
+            assertThat(jdbc(0).queryForObject("""
+                    select count(*) from listing_object_deletions d join property_images i on i.upload_object_key=d.object_key
+                    where i.property_id=? and d.bucket='STAGING' and d.next_attempt_at >= i.upload_expires_at + interval '5 minutes'
+                    """, Long.class, id)).isEqualTo(2L);
+        } finally {
+            storage.unavailableDeletes.remove(firstFinal);
+        }
+        jdbc(0).update("update listing_object_deletions set next_attempt_at=statement_timestamp() where object_key like ?", "listings/" + id + "/%");
+        while (Boolean.TRUE.equals(jdbc(0).queryForObject("""
+                select exists(select 1 from listing_object_deletions where next_attempt_at <= statement_timestamp())
+                """, Boolean.class))) media().purgeDeletedObjects();
+        assertThat(storage.finals.keySet()).doesNotContainAnyElementsOf(finals);
+        assertThat(storage.staging.keySet()).doesNotContainAnyElementsOf(staging);
+        assertThat(jdbc(0).queryForObject("select count(*) from listing_object_deletions where object_key like ?", Long.class, "listings/" + id + "/%")).isZero();
     }
     @Test void completionRetriesCannotAttachLaterStagingBytesAndCleanupPreservesAttachedObjects() throws Exception {
         UUID owner = owner(0, false);
@@ -278,10 +398,25 @@ class ListingLifecycleIT {
         assertThat(send(0, "GET", "/api/v1/listings/mine", replay, null, null).statusCode()).isEqualTo(401);
         assertThat(send(1, "GET", "/api/v1/listings/" + id, null, null, null).statusCode()).isEqualTo(404);
         assertThat(send(0, "GET", "/api/v1/listings/search?city=Mumbai", cookie, null, null).headers().firstValue("Cache-Control")).contains("no-store");
-        assertThatThrownBy(() -> as(owner(0, false), () -> service().change(id, inventory("ROOM", 0, true), "inventory"))).isInstanceOf(RequestFailure.class);
+        UUID stranger = owner(0, false);
+        assertThatThrownBy(() -> as(stranger, () -> service().change(id, inventory("ROOM", 0, true), "inventory"))).isInstanceOf(RequestFailure.class);
+        String strangerCookie = session(0, stranger, "production:primary");
+        var strangerCsrf = json.readTree(send(0, "GET", "/api/v1/auth/csrf", strangerCookie, null, null).body()).get("token").asString();
+        String path = "/api/v1/listings/" + id;
+        assertThat(send(0, "DELETE", path + "?version=0", strangerCookie, strangerCsrf, null).statusCode()).isEqualTo(403);
+        assertThat(send(0, "DELETE", path + "?version=0", cookie, null, null).statusCode()).isEqualTo(403);
+        assertThat(send(0, "DELETE", path, cookie, csrf, null).statusCode()).isEqualTo(400);
+        assertThat(send(0, "DELETE", path + "?version=-1", cookie, csrf, null).statusCode()).isEqualTo(400);
+        assertThat(send(0, "DELETE", path + "?version=1", cookie, csrf, null).statusCode()).isEqualTo(409);
+        var deleted = send(0, "DELETE", path + "?version=0", cookie, csrf, null);
+        assertThat(deleted.statusCode()).isEqualTo(200);
+        assertThat(deleted.headers().firstValue("Cache-Control")).hasValue("no-store");
+        assertThat(json.readTree(deleted.body()).get("deletedListingId").asString()).isEqualTo(id.toString());
+        assertThat(send(0, "GET", path, cookie, null, null).statusCode()).isEqualTo(404);
+        assertThat(send(0, "DELETE", path + "?version=0", cookie, csrf, null).statusCode()).isEqualTo(404);
     }
     @Test void migrationUpgradePreservesOriginalChecksumsAndValidatesMediaMetadata() {
-        assertThat(jdbc(0).queryForList("select version from flyway_schema_history where success order by installed_rank", String.class)).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10");
+        assertThat(jdbc(0).queryForList("select version from flyway_schema_history where success order by installed_rank", String.class)).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11");
         assertThat(jdbc(0).queryForList("select column_name from information_schema.columns where table_name='listing_owner_profiles'", String.class))
                 .containsExactlyInAnyOrder("id", "full_name", "average_rating", "review_count", "broker_report_count");
         UUID owner = owner(0, false);
@@ -405,6 +540,11 @@ class ListingLifecycleIT {
         }
         assertThatThrownBy(() -> media().presign(id, owner, node("{\"segment\":\"ROOM\",\"contentType\":\"image/png\",\"byteSize\":100}")))
                 .isInstanceOfSatisfying(RequestFailure.class, failure -> assertThat(failure.kind()).isEqualTo(RequestFailure.Kind.RATE_LIMITED));
+        as(owner, () -> service().delete(id, 0));
+        UUID replacement = (UUID) as(owner, () -> service().create(draft("PG_HOSTEL", "Lucknow", 5500))).get("id");
+        assertThatThrownBy(() -> media().presign(replacement, owner, node("{\"segment\":\"ROOM\",\"contentType\":\"image/png\",\"byteSize\":100}")))
+                .isInstanceOfSatisfying(RequestFailure.class, failure -> assertThat(failure.kind()).isEqualTo(RequestFailure.Kind.RATE_LIMITED));
+        for (int i = 0; i < 6; i++) media().purgeDeletedObjects();
     }
     @Test void recordsRepresentativeMultiCityQueryPlans() throws Exception {
         UUID owner = owner(0, false);
@@ -517,6 +657,7 @@ class ListingLifecycleIT {
     }
     @TestConfiguration(proxyBeanMethods = false)
     static class StorageConfiguration {
+        @Bean NoOpTaskScheduler taskScheduler() { return new NoOpTaskScheduler(); }
         @Bean @Primary ControlledStorage controlledStorage() { return new ControlledStorage(); }
         @Bean @Primary SnapshotJdbc snapshotJdbc(javax.sql.DataSource dataSource) { return new SnapshotJdbc(dataSource); }
     }
@@ -534,6 +675,7 @@ class ListingLifecycleIT {
     }
     static class ControlledStorage implements StorageObjects {
         final Map<String, byte[]> staging = new ConcurrentHashMap<>(), finals = new ConcurrentHashMap<>();
+        final Set<String> unavailableDeletes = ConcurrentHashMap.newKeySet();
         final java.util.concurrent.atomic.AtomicInteger uploads = new java.util.concurrent.atomic.AtomicInteger(), reads = new java.util.concurrent.atomic.AtomicInteger();
         private Instant modified = Instant.now();
         public boolean enabled() { return true; }
@@ -542,7 +684,10 @@ class ListingLifecycleIT {
         public byte[] read(String key, long size) { reads.incrementAndGet(); var bytes = staging.get(key); ListingInput.require(bytes != null && bytes.length == size); return bytes; }
         public void writeFinal(String key, byte[] bytes, String type) { if (finals.putIfAbsent(key, bytes) != null) throw new IllegalStateException(); }
         public String download(String key) { return "https://media.example.invalid/" + key; }
-        public void delete(Bucket bucket, String key) { (bucket == Bucket.STAGING ? staging : finals).remove(key); }
+        public void delete(Bucket bucket, String key) {
+            if (unavailableDeletes.contains(key)) throw new RequestFailure(RequestFailure.Kind.UNAVAILABLE);
+            (bucket == Bucket.STAGING ? staging : finals).remove(key);
+        }
         public void visit(Bucket bucket, java.util.function.Consumer<Stored> visitor) { List.copyOf((bucket == Bucket.STAGING ? staging : finals).keySet()).forEach(key -> visitor.accept(new Stored(key, modified))); }
         void ageAll() { modified = Instant.now().minus(Duration.ofDays(2)); }
     }

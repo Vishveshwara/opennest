@@ -1221,6 +1221,10 @@ input[type="checkbox"] {
   align-items: center;
   gap: 5px;
 }
+.danger-zone {
+  border-color: color-mix(in oklch, var(--destructive) 45%, var(--border));
+  background: color-mix(in oklch, var(--destructive) 4%, var(--card));
+}
 .upload-jobs {
   list-style: none;
   padding: 0;
