@@ -19,4 +19,6 @@ The npm lockfile records exact transitive resolutions. Tailwind 4, Zod 4, MapLib
 
 The development-only TypeScript ESLint dependency receives a scoped minimatch 11.0.1 override to address [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249). Lint/type/test/build checks must pass with that override. npm audit reported zero vulnerabilities after selection; repeat the audit when dependencies change.
 
+CI runs `npm run check:dependencies` in `frontend`. It audits the full dependency tree and temporarily allows [GHSA-fc5q-39xc-vjpf](https://github.com/advisories/GHSA-fc5q-39xc-vjpf) and its reported dependency paths only when every affected package is marked development-only in the lockfile. The production dependency audit reports zero findings as of 18 November 2026. The advisory has no patched release as of that date. Upgrade the affected dependency paths and restore the standard `npm audit --audit-level=moderate` command when a compatible fix is available.
+
 The supplied TweakCN registry item remains the source of theme values. The theme synchronization script validates the expected variable groups and writes the original JSON alongside CSS. Montserrat files and their OFL license are served locally, so builds and visitors do not need Google Fonts requests.

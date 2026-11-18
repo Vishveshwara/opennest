@@ -49,7 +49,7 @@ jobs:
           npm run lint
           npm test
           npm run build
-          npm audit --audit-level=moderate
+          npm run check:dependencies
       - name: Install the browser
         working-directory: frontend
         run: npx playwright install --with-deps chromium

@@ -20,7 +20,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "check:lan": "node scripts/check-lan-session.mjs"
+    "check:lan": "node scripts/check-lan-session.mjs",
+    "check:dependencies": "node scripts/check-dependency-audit.mjs"
   },
   "dependencies": {
     "@jsquash/avif": "2.1.1",
