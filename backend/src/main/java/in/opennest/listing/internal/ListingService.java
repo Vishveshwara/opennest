@@ -49,6 +49,7 @@ class ListingService {
                 "femaleRoomsAvailable", "sharedRoomsAvailable", "maxSharingPerRoom") : Set.of("version"));
         long version = ListingInput.version(body);
         return store.write(() -> {
+            store.owned(id, owner, false);
             accounts.lockForListingMutation(owner);
             var row = store.owned(id, owner, true);
             store.version(row, version);
@@ -76,6 +77,7 @@ class ListingService {
         ListingInput.require(version >= 0);
         var owner = caller();
         return store.write(() -> {
+            store.owned(id, owner, false);
             accounts.lockForListingMutation(owner);
             store.version(store.owned(id, owner, true), version);
             store.delete(id);

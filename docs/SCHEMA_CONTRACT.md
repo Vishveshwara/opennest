@@ -17,7 +17,7 @@ The [listing model](LISTING_MODEL.md), [search contract](LISTING_SEARCH.md), and
 ## Storage conventions
 
 - Eleven application tables live in public. V1 creates users, auth_identities, properties, property_images, contact_reveals, and owner_reviews. Later migrations add contact_verifications, telegram_login_receipts, sandbox_state, listing_records, and listing_object_deletions. Flyway history and PostGIS objects are additional infrastructure.
-- Each domain table has an `id uuid PRIMARY KEY` that is `NOT NULL` with no database default; sandbox_state instead has a singleton smallint key. The application supplies a random UUID before insertion. IDs never change; fixture IDs may be deterministic only in isolated sandbox/test databases.
+- Domain tables normally use an `id uuid PRIMARY KEY` with no default. `sandbox_state` uses a singleton smallint key, and `listing_object_deletions` uses the composite key `(bucket, object_key)`. The application supplies random UUIDs before insertion. Fixture IDs may be deterministic in isolated sandbox and test databases.
 - In the tables below, **required** means `NOT NULL`; **nullable** means SQL NULL is allowed. **None** means no explicit default. Nullable fields omitted on insert become NULL. Generated columns have no separate default and cannot accept a caller's value.
 - Enum-like values use `text` plus named `CHECK` constraints, mapped as strings later. Do not introduce PostgreSQL enum types or ordinal persistence. Every required enum also has `NOT NULL`.
 - Required free text has `CHECK (length(btrim(column)) > 0)`. Nullable text, when present, has the same nonblank check. This rejects empty/ASCII-space-only values; Unicode whitespace handling and future content/length limits belong to request validation. Technical keys are opaque, case-sensitive, and never silently trimmed or case-folded.
@@ -256,7 +256,7 @@ Phase 1.5's real PostgreSQL 17/PostGIS 3.5 checks cover the following schema acc
 - Verify Kolkata dates around 18:30 UTC and under changed session timezones, including historical fixtures. Verify object expiry and timestamp-order checks.
 - Keep service/transaction behaviors separate from these schema tests. Phase 1.6 now proves Hibernate validation and persistence round trips; publication/reveal quota and review concurrency belong to their feature phases. Broader application isolation and backend CI gates remain later Phase 1 tasks.
 
-Phase 2 approves and implements trust thresholds without changing the schema. Phase 3 implements listing services and the V3 additions below. Phase 3A adds the approved Telegram contact provenance through V4 and expiring login receipts through V5. Moderation/appeals, broader retention/erasure policy, future public map coarsening, and edit/deletion routes remain open. They do not authorize a service bypass or a public launch.
+Phase 2 implements trust thresholds. Phase 3 implements listing services and V3. Phase 3A adds Telegram contact provenance through V4 and expiring login receipts through V5. Later follow-ups implement owner photo and listing deletion. Text and price edits, photo replacement, moderation and appeals, and account retention and erasure remain open.
 
 ## Phase 3 V3 additions
 

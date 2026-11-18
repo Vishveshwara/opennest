@@ -165,8 +165,7 @@ export function Login() {
       setCode("");
       setFullName("");
       rotate();
-      await api.token();
-      await refresh();
+      void refresh().catch(() => {});
       router.replace(safeReturnPath(params.get("returnTo"), config.basePath));
       router.refresh();
     } catch (error) {
@@ -559,8 +558,7 @@ export function Personas() {
         { personaKey: key },
       );
       rotate();
-      await api.token();
-      await refresh();
+      void refresh().catch(() => {});
       router.replace(safeReturnPath(params.get("returnTo"), config.basePath));
       router.refresh();
     } catch (error) {

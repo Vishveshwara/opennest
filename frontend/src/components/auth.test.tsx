@@ -7,7 +7,7 @@ import {
   challengeStatusSchema,
   loginCompletionSchema,
 } from "@/lib/contracts";
-import { Login } from "./auth";
+import { Login, Personas } from "./auth";
 
 const doubles = vi.hoisted(() => ({
   api: { request: vi.fn(), token: vi.fn() },
@@ -197,7 +197,7 @@ it("creates a named account only after a valid OTP and reuses the same private c
   );
   expect(challengeCreations()).toHaveLength(1);
   expect(doubles.rotate).toHaveBeenCalledOnce();
-  expect(doubles.api.token).toHaveBeenCalledOnce();
+  expect(doubles.api.token).not.toHaveBeenCalled();
   expect(doubles.refresh).toHaveBeenCalledOnce();
   expect(doubles.router.replace).toHaveBeenCalledWith("/account");
 });
@@ -231,6 +231,8 @@ it("offers manual command copying when the clipboard is unavailable and removes 
 
 it("signs an existing account in without asking for a name or submitting a replacement name", async () => {
   returning = true;
+  const profile = Promise.withResolvers<void>();
+  doubles.refresh.mockReturnValueOnce(profile.promise);
   await startLogin();
   await submitCode();
   expect(screen.queryByRole("textbox", { name: "Full name" })).not.toBeInTheDocument();
@@ -241,6 +243,21 @@ it("signs an existing account in without asking for a name or submitting a repla
   expect(doubles.rotate).toHaveBeenCalledOnce();
   expect(doubles.refresh).toHaveBeenCalledOnce();
   expect(doubles.router.replace).toHaveBeenCalledWith("/account");
+  await act(async () => profile.resolve());
+});
+
+it("starts the selected persona's profile without fetching CSRF or waiting to navigate", async () => {
+  const profile = Promise.withResolvers<void>();
+  doubles.refresh.mockReturnValueOnce(profile.promise);
+  doubles.api.request
+    .mockResolvedValueOnce({ personas: [{ key: "owner", displayName: "Test owner" }] })
+    .mockResolvedValueOnce({ status: "AUTHENTICATED" });
+  await act(async () => render(<Personas />));
+  await act(async () => fireEvent.click(screen.getByRole("button", { name: /Test owner/ })));
+  expect(doubles.rotate).toHaveBeenCalledBefore(doubles.refresh);
+  expect(doubles.api.token).not.toHaveBeenCalled();
+  expect(doubles.router.replace).toHaveBeenCalledWith("/account");
+  await act(async () => profile.reject(new ApiError(503)));
 });
 
 it("waits for the resend deadline then posts an empty body, retains the challenge and replaces the cooldown", async () => {

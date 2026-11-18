@@ -94,7 +94,7 @@ test("public search is keyboard accessible in both themes and survives map failu
       await page
         .getByRole("button", { name: "Use dark theme", exact: true })
         .click();
-    const logo = dark ? "/opennest%20logo_dark.png" : "/opennest-logo.png";
+    const logo = dark ? "/opennest-logo-dark.png" : "/opennest-logo.png";
     await expect(page.locator(".site-header .brand-mark")).toHaveAttribute("src", logo);
     await expect(page.locator(".site-footer .brand-mark")).toHaveAttribute("src", logo);
     expect((await page.request.get(new URL(logo, sandboxUi).href)).ok()).toBe(true);

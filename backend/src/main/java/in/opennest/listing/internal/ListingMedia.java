@@ -95,8 +95,8 @@ class ListingMedia implements AutoCloseable {
             accounts.lockForListingMutation(owner);
             var listing = store.owned(property, owner, true);
             var row = image(property, id, true);
-            if ("REJECTED".equals(row.get("validation_state"))) return Map.of("deletedImageId", id, "listingPaused", false);
             store.queueImageDeletions(property, id);
+            if ("REJECTED".equals(row.get("validation_state"))) return Map.of("deletedImageId", id, "listingPaused", false);
             if (store.jdbc().update("update property_images set validation_state = 'REJECTED', object_key = null, content_type = null, byte_size = null, width = null, height = null where id = ?", id) != 1)
                 throw new RequestFailure(RequestFailure.Kind.CONFLICT);
             boolean published = !"PAUSED".equals(listing.get("status"));
@@ -177,7 +177,7 @@ class ListingMedia implements AutoCloseable {
                         where bucket = ? and object_key = ?
                         """, operation.bucket().name(), operation.key());
                 LOG.warn("OpenNest listing object deletion deferred after storage failure");
-                return;
+                continue;
             }
             store.jdbc().update("delete from listing_object_deletions where bucket = ? and object_key = ?",
                     operation.bucket().name(), operation.key());

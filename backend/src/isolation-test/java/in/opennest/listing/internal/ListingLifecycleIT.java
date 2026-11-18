@@ -23,6 +23,7 @@ import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.scheduling.support.NoOpTaskScheduler;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.context.SecurityContextImpl;
@@ -156,8 +157,10 @@ class ListingLifecycleIT {
         var deleted = send(0, "DELETE", path, cookie, csrf, null);
         assertThat(deleted.statusCode()).isEqualTo(200);
         assertThat(deleted.headers().firstValue("Cache-Control")).hasValue("no-store");
-        assertThat(jdbc(0).queryForObject("select count(*) from listing_object_deletions where object_key in (?,?)",
-                Long.class, roomStaging.getFirst(), roomStaging.getLast())).isZero();
+        var retryKey = jdbc(0).queryForObject("select upload_object_key from property_images where id=?", String.class, rooms.getFirst());
+        var queuedAt = jdbc(0).queryForObject("select next_attempt_at from listing_object_deletions where bucket='STAGING' and object_key=?", Timestamp.class, retryKey);
+        assertThat(media().delete(id, rooms.getFirst(), owner)).containsEntry("listingPaused", false);
+        assertThat(jdbc(0).queryForObject("select next_attempt_at from listing_object_deletions where bucket='STAGING' and object_key=?", Timestamp.class, retryKey)).isEqualTo(queuedAt);
     }
     @Test void simultaneousInventoryWritesHaveOneWinner() throws Exception {
         UUID owner = owner(0, false);
@@ -188,7 +191,10 @@ class ListingLifecycleIT {
         UUID id = (UUID) as(owner, () -> service().create(draft("PG_HOSTEL", "Visakhapatnam", 7100))).get("id");
         images(id, owner, "PG_HOSTEL");
         as(owner, () -> service().change(id, node("{\"version\":0}"), "publish"));
-        jdbc(0).update("insert into contact_reveals (id,tenant_id,property_id,owner_id) values (?,?,?,?)", UUID.randomUUID(), seeker, id, owner);
+        UUID revealId = UUID.randomUUID();
+        var revealedDate = jdbc(0).queryForObject("""
+                insert into contact_reveals (id,tenant_id,property_id,owner_id) values (?,?,?,?) returning revealed_date
+                """, LocalDate.class, revealId, seeker, id, owner);
         jdbc(0).update("insert into owner_reviews (id,property_id,owner_id,reviewer_id,rating,issue_tag,is_auto_broker_report) values (?,?,?,?,1,'ASKED_BROKERAGE',true)",
                 UUID.randomUUID(), id, owner, seeker);
         jdbc(0).update("update users set average_rating=1,review_count=1,broker_report_count=1 where id=?", owner);
@@ -212,12 +218,13 @@ class ListingLifecycleIT {
             assertThat(service().search(query("city", "Visakhapatnam"), false)).containsEntry("totalElements", 0L);
             assertThat(as(owner, () -> service().search(query(), true))).containsEntry("totalElements", 0L);
             assertThat(jdbc(0).queryForObject("select count(*) from property_images where property_id=? and validation_state='REJECTED' and object_key is null and content_type is null", Long.class, id)).isEqualTo(2L);
-            assertThat(jdbc(0).queryForObject("select count(*) from contact_reveals where property_id=? and tenant_id=? and revealed_date=(current_timestamp at time zone 'Asia/Kolkata')::date", Long.class, id, seeker)).isEqualTo(1L);
+            assertThat(jdbc(0).queryForObject("select revealed_date from contact_reveals where id=? and property_id=? and tenant_id=?", LocalDate.class, revealId, id, seeker)).isEqualTo(revealedDate);
             assertThat(jdbc(0).queryForObject("select is_auto_broker_report from owner_reviews where property_id=?", Boolean.class, id)).isTrue();
             assertThat(jdbc(0).queryForMap("select review_count,broker_report_count from users where id=?", owner))
                     .containsEntry("review_count", 1L).containsEntry("broker_report_count", 1L);
             media().purgeDeletedObjects();
             assertThat(storage.finals).containsKey(firstFinal);
+            assertThat(storage.finals).doesNotContainKey(finals.getLast());
             assertThat(jdbc(0).queryForObject("select next_attempt_at > statement_timestamp() from listing_object_deletions where object_key=?", Boolean.class, firstFinal)).isTrue();
             assertThat(storage.staging.keySet()).containsAll(staging);
             assertThat(jdbc(0).queryForObject("""
@@ -631,6 +638,7 @@ class ListingLifecycleIT {
     }
     @TestConfiguration(proxyBeanMethods = false)
     static class StorageConfiguration {
+        @Bean NoOpTaskScheduler taskScheduler() { return new NoOpTaskScheduler(); }
         @Bean @Primary ControlledStorage controlledStorage() { return new ControlledStorage(); }
         @Bean @Primary SnapshotJdbc snapshotJdbc(javax.sql.DataSource dataSource) { return new SnapshotJdbc(dataSource); }
     }

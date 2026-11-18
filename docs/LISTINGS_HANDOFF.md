@@ -101,7 +101,7 @@ V3 adds the public owner projection and six nullable image metadata columns with
 
 Roll out the AVIF-capable backend and V10 before the frontend writer. To roll back the writer, restore the previous frontend while retaining V10 and an AVIF-capable backend so new and existing photos remain readable. Do not downgrade to a backend that cannot validate AVIF while AVIF reservations or photos exist. Failed nontransactional constraint validation needs operator reconciliation; do not repair checksums or delete photos automatically. Hosted migration and provider smoke tests are still pending.
 
-Apply V11 through Flyway before enabling the deletion UI. V11 backfills IDs and owners without deleting content or changing V1–V10 checksums. A failed V11 migration rolls back as one transaction. Run only V11-compatible writers after deletion is available so reservation accounting and sandbox resets use the new schema. To withdraw the UI, keep the V11-compatible backend and worker so pending R2 jobs drain and retained quota history still counts.
+Before applying V11 to each database, drain listing reads and stop every previous backend instance and sandbox reset process connected to that database. This prevents lock contention with listing readers and keeps old reset code away from the new foreign keys. Start a V11-compatible backend to apply Flyway, verify migration success, then start the other compatible instances and enable the deletion UI. V11 backfills IDs and owners, preserves V1–V10 checksums, and rolls back as one transaction if it fails. To withdraw the UI, keep a compatible backend and worker running so pending R2 jobs drain and retained quota history still counts.
 
 Run from the repository root using Java 25 and Linux amd64 Docker:
 

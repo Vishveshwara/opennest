@@ -120,7 +120,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
 function BrandMark({ dark }: { dark: boolean }) {
   return (
     <Image
-      src={dark ? "/opennest%20logo_dark.png" : "/opennest-logo.png"}
+      src={dark ? "/opennest-logo-dark.png" : "/opennest-logo.png"}
       className="brand-mark"
       width={37}
       height={37}
