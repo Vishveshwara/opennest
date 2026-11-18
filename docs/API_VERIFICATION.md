@@ -1,6 +1,6 @@
 # OpenNest API verification with Telegram sessions
 
-This record covers the implemented authentication, listing, contact reveal, review/report and recruiter persona APIs. Phase 4 also implements sandbox image reads and operator CLI reset/telemetry, with no reset or telemetry HTTP routes. Frontend and deployment remain future work. Current local verification is recorded in [the Phase 4 handoff](PHASE4_HANDOFF.md).
+This record covers the implemented authentication, listing, contact reveal, review/report and recruiter persona APIs. Sandbox image reads are HTTP routes, and reset and telemetry use the operator CLI. See [the interaction handoff](PHASE4_HANDOFF.md), [the frontend handoff](PHASE5_HANDOFF.md), and [listing verification](LISTINGS_HANDOFF.md).
 
 On 10 November 2026 the maintainer completed a real local Telegram self-contact/OTP login in Postman and read the private profile with phoneVerified=true. The phone, account ID, cookies and code are deliberately absent from this record. This confirms local login/profile behavior; it does not establish hosted readiness or a live storage upload.
 
@@ -26,6 +26,7 @@ The lifecycle covers ENTIRE_FLAT, FLAT ROOM and PG_HOSTEL with fabricated data a
 | `POST /api/v1/listings/{id}/publish` | Required contact/images and quota remain enforced; current version activates mode-appropriate availability |
 | `PATCH /api/v1/listings/{id}/inventory` | Mode-appropriate body, version increments, stale conflict, published zero vacancy becomes FULL_OCCUPIED, PAUSED remains PAUSED |
 | `POST /api/v1/listings/{id}/pause` | Owner-only/current version, hides public listing while preserving owner access |
+| `DELETE /api/v1/listings/{id}?version={version}` | Separate ListingLifecycleIT HTTP coverage checks owner and CSRF, invalid and stale versions, no-store success, and 404 after deletion. |
 | `POST /api/v1/auth/logout` | Fresh CSRF required, 204, prior cookie loses owner authorization while public browsing remains available |
 | `POST /api/v1/webhooks/telegram` | Webhook transport only; exact secret required, browser CSRF exemption limited to this route; fake/group/forwarded/stale/mismatched contacts rejected |
 
@@ -58,7 +59,7 @@ The Java verification artifact is backend/target/backend-verification.json; oaut
 
 Use [the Postman guide](POSTMAN_API_GUIDE.md) and [Telegram setup](TELEGRAM_HANDOFF.md). Local login/profile is maintainer-confirmed. The complete listing lifecycle is tested on isolated stores with controlled storage, not written into the maintainer's real account. An additional anonymous smoke against localhost:8080 could not run because no backend was listening during this audit; no account/session data was accessed.
 
-Live R2 credentials, bucket CORS, direct signed upload/read and deployed provider behavior remain unverified. Storage-disabled upload endpoints intentionally return 503. Publication without required validated images returns 409. These responses do not indicate an authentication failure. Hosted HTTPS webhooks, live failure/logout/repeated-login checks, CI, production readiness and deployment remain separate gates.
+Live R2 deletion probes used synthetic PNGs and disposable PostGIS databases. Both permanent listing deletion and individual photo deletion caused the final objects and previously issued signed GETs to return 404 after the worker ran. Staging objects stayed available until their queue timestamps were advanced in the test databases, then returned 404 on the next run. Individual photo deletion left the listing available and a retry queued no work. Browser R2 CORS and hosted provider behavior remain separate checks. Storage-disabled upload endpoints return 503. Publication without required validated images returns 409.
 
 The Phase 3A result on 10 November 2026 was a clean Java 25/Linux amd64 Docker gate with 553 passing tests: 427 default, 53 schema/persistence, 25 datastore isolation, 17 listing lifecycle and 31 Telegram authentication/API integration cases. No failures, errors or skips occurred. Report/artifact validation, six Python checks, 20 isolated PowerShell launcher regressions, context limits and whitespace checks passed. Both Postman collections passed JSON, embedded-script syntax and substituted-request-body validation. The packaged artifact contains neither test fixtures nor OAuth/OIDC application classes/libraries. Current-branch CI was not run by this local verification.
 

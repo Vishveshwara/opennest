@@ -55,7 +55,7 @@ class SchemaMigrationIT {
             for (var database : databases) {
                 try (var connection = database.connect()) {
                     assertThat(value(connection, "SHOW server_version_num").toString()).startsWith("17");
-                    assertThat(value(connection, "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('users','auth_identities','properties','property_images','contact_reveals','owner_reviews','contact_verifications','telegram_login_receipts','sandbox_state')"))
+                    assertThat(value(connection, "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('users','auth_identities','properties','property_images','contact_reveals','owner_reviews','contact_verifications','telegram_login_receipts','sandbox_state','listing_records','listing_object_deletions')"))
                             .as("Integration databases must be fresh; this suite never cleans or drops a schema").isEqualTo(0L);
                 }
                 var application = new SpringApplication(OpenNestApplication.class);
@@ -80,7 +80,7 @@ class SchemaMigrationIT {
                     var context = application.run(arguments.toArray(String[]::new));
                     contexts.add(context);
                     var flyway = context.getBean(Flyway.class);
-                    assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("10");
+                    assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("11");
                     assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
                     assertThat(flyway.migrate().migrationsExecuted).isZero();
                     assertThat(flyway.getConfiguration().isCleanDisabled()).isTrue();
@@ -138,7 +138,7 @@ class SchemaMigrationIT {
     }
 
     @Test
-    void upgradesPopulatedV9WithoutChangingLegacyImagesOrChecksums() throws Exception {
+    void upgradesPopulatedV9ThroughV11WithoutChangingLegacyImagesOrHistory() throws Exception {
         try (var container = new PostgreSQLContainer(DockerImageName.parse("postgis/postgis:17-3.5").asCompatibleSubstituteFor("postgres"))
                 .withDatabaseName("opennest_avif_upgrade").withUsername("avif_upgrade").withPassword("fabricated-avif-upgrade")) {
             container.start();
@@ -151,7 +151,10 @@ class SchemaMigrationIT {
                         "object_key", "upgrade/final", "segment", "ROOM", "upload_expires_at", OffsetDateTime.now().plusHours(1),
                         "validation_state", "VALIDATED", "declared_content_type", "image/webp", "declared_byte_size", 50000000L,
                         "content_type", "image/webp", "byte_size", 50000000L, "width", 6000, "height", 4000));
-                var flyway = Flyway.configure().dataSource(container.getJdbcUrl(), container.getUsername(), container.getPassword()).load();
+                UUID tenant = user(connection), reveal = UUID.randomUUID(), review = UUID.randomUUID();
+                execute(connection, "INSERT INTO contact_reveals(id,tenant_id,property_id,owner_id) VALUES (?,?,?,?)", reveal, tenant, property, owner);
+                execute(connection, "INSERT INTO owner_reviews(id,property_id,owner_id,reviewer_id,rating,issue_tag,is_auto_broker_report) VALUES (?,?,?,?,1,'ASKED_BROKERAGE',true)", review, property, owner, tenant);
+                var flyway = Flyway.configure().dataSource(container.getJdbcUrl(), container.getUsername(), container.getPassword()).target("10").load();
                 assertThat(flyway.migrate().migrationsExecuted).isEqualTo(1);
                 assertThat(strings(connection, "SELECT version || ':' || checksum FROM flyway_schema_history WHERE version <> '10' ORDER BY installed_rank")).isEqualTo(history);
                 assertThat(value(connection, "SELECT content_type || ':' || byte_size || ':' || width || ':' || height || ':' || object_key FROM property_images WHERE id=?", image))
@@ -160,6 +163,17 @@ class SchemaMigrationIT {
                 assertThat(value(connection, "SELECT byte_size FROM property_images WHERE id=?", image)).isEqualTo(50000000L);
                 assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
                 assertThat(flyway.migrate().migrationsExecuted).isZero();
+                var v10History = strings(connection, "SELECT version || ':' || checksum FROM flyway_schema_history ORDER BY installed_rank");
+                var latest = Flyway.configure().dataSource(container.getJdbcUrl(), container.getUsername(), container.getPassword()).load();
+                assertThat(latest.migrate().migrationsExecuted).isEqualTo(1);
+                assertThat(strings(connection, "SELECT version || ':' || checksum FROM flyway_schema_history WHERE version <> '11' ORDER BY installed_rank")).isEqualTo(v10History);
+                assertThat(value(connection, "SELECT owner_id FROM listing_records WHERE id=?", property)).isEqualTo(owner);
+                assertThat(value(connection, "SELECT object_key FROM property_images WHERE id=?", image)).isEqualTo("upgrade/final");
+                assertThat(value(connection, "SELECT property_id FROM contact_reveals WHERE id=?", reveal)).isEqualTo(property);
+                assertThat(value(connection, "SELECT is_auto_broker_report FROM owner_reviews WHERE id=?", review)).isEqualTo(true);
+                assertThat(value(connection, "SELECT count(*) FROM listing_object_deletions")).isEqualTo(0L);
+                assertThat(latest.validateWithResult().validationSuccessful).isTrue();
+                assertThat(latest.migrate().migrationsExecuted).isZero();
             }
         }
     }
@@ -214,7 +228,7 @@ class SchemaMigrationIT {
             try (var connection = database.connect()) {
                 assertThat(value(connection, "SELECT public.PostGIS_Lib_Version()").toString()).startsWith("3.5.");
                 var tables = strings(connection, "SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE' AND table_name <> 'spatial_ref_sys' ORDER BY table_name");
-                assertThat(tables).containsExactly("auth_identities", "contact_reveals", "contact_verifications", "flyway_schema_history", "owner_reviews", "properties", "property_images", "sandbox_state", "telegram_login_receipts", "users");
+                assertThat(tables).containsExactly("auth_identities", "contact_reveals", "contact_verifications", "flyway_schema_history", "listing_object_deletions", "listing_records", "owner_reviews", "properties", "property_images", "sandbox_state", "telegram_login_receipts", "users");
                 for (String table : tables) {
                     if (!table.equals("flyway_schema_history")) {
                         assertThat(value(connection, "SELECT count(*) FROM public." + table)).isEqualTo(0L);
@@ -226,23 +240,23 @@ class SchemaMigrationIT {
                         FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid
                         JOIN pg_namespace n ON n.oid=c.relnamespace
                         LEFT JOIN pg_attrdef d ON d.adrelid=c.oid AND d.adnum=a.attnum
-                        WHERE n.nspname='public' AND c.relname IN ('users','auth_identities','properties','property_images','contact_reveals','owner_reviews','contact_verifications','telegram_login_receipts','sandbox_state')
+                        WHERE n.nspname='public' AND c.relname IN ('users','auth_identities','properties','property_images','contact_reveals','owner_reviews','contact_verifications','telegram_login_receipts','sandbox_state','listing_records','listing_object_deletions')
                             AND a.attnum>0 AND NOT a.attisdropped ORDER BY c.relname,a.attnum
                         """));
                 current += String.join("\n", strings(connection, "SELECT conrelid::regclass::text || ':' || conname || ':' || pg_get_constraintdef(oid) FROM pg_constraint WHERE connamespace='public'::regnamespace AND conname ~ '^(pk_|uq_|fk_|ck_)' ORDER BY conname"));
                 current += String.join("\n", strings(connection, "SELECT indexdef FROM pg_indexes WHERE schemaname='public' AND indexname LIKE 'ix_%' ORDER BY indexname"));
                 current += "\n" + ownerProfileViewFingerprint(connection);
                 var currentHistory = strings(connection, "SELECT version || ':' || checksum || ':' || success FROM public.flyway_schema_history WHERE version IS NOT NULL ORDER BY installed_rank");
-                assertThat(currentHistory).hasSize(10);
+                assertThat(currentHistory).hasSize(11);
                 if (fingerprint != null) {
                     assertThat(current).isEqualTo(fingerprint);
                     assertThat(currentHistory).isEqualTo(history);
                 }
                 fingerprint = current;
                 history = currentHistory;
-                assertThat(value(connection, "SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name IN ('users','auth_identities','properties','property_images','contact_reveals','owner_reviews','contact_verifications','telegram_login_receipts','sandbox_state')")).isEqualTo(92L);
+                assertThat(value(connection, "SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name IN ('users','auth_identities','properties','property_images','contact_reveals','owner_reviews','contact_verifications','telegram_login_receipts','sandbox_state','listing_records','listing_object_deletions')")).isEqualTo(97L);
                 assertThat(value(connection, "SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND is_generated='ALWAYS'")).isEqualTo(3L);
-                assertThat(value(connection, "SELECT count(*) FROM pg_constraint WHERE connamespace='public'::regnamespace AND contype='f' AND confdeltype='r' AND confupdtype='r' AND NOT condeferrable")).isEqualTo(9L);
+                assertThat(value(connection, "SELECT count(*) FROM pg_constraint WHERE connamespace='public'::regnamespace AND contype='f' AND confdeltype='r' AND confupdtype='r' AND NOT condeferrable")).isEqualTo(11L);
             }
         }
     }
@@ -506,10 +520,14 @@ class SchemaMigrationIT {
         fixture(target, f -> {
             image(f, "staging/restrict");
             reveal(f, f.entire(), "2026-10-21T18:30:00Z");
-            reject(f.db(), "23503", "DELETE FROM properties WHERE id=?", f.entire());
+            reject(f.db(), "23503", "DELETE FROM listing_records WHERE id=?", f.entire());
             reject(f.db(), "23503", "DELETE FROM users WHERE id=?", f.owner());
             reject(f.db(), "23503", "DELETE FROM users WHERE id=?", f.tenant());
             reject(f.db(), "23503", "UPDATE properties SET owner_id=? WHERE id=?", f.otherOwner(), f.entire());
+            execute(f.db(), "DELETE FROM properties WHERE id=?", f.entire());
+            reject(f.db(), "23503", "DELETE FROM listing_records WHERE id=?", f.entire());
+            assertThat(value(f.db(), "SELECT count(*) FROM contact_reveals WHERE property_id=?", f.entire())).isEqualTo(1L);
+            assertThat(value(f.db(), "SELECT count(*) FROM property_images WHERE property_id=?", f.entire())).isEqualTo(1L);
         });
     }
 
@@ -518,7 +536,7 @@ class SchemaMigrationIT {
     void installsAllDocumentedIndexesWithMixedSortDirections(int target) throws Exception {
         try (var connection = databases.get(target).connect()) {
             assertThat(strings(connection, "SELECT indexname FROM pg_indexes WHERE schemaname='public' AND indexname LIKE 'ix_%' ORDER BY indexname")).containsExactly(
-                    "ix_auth_identities_user", "ix_contact_reveals_property_owner", "ix_contact_reveals_tenant_day", "ix_contact_verifications_telegram_user", "ix_owner_reviews_owner", "ix_owner_reviews_property_owner", "ix_properties_city_filters", "ix_properties_city_newest", "ix_properties_city_rent_asc", "ix_properties_city_rent_desc", "ix_properties_location", "ix_properties_newest", "ix_properties_owner_status", "ix_properties_rent_asc", "ix_properties_rent_desc", "ix_property_images_property_order", "ix_telegram_login_receipts_expiry");
+                    "ix_auth_identities_user", "ix_contact_reveals_property_owner", "ix_contact_reveals_tenant_day", "ix_contact_verifications_telegram_user", "ix_listing_object_deletions_due", "ix_listing_records_owner", "ix_owner_reviews_owner", "ix_owner_reviews_property_owner", "ix_properties_city_filters", "ix_properties_city_newest", "ix_properties_city_rent_asc", "ix_properties_city_rent_desc", "ix_properties_location", "ix_properties_newest", "ix_properties_owner_status", "ix_properties_rent_asc", "ix_properties_rent_desc", "ix_property_images_property_order", "ix_telegram_login_receipts_expiry");
             assertThat(value(connection, "SELECT indexdef FROM pg_indexes WHERE schemaname='public' AND indexname='ix_properties_location'").toString()).contains("USING gist (location)");
             assertThat(value(connection, "SELECT indexdef FROM pg_indexes WHERE schemaname='public' AND indexname='ix_contact_verifications_telegram_user'").toString())
                     .contains("USING btree (telegram_user_id)");

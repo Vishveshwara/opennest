@@ -127,7 +127,11 @@ class R2Storage implements StorageObjects, AutoCloseable {
     }
     @Override public void delete(Bucket bucket, String key) {
         requireEnabled();
-        try { client.deleteObject(builder -> builder.bucket(bucket == Bucket.STAGING ? staging : finals).key(key)); }
+        try {
+            client.deleteObject(builder -> builder.bucket(bucket == Bucket.STAGING ? staging : finals).key(key)
+                    .overrideConfiguration(configuration -> configuration.apiCallTimeout(Duration.ofSeconds(10))
+                            .apiCallAttemptTimeout(Duration.ofSeconds(5))));
+        }
         catch (software.amazon.awssdk.core.exception.SdkException failure) { throw unavailable(); }
     }
     @Override public void visit(Bucket bucket, Consumer<Stored> visitor) {

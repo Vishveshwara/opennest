@@ -10,6 +10,8 @@ import java.util.UUID;
 import java.util.concurrent.Semaphore;
 import in.opennest.common.RequestFailure;
 import in.opennest.identity.IdentityAccounts;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
@@ -18,6 +20,7 @@ import tools.jackson.databind.JsonNode;
 class ListingMedia implements AutoCloseable {
     static final int MAX_BYTES = Integer.MAX_VALUE - 8;
     static final int MAX_IMAGES = 20;
+    private static final Logger LOG = LoggerFactory.getLogger(ListingMedia.class);
     private final ListingStore store;
     private final StorageObjects storage;
     private final IdentityAccounts accounts;
@@ -40,7 +43,7 @@ class ListingMedia implements AutoCloseable {
             accounts.lockForListingMutation(owner); store.owned(property, owner, true);
             long count = store.jdbc().queryForObject("select count(*) from property_images where property_id = ? and (validation_state = 'VALIDATED' or (validation_state = 'PENDING' and upload_expires_at > current_timestamp))", Long.class, property);
             if (count >= MAX_IMAGES) throw new RequestFailure(RequestFailure.Kind.CONFLICT);
-            long recent = store.jdbc().queryForObject("select count(*) from property_images i join properties p on p.id = i.property_id where p.owner_id = ? and i.created_at > current_timestamp - interval '24 hours'", Long.class, owner);
+            long recent = store.jdbc().queryForObject("select count(*) from property_images i join listing_records r on r.id = i.property_id where r.owner_id = ? and i.created_at > current_timestamp - interval '24 hours'", Long.class, owner);
             if (recent >= 60) throw new RequestFailure(RequestFailure.Kind.RATE_LIMITED);
             var id = UUID.randomUUID(); String key = "listings/" + property + "/" + id;
             var upload = storage.upload(key, type, size);
@@ -92,6 +95,8 @@ class ListingMedia implements AutoCloseable {
             accounts.lockForListingMutation(owner);
             var listing = store.owned(property, owner, true);
             var row = image(property, id, true);
+            if ("REJECTED".equals(row.get("validation_state"))) return Map.of("deletedImageId", id, "listingPaused", false);
+            store.queueImageDeletions(property, id);
             if (store.jdbc().update("update property_images set validation_state = 'REJECTED', object_key = null, content_type = null, byte_size = null, width = null, height = null where id = ?", id) != 1)
                 throw new RequestFailure(RequestFailure.Kind.CONFLICT);
             boolean published = !"PAUSED".equals(listing.get("status"));
@@ -154,6 +159,32 @@ class ListingMedia implements AutoCloseable {
         }
     }
     @Override public void close() { decoders.shutdownNow(); }
+
+    @Scheduled(fixedDelay = 30_000, initialDelay = 30_000)
+    void purgeDeletedObjects() {
+        if (!storage.enabled()) return;
+        var due = store.jdbc().query("""
+                select bucket, object_key from listing_object_deletions where next_attempt_at <= statement_timestamp()
+                order by next_attempt_at, bucket, object_key limit 10
+                """, (row, index) -> new ObjectDeletion(StorageObjects.Bucket.valueOf(row.getString(1)), row.getString(2)));
+        for (var operation : due) {
+            try {
+                storage.delete(operation.bucket(), operation.key());
+            } catch (RequestFailure failure) {
+                if (failure.kind() != RequestFailure.Kind.UNAVAILABLE) throw failure;
+                store.jdbc().update("""
+                        update listing_object_deletions set next_attempt_at = statement_timestamp() + interval '1 minute'
+                        where bucket = ? and object_key = ?
+                        """, operation.bucket().name(), operation.key());
+                LOG.warn("OpenNest listing object deletion deferred after storage failure");
+                return;
+            }
+            store.jdbc().update("delete from listing_object_deletions where bucket = ? and object_key = ?",
+                    operation.bucket().name(), operation.key());
+        }
+    }
+
+    private record ObjectDeletion(StorageObjects.Bucket bucket, String key) {}
 
     @Scheduled(fixedDelay = 3_600_000, initialDelay = 3_600_000)
     void cleanup() {

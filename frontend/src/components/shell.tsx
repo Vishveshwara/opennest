@@ -30,7 +30,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <header className="site-header">
         <div className="container header-inner">
           <Link href={path("/")} className="brand" aria-label="OpenNest home">
-            <BrandMark />
+            <BrandMark dark={dark} />
             OpenNest<span className="brand-dot">.</span>
           </Link>
           <nav aria-label="Main navigation">
@@ -94,7 +94,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <div className="container footer-inner">
           <div>
             <Link href={path("/")} className="brand">
-              <BrandMark />
+              <BrandMark dark={dark} />
               OpenNest<span className="brand-dot">.</span>
             </Link>
             <p>A place for your next chapter.</p>
@@ -115,10 +115,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function BrandMark() {
+function BrandMark({ dark }: { dark: boolean }) {
   return (
     <Image
-      src="/opennest-logo.png"
+      src={dark ? "/opennest%20logo_dark.png" : "/opennest-logo.png"}
       className="brand-mark"
       width={37}
       height={37}

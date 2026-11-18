@@ -72,6 +72,16 @@ class ListingService {
             return render(store.property(id, false), true);
         });
     }
+    Map<String, Object> delete(UUID id, long version) {
+        ListingInput.require(version >= 0);
+        var owner = caller();
+        return store.write(() -> {
+            accounts.lockForListingMutation(owner);
+            store.version(store.owned(id, owner, true), version);
+            store.delete(id);
+            return Map.of("deletedListingId", id);
+        });
+    }
     private Map<String, Object> render(Map<String, Object> row, boolean owner) {
         var id = (UUID) row.get("id");
         return store.response(row, owner, store.images(List.of(id)).getOrDefault(id, List.of()), media);

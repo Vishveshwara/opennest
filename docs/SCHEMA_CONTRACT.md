@@ -10,13 +10,13 @@
 
 # OpenNest database schema contract
 
-Status: Phase 1.4 design implemented by Phase 1.5's V1 schema/V2 indexes and Phase 1.6's module-owned mappings/Hibernate validation, verified on isolated PostgreSQL 17/PostGIS 3.5 targets on 22 October 2026. See [migration execution](BACKEND_MIGRATIONS.md) and [persistence evidence](BACKEND_PERSISTENCE.md). Phase 3 adds V3 media metadata/listing services, and Phase 3A adds V4 current contact provenance plus V5 expiring login receipts, described below. Phase 4 adds V7 sandbox reset metadata and implements interaction APIs. Current totals are nine application tables/92 columns with six ORM mappings/76 columns. V8 expands legacy image constraints; V9 adds bounded AVIF; V10 removes its product byte cap while retaining dimension/transport checks. Neither adds tables or columns. Hosted databases are not migrated; update triggers remain unimplemented.
+The V1 schema, V2 indexes, and Hibernate mappings were verified on isolated PostgreSQL 17/PostGIS 3.5. V3 adds media metadata, V4 contact provenance, V5 login receipts, V6 the Telegram sender index, and V7 sandbox reset metadata. V8–V10 update image constraints. V11 adds listing deletion, bringing the totals to eleven application tables and 97 columns. The six ORM mappings still cover 76 columns. See [migration execution](BACKEND_MIGRATIONS.md) and [persistence evidence](BACKEND_PERSISTENCE.md).
 
 The [listing model](LISTING_MODEL.md), [search contract](LISTING_SEARCH.md), and [authentication decisions](AUTHENTICATION.md) remain authoritative for feature behavior. Production and sandbox use identical migrations in separate databases. No row-level sandbox flag or request-selected database is introduced.
 
 ## Storage conventions
 
-- Nine application tables live in public: users, auth_identities, properties, property_images, contact_reveals, owner_reviews, contact_verifications, telegram_login_receipts and sandbox_state. V1 introduced the first six; V4/V5 introduced the receipt tables. Flyway history and PostGIS objects are additional infrastructure.
+- Eleven application tables live in public. V1 creates users, auth_identities, properties, property_images, contact_reveals, and owner_reviews. Later migrations add contact_verifications, telegram_login_receipts, sandbox_state, listing_records, and listing_object_deletions. Flyway history and PostGIS objects are additional infrastructure.
 - Each domain table has an `id uuid PRIMARY KEY` that is `NOT NULL` with no database default; sandbox_state instead has a singleton smallint key. The application supplies a random UUID before insertion. IDs never change; fixture IDs may be deterministic only in isolated sandbox/test databases.
 - In the tables below, **required** means `NOT NULL`; **nullable** means SQL NULL is allowed. **None** means no explicit default. Nullable fields omitted on insert become NULL. Generated columns have no separate default and cannot accept a caller's value.
 - Enum-like values use `text` plus named `CHECK` constraints, mapped as strings later. Do not introduce PostgreSQL enum types or ordinal persistence. Every required enum also has `NOT NULL`.
@@ -106,7 +106,7 @@ PostgreSQL accepts a CHECK whose result is NULL; mode/aggregate checks must ther
 | `created_at` | `timestamptz` | required | `statement_timestamp()` | Creation instant, not publication time |
 | `updated_at` | `timestamptz` | required | `statement_timestamp()` | >= created_at |
 
-`uq_properties_id_owner` is UNIQUE(id, owner_id), in addition to the primary key. Interaction tables reference that pair so stored owner attribution cannot disagree with its property. This extra unique key is intentional.
+`uq_properties_id_owner` is UNIQUE(id, owner_id), in addition to the primary key. V11 binds that pair to listing_records. This preserves owner attribution when the property payload is removed.
 
 `ck_properties_mode_inventory` admits exactly these complete branches. Each required nullable-column condition must include `IS NOT NULL`, in addition to its value/range test:
 
@@ -133,7 +133,7 @@ Landmarks are optional enrichment: an empty array is valid and an outage must no
 | Column | SQL type | Nullability | Default | Database rule |
 | --- | --- | --- | --- | --- |
 | `id` | `uuid` | required | None | Primary key, reserved before presign |
-| `property_id` | `uuid` | required | None | FK to properties(id) |
+| `property_id` | `uuid` | required | None | FK to listing_records(id) since V11 |
 | `upload_object_key` | `text` | required | None | Nonblank, unique staging key |
 | `object_key` | `text` | nullable | None | Nonblank when present, unique final key |
 | `segment` | `text` | required | None | ROOM, HALL, BATHROOM, KITCHEN, or EXTERIOR_AMENITY |
@@ -157,7 +157,7 @@ Landmarks are optional enrichment: an empty array is valid and an outage must no
 | `id` | `uuid` | required | None | Primary key |
 | `tenant_id` | `uuid` | required | None | FK to users(id); seeking account, not a global role |
 | `property_id` | `uuid` | required | None | Part of composite property/owner FK |
-| `owner_id` | `uuid` | required | None | (property_id, owner_id) FK to properties(id, owner_id) |
+| `owner_id` | `uuid` | required | None | (property_id, owner_id) FK to listing_records(id, owner_id) since V11 |
 | `revealed_date` | `date` | required | Generated stored | Kolkata date of created_at |
 | `created_at` | `timestamptz` | required | `statement_timestamp()` | Ledger insertion instant |
 
@@ -174,7 +174,7 @@ The explicit-zone expression follows [PostgreSQL AT TIME ZONE](https://www.postg
 | --- | --- | --- | --- | --- |
 | `id` | `uuid` | required | None | Immutable primary key |
 | `property_id` | `uuid` | required | None | Part of composite property/owner FK |
-| `owner_id` | `uuid` | required | None | (property_id, owner_id) FK to properties(id, owner_id) |
+| `owner_id` | `uuid` | required | None | (property_id, owner_id) FK to listing_records(id, owner_id) since V11 |
 | `reviewer_id` | `uuid` | required | None | FK to users(id) |
 | `rating` | `smallint` | required | None | 1..5 |
 | `issue_tag` | `text` | required | None | GENUINE_OWNER, ASKED_BROKERAGE, MAINTENANCE_ISSUE, FAKE_PHOTOS, or OTHER |
@@ -203,7 +203,7 @@ The exact FK graph is below. Every edge uses RESTRICT for updates/deletes, witho
 | owner_reviews(reviewer_id) | users(id) |
 | owner_reviews(property_id, owner_id) | properties(id, owner_id) |
 
-Deleting a referenced user/property must fail instead of silently erasing identities, image reservations, quota history, or review eligibility. This is a conservative initial FK action, not an approved retention policy. No deletion endpoint, purge job, or retention period is defined. Future erasure/anonymization must coordinate database history and object storage under the pending policy.
+The V1/V2 graph required user and property deletions to fail while dependent records referenced them. V11 allows the service to delete the property payload while retaining a restricted identity row and its history. Future account erasure or anonymization still requires its own policy.
 
 Primary/unique keys in V1 create their own indexes; do not duplicate them. Phase 1.5's V2 adds these nonunique indexes:
 
@@ -242,7 +242,7 @@ Do not promise these indexes satisfy every filter/sort combination. Phase 3 reco
 | Reviews/reports | Unique pair, rating/tag/report shape, owner FK, no self-review | Historical reveal; create-only ordinary reviews; preserved conversion identity/text; idempotent reports |
 | Aggregates | Nonnegative consistent count/rating shape | All writers serialize on owner; recompute from reviews atomically; no client aggregate writes |
 | Privacy/isolation | Separate databases share this schema; no sandbox flags | Separate credentials/stores/sessions/caches; authorized DTOs; sandbox contact actions disabled |
-| Lifecycle | RESTRICT FKs prevent implicit dependency deletion | No delete/retention flow until policy is approved; never hide listings automatically |
+| Lifecycle | RESTRICT FKs protect identities and history | V11 allows explicit owner listing deletion. Ratings and reports never hide a listing automatically. |
 
 No triggers, cross-table CHECK functions, runtime database roles, or cross-module Java contracts are added in Phase 1.4. Trusted database writes can bypass service-only rules; transaction tests and restricted deployment privileges remain necessary.
 
@@ -252,7 +252,7 @@ Phase 1.5's real PostgreSQL 17/PostGIS 3.5 checks cover the following schema acc
 - Accept all three valid rental branches, studio FLAT, zero applicable vacancies, PAUSED drafts, all published states with matching vacancy, multiple phone-less users, and unrated owners.
 - Reject every incomplete/NULL-leaking mode branch, wrong capacity/counter fields, negative inputs, inconsistent published status, and direct assignments to generated columns. Test room totals beyond integer range without overflow.
 - Verify coordinate edges, longitude/latitude orientation, generated-point updates, coarse-box rejections, and metre-based spatial behavior. Do not claim strict India geofencing.
-- Verify unique identity/phone/review/daily-pair keys; duplicate nullable phones/final keys remain valid. Reject mismatched property owners, self-reveals/reviews, invalid report shape, bad image finalization state, and referenced-user/property deletion.
+- Verify unique identity, phone, review, and daily-pair keys while allowing multiple NULL phones and final keys. Reject mismatched owners, self-reveals and self-reviews, invalid report shape, bad image state, and removal of referenced users or retained listing records.
 - Verify Kolkata dates around 18:30 UTC and under changed session timezones, including historical fixtures. Verify object expiry and timestamp-order checks.
 - Keep service/transaction behaviors separate from these schema tests. Phase 1.6 now proves Hibernate validation and persistence round trips; publication/reveal quota and review concurrency belong to their feature phases. Broader application isolation and backend CI gates remain later Phase 1 tasks.
 
@@ -278,6 +278,12 @@ V8 replaces `ck_property_images_declared_metadata` and `ck_property_images_valid
 V9 adds `image/avif` with a 4,000,000-byte limit on declared/final metadata and 2,048-pixel final dimensions. JPEG/PNG/WebP checks and nullable legacy groups are preserved exactly. It uses the same committed NOT VALID replacement plus two validation transactions as V8, covered for both versions by PostgreSQL event-trigger tests. A populated V8 upgrade verifies saved large WebP metadata, unchanged V1-V8 checksums and repeat migration idempotency. There are still nine application tables/92 columns and six ORM mappings/76 columns. Apply migrations through V10 with the AVIF-capable backend before releasing the browser writer; rollback guidance is in [LISTINGS_HANDOFF.md](LISTINGS_HANDOFF.md). No shared or hosted database was migrated.
 
 V10 implements the subsequent maintainer request to remove the 4 MB converted-output limit. All four media types now share the existing 1..2,147,483,639-byte transport bound; AVIF retains its 2,048-pixel side limits, all-or-none metadata and VALIDATED state requirements. Application heap admission still runs before signing/downloading and decoding. The new migration preserves V1-V9 bytes/checksums and existing rows, using the same committed replacement and separate validations. Upgrade tests preserve populated V9 data/history and then accept AVIF metadata above 4 MB. No hosted database was migrated.
+
+### V11 permanent listing deletion
+
+- `listing_records` stores the listing UUID primary key and required owner UUID. V11 backfills all existing pairs and registers new pairs through a BEFORE INSERT trigger on properties. The restrictive FKs keep property ownership stable and preserve identity, image reservation, reveal, and review history when the listing payload is removed. The owner index supports rolling upload quota lookup.
+- `listing_object_deletions` stores a bucket selector, private object key, and next attempt timestamp, all required. The primary key is (bucket, object_key). The due index covers (next_attempt_at, bucket, object_key). Deletion commits this queue alongside property removal and image detachment. Successful R2 deletion removes the queue row. Jobs survive sandbox resets and refer to exact keys so a reset cannot send new uploads to the old job.
+- V11 changes no prior migration checksums or ORM entity mappings. It runs in one transaction. The populated upgrade test verifies preservation of listing ownership, image metadata, contact reveals, and reviews. The service and rollback sequence are in [the listings handoff](LISTINGS_HANDOFF.md).
 
 ## Phase 3A V4 contact receipt
 
@@ -309,7 +315,7 @@ Telegram account identity uses fixed issuer https://telegram.org and validated s
 
 ## Phase 4 reset metadata
 
-V7 adds sandbox_state through Flyway; V1-V6 are unchanged. It has id smallint primary key constrained to 1, seed_version integer >0, generation bigint >0, reset_interval bigint >=0, and reset_at timestamptz. All five columns are required and have no defaults. The migration inserts no rows in either database. Current totals are nine application tables and 92 columns; the six entity mappings remain unchanged at 76 columns.
+V7 adds sandbox_state through Flyway. It has id smallint primary key constrained to 1, seed_version integer >0, generation bigint >0, reset_interval bigint >=0, and reset_at timestamptz. All five columns are required and have no defaults. The migration inserts no rows in either database. V7 brought the schema to nine application tables and 92 columns, with six entity mappings covering 76 columns.
 
 Sandbox tooling alone initializes metadata alongside fabricated fixtures. Reset takes the exclusive advisory lock, deletes child rows before parent rows, reseeds, and increments generation in one transaction. Scheduled interval values use Kolkata six-hour boundaries. Normal sandbox transactions take the shared advisory lock. Snapshot reads also lock the metadata row, rejecting pre-reset repeatable-read snapshots rather than accepting an old generation.
 

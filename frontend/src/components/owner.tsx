@@ -20,6 +20,7 @@ import {
   presignSchema,
   imageSchema,
   deletedImageSchema,
+  deletedListingSchema,
   uuid,
   type OwnerListing,
   type ImageSegment,
@@ -588,6 +589,33 @@ function ManageListing({ id }: { id: string }) {
       setBusy(false);
     }
   }
+  async function deleteListing() {
+    if (!listing) return;
+    setBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      await api.request(
+        `/api/v1/listings/${id}?version=${listing.version}`,
+        deletedListingSchema,
+        "DELETE",
+      );
+      router.replace(`${config.basePath}/my-listings`);
+      router.refresh();
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 409) {
+        try {
+          await load();
+          setError("The listing changed. Review the refreshed version before trying again.");
+        } catch {
+          setError("The listing changed and could not be refreshed. Reload the page before trying again.");
+        }
+      } else {
+        setError(errorMessage(error));
+      }
+      setBusy(false);
+    }
+  }
   if (!listing)
     return (
       <>
@@ -676,6 +704,19 @@ function ManageListing({ id }: { id: string }) {
               {listing.latitude}, {listing.longitude}. Only you can access these
               exact values.
             </p>
+          </section>
+          <section className="panel danger-zone">
+            <h2>Delete listing</h2>
+            <p>This permanently removes the listing and its photos.</p>
+            <ConfirmDialog
+              title="Delete this listing?"
+              description="OpenNest will remove the listing and queue its photos for deletion. Existing reviews still count toward your owner rating."
+              trigger="Delete listing"
+              triggerVariant="destructive"
+              confirmLabel="Delete listing"
+              busy={busy}
+              confirm={deleteListing}
+            />
           </section>
         </div>
         <aside>

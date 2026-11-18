@@ -103,6 +103,31 @@ class ListingStore {
         if (jdbc.update("update properties set status = ?, version = version + 1, updated_at = greatest(created_at, current_timestamp) where id = ? and version = ?",
                 status, id, version) != 1) throw new RequestFailure(RequestFailure.Kind.CONFLICT);
     }
+    void queueImageDeletions(UUID property, UUID image) {
+        var keyPrefix = "listings/" + property + "/%";
+        jdbc.update("""
+                with images as (
+                    select object_key, upload_object_key, upload_expires_at
+                    from property_images where property_id = ? and id = coalesce(?, id)
+                )
+                insert into listing_object_deletions (bucket, object_key, next_attempt_at)
+                select 'FINAL', object_key, statement_timestamp()
+                from images where object_key like ?
+                union all
+                select 'STAGING', upload_object_key, greatest(statement_timestamp(), upload_expires_at + interval '5 minutes')
+                from images where upload_object_key like ?
+                on conflict (bucket, object_key) do nothing
+                """, property, image, keyPrefix, keyPrefix);
+    }
+    void delete(UUID id) {
+        queueImageDeletions(id, null);
+        jdbc.update("""
+                update property_images set validation_state = 'REJECTED', object_key = null,
+                    content_type = null, byte_size = null, width = null, height = null
+                where property_id = ? and validation_state <> 'REJECTED'
+                """, id);
+        if (jdbc.update("delete from properties where id = ?", id) != 1) throw new RequestFailure(RequestFailure.Kind.CONFLICT);
+    }
     private void inventoryValues(Map<String, Object> values, ListingInput.Inventory inventory) {
         switch (inventory) {
             case ListingInput.EntireFlat flat -> { values.put("whole_flat_available", flat.available()); values.put("max_occupants", flat.capacity()); }

@@ -38,6 +38,9 @@ export const deletedImageSchema = z.object({
   deletedImageId: uuid,
   listingPaused: z.boolean(),
 });
+export const deletedListingSchema = z.object({
+  deletedListingId: uuid,
+});
 const commonListing = z.object({
   id: uuid,
   ownerId: uuid,

@@ -64,9 +64,10 @@ class InteractionService {
         var input = report ? null : InteractionInput.review(body);
         if (report) InteractionInput.empty(body);
         return store.write(() -> {
-            var listing = listings.find(id, false);
-            if (caller.equals(listing.ownerId())) throw new RequestFailure(RequestFailure.Kind.FORBIDDEN);
-            accounts.lock(listing.ownerId());
+            var owner = listings.find(id, false).ownerId();
+            if (caller.equals(owner)) throw new RequestFailure(RequestFailure.Kind.FORBIDDEN);
+            accounts.lock(owner);
+            var listing = listings.find(id, true);
             if (!store.historical(caller, id, listing.ownerId()))
                 throw new RequestFailure(listing.published() ? RequestFailure.Kind.FORBIDDEN : RequestFailure.Kind.NOT_FOUND);
             var existing = store.review(caller, id);
