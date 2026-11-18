@@ -181,8 +181,8 @@ hr {
 .brand-mark {
   border: 1px solid var(--border);
   background: var(--background);
-  display: grid;
-  place-items: center;
+  object-fit: contain;
+  flex-shrink: 0;
   height: 37px;
   width: 37px;
   margin-right: 10px;
