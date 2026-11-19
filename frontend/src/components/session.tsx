@@ -34,9 +34,9 @@ function createSessionClient(
     unavailable: (error: unknown) => void;
   },
 ) {
-  let activeCheck: AbortController | null = null;
+  let activeCheck: { timeout: ReturnType<typeof setTimeout> } | null = null;
   function cancelCheck() {
-    activeCheck?.abort();
+    if (activeCheck) clearTimeout(activeCheck.timeout);
     activeCheck = null;
   }
   const api = browserApi(origin, () => {
@@ -45,20 +45,22 @@ function createSessionClient(
   });
   function checkSession(refreshing = false) {
     cancelCheck();
-    const check = new AbortController();
+    const check = {
+      timeout: setTimeout(() => {
+        if (activeCheck !== check) return;
+        activeCheck = null;
+        update.unavailable(new ApiError(503));
+      }, SESSION_CHECK_TIMEOUT_MS),
+    };
     activeCheck = check;
-    const timeout = setTimeout(() => check.abort(), SESSION_CHECK_TIMEOUT_MS);
-    return api
-      .probe("/api/v1/users/me", accountSchema, check.signal)
+    void api
+      .probe("/api/v1/users/me", accountSchema)
       .then((profile) => {
-        check.signal.throwIfAborted();
-        update.ready(profile);
-        return profile;
+        if (activeCheck === check) update.ready(profile);
       })
       .catch((error) => {
-        if (activeCheck !== check) throw error;
-        const failure = check.signal.aborted ? new ApiError(503) : error;
-        if (failure instanceof ApiError && failure.status === 401) {
+        if (activeCheck !== check) return;
+        if (error instanceof ApiError && error.status === 401) {
           if (refreshing) {
             api.clear();
             update.expired();
@@ -66,13 +68,11 @@ function createSessionClient(
             update.ready(null);
           }
         } else {
-          update.unavailable(failure);
+          update.unavailable(error);
         }
-        throw failure;
       })
       .finally(() => {
-        clearTimeout(timeout);
-        if (activeCheck === check) activeCheck = null;
+        if (activeCheck === check) cancelCheck();
       });
   }
   return { api, cancelCheck, checkSession };
@@ -110,7 +110,7 @@ export function SessionProvider({
   }, [config.browserApiOrigin]);
   const startProfileCheck = () => {
     setStatus("checking");
-    void checkSession(true).catch(() => {});
+    checkSession(true);
   };
   const rotate = () => {
     api.clear();
@@ -120,7 +120,7 @@ export function SessionProvider({
     startProfileCheck();
   };
   useEffect(() => {
-    void checkSession().catch(() => {});
+    checkSession();
     return cancelCheck;
   }, [cancelCheck, checkSession]);
   const logout = async () => {

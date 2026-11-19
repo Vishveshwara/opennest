@@ -1,0 +1,16 @@
+**
+!backend/
+!backend/.mvn/
+!backend/.mvn/**
+!backend/mvnw
+!backend/pom.xml
+!backend/src/
+!backend/src/**
+!backend/Dockerfile
+!LICENSE
+!docs/
+!docs/THIRD_PARTY_NOTICES.md
+!docs/verification/
+!docs/verification/backend-dependencies/
+!docs/verification/backend-dependencies/settings.xml
+**/.env*

@@ -6,7 +6,7 @@
 
 Telegram Bot API is the sole authentication provider by maintainer decision on 10 November 2026. Local bot identity/webhook-state checks passed, and the maintainer confirmed real local OTP authentication plus the verified private profile on 10 November. Production HTTPS webhook routing, hosted browser behavior, and deployment remain unverified. See [Telegram setup](TELEGRAM_HANDOFF.md). No infrastructure is provisioned by this change.
 
-Status: deployment proposal, reviewed against provider documentation on 21 October 2026; website and Java target updated by maintainer decision on 22 October 2026. Local datastore Compose, foundation CI, and the Phase 1 backend foundation exist. Dependency resolution, Java 25 tests, startup guards, and real PostGIS/Redis container isolation are verified locally as of 30 October 2026; the [handoff](BACKEND_HANDOFF.md) records review corrections and regression results. Phase 2 controlled-provider tests locally verify browser-bound state and session isolation. Hosted browser routing, repeated real-provider flows, and hosted deployment integration remain unverified. Production Compose, Dockerfiles, Caddy configuration, cloud resources, and deployment workflows are not implemented.
+Status: deployment proposal, reviewed against provider documentation on 21 October 2026; website and Java target updated by maintainer decision on 22 October 2026. Local datastore Compose, foundation CI, and the Phase 1 backend foundation exist. Dependency resolution, Java 25 tests, startup guards, and real PostGIS/Redis container isolation are verified locally as of 30 October 2026; the [handoff](BACKEND_HANDOFF.md) records review corrections and regression results. Phase 2 controlled-provider tests locally verify browser-bound state and session isolation. Hosted browser routing, repeated real-provider flows, and hosted deployment integration remain unverified. The repository includes a Linux x86-64 backend Dockerfile for a Render preview. Production Compose, Caddy configuration, cloud resources, and deployment workflows remain pending.
 
 This replaces the supplied deployment draft where it conflicts with the [project plan](PROJECT_PLAN.md), [authentication decisions](AUTHENTICATION.md), or existing infrastructure. OpenNest remains India-wide and licensed under [AGPL-3.0-only](../LICENSE). Hosting in Mumbai does not limit listing coverage to that region.
 
@@ -16,6 +16,13 @@ This replaces the supplied deployment draft where it conflicts with the [project
 - No AWS account or credits exist yet. Eligibility, available services, credit balance, and expiry must be checked after account creation.
 - The planned public website is [opennest.co.in](https://opennest.co.in), confirmed on 22 October 2026. Domain ownership/control, DNS, TLS, and live hosting have not been verified. API, sandbox, and media hostnames remain undecided.
 - Begin with local development and isolated previews. Confirm the public deployment's budget and routing arrangement before provisioning it. This document does not authorize purchases or deployment.
+
+### Render backend preview
+
+- Build from the repository root with `backend/Dockerfile`. The image uses Java 25 and the native AVIF libraries. Build the image after CI passes for the release commit. The root `.dockerignore` limits the build context to the backend and required build and license files.
+- Supply the Supabase session pooler host, port, database, username, and password through `DB_*` settings. Upload the Supabase CA as a Render secret file and set `DB_SSL_ROOT_CERT=/etc/secrets/supabase-ca.crt`. The runtime user belongs to group `1000` to read Render secret files. [Render Docker secret files](https://render.com/docs/docker-secrets#accessing-secret-files-at-runtime)
+- Enable internal authentication on the Render Key Value instance. Use the host, port, username, and password from its authenticated internal connection string as the separate `REDIS_*` values. Set `noeviction` for session-bearing Redis. [Render Key Value](https://render.com/docs/key-value)
+- Verify the Supabase connection, Flyway migrations, search, and session handling on the hosted preview before enabling additional features. The existing migrations expect PostGIS in `public`.
 
 ## Proposed stack and cost boundaries
 

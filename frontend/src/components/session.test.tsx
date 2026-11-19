@@ -52,25 +52,41 @@ it("labels an unfinished session check without implying the visitor is signed in
 it("lets a stalled check time out and retry into the existing account", async () => {
   vi.useFakeTimers();
   try {
+    const abort = vi.spyOn(AbortController.prototype, "abort");
+    const stalled = Promise.withResolvers<Response>();
     const fetch = vi.fn()
-      .mockImplementationOnce((_url: string, { signal }: RequestInit) =>
-        new Promise<Response>((_resolve, reject) => {
-          signal?.addEventListener("abort", () => reject(signal.reason), { once: true });
-        }),
-      )
+      .mockImplementationOnce((_url: string, { signal }: RequestInit) => {
+        signal?.addEventListener("abort", () => stalled.reject(signal.reason), { once: true });
+        return stalled.promise;
+      })
       .mockResolvedValueOnce(Response.json(profile));
     vi.stubGlobal("fetch", fetch);
     render(<SessionProvider config={getConfig()}><Shell><AuthGate>Private content</AuthGate></Shell></SessionProvider>);
     await act(() => vi.advanceTimersByTimeAsync(8_000));
     expect(screen.getByText("Sign-in unavailable")).toBeInTheDocument();
+    expect(abort).not.toHaveBeenCalled();
     expect(screen.queryByText("Sign in to continue")).not.toBeInTheDocument();
     const retry = screen.getByRole("button", { name: "Retry session check" });
     await act(async () => fireEvent.click(retry));
+    await act(async () => stalled.resolve(new Response(null, { status: 401 })));
     expect(screen.getByRole("link", { name: "My account: Test Resident" })).toBeInTheDocument();
     expect(screen.getByText("Private content")).toBeInTheDocument();
   } finally {
     vi.useRealTimers();
   }
+});
+
+it("ignores a superseded profile failure during Strict Mode cleanup without aborting fetch", async () => {
+  const abort = vi.spyOn(AbortController.prototype, "abort");
+  const previous = Promise.withResolvers<Response>();
+  vi.stubGlobal("fetch", vi.fn().mockReturnValueOnce(previous.promise)
+    .mockResolvedValueOnce(new Response(null, { status: 401 })));
+
+  mount();
+  expect(await screen.findByText("Session check complete")).toBeInTheDocument();
+  await act(async () => previous.reject(new TypeError("Failed to fetch")));
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  expect(abort).not.toHaveBeenCalled();
 });
 
 it("shows a handled outage when the browser fetch rejects", async () => {
@@ -130,18 +146,15 @@ function RefreshCsrf() {
 }
 
 it.each([200, 503])("checks the selected persona immediately and handles a %s profile response despite failed CSRF refresh", async (status) => {
+  const abort = vi.spyOn(AbortController.prototype, "abort");
   const previousProfile = Promise.withResolvers<Response>();
   const selectedProfile = Promise.withResolvers<Response>();
   let profileReads = 0;
   let csrfReads = 0;
-  let previousSignal: AbortSignal | null | undefined;
-  vi.stubGlobal("fetch", vi.fn(async (url: string, options: RequestInit) => {
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => {
     if (url.endsWith("/api/v1/users/me")) {
       profileReads++;
-      if (profileReads === 1) {
-        previousSignal = options.signal;
-        return previousProfile.promise;
-      }
+      if (profileReads === 1) return previousProfile.promise;
       if (profileReads === 2) return selectedProfile.promise;
       return Response.json(profile);
     }
@@ -166,7 +179,7 @@ it.each([200, 503])("checks the selected persona immediately and handles a %s pr
   );
   const persona = await screen.findByRole("button", { name: /Select Test Resident/ });
   await act(async () => fireEvent.click(persona));
-  expect(previousSignal?.aborted).toBe(true);
+  expect(abort).not.toHaveBeenCalled();
   expect(profileReads).toBe(2);
   expect(csrfReads).toBe(1);
   await act(async () => fireEvent.click(screen.getByRole("button", { name: "Request CSRF" })));

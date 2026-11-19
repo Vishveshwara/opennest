@@ -29,6 +29,7 @@ opennest:
         name: ${DB_NAME:opennest}
         username: ${DB_USER:opennest}
         password: ${DB_PASSWORD:}
+        ssl-root-cert: ${DB_SSL_ROOT_CERT:}
       redis:
         host: ${REDIS_HOST:127.0.0.1}
         port: ${REDIS_PORT:6379}
@@ -41,6 +42,7 @@ opennest:
         name: ${SANDBOX_DB_NAME:opennest_sandbox}
         username: ${SANDBOX_DB_USER:opennest_sandbox}
         password: ${SANDBOX_DB_PASSWORD:}
+        ssl-root-cert: ${SANDBOX_DB_SSL_ROOT_CERT:}
       redis:
         host: ${SANDBOX_REDIS_HOST:127.0.0.1}
         port: ${SANDBOX_REDIS_PORT:6380}
