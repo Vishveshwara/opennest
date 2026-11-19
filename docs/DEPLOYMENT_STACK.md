@@ -1,180 +1,34 @@
-<!-- coderabbit-ai-generated:v1 -->
+# OpenNest deployment stack
 
-<!-- coderabbit-ai-generated-section:v1:badda97792b45758f96da912dd2beafdf02802f62b33e59cb4923ca91e3a0b9e -->
+On 19 November 2026 the maintainer selected **Render for the Spring backend, Supabase for PostgreSQL/PostGIS, and Vercel for the Next.js frontend**. The planned public site is `https://opennest.co.in`. Domain control, production resources, DNS, TLS and hosted behavior still need verification.
 
-# OpenNest deployment and infrastructure plan
+For a hosted rehearsal and production setup, follow the [deployment guide](DEPLOYMENT_SETUP.md). For development or acceptance tests on a workstation, follow the [Docker Desktop guide](LOCAL_DOCKER_TESTING.md).
 
-Telegram Bot API is the sole authentication provider by maintainer decision on 10 November 2026. Local bot identity/webhook-state checks passed, and the maintainer confirmed real local OTP authentication plus the verified private profile on 10 November. Production HTTPS webhook routing, hosted browser behavior, and deployment remain unverified. See [Telegram setup](TELEGRAM_HANDOFF.md). No infrastructure is provisioned by this change.
+## Where each component runs
 
-Status: deployment proposal, reviewed against provider documentation on 21 October 2026; website and Java target updated by maintainer decision on 22 October 2026. Local datastore Compose, foundation CI, and the Phase 1 backend foundation exist. Dependency resolution, Java 25 tests, startup guards, and real PostGIS/Redis container isolation are verified locally as of 30 October 2026; the [handoff](BACKEND_HANDOFF.md) records review corrections and regression results. Phase 2 controlled-provider tests locally verify browser-bound state and session isolation. Hosted browser routing, repeated real-provider flows, and hosted deployment integration remain unverified. The repository includes a Linux x86-64 backend Dockerfile for a Render preview. Production Compose, Caddy configuration, cloud resources, and deployment workflows remain pending.
-
-This replaces the supplied deployment draft where it conflicts with the [project plan](PROJECT_PLAN.md), [authentication decisions](AUTHENTICATION.md), or existing infrastructure. OpenNest remains India-wide and licensed under [AGPL-3.0-only](../LICENSE). Hosting in Mumbai does not limit listing coverage to that region.
-
-## Maintainer preferences
-
-- Start as a personal, non-commercial project with the lowest practical cost; increase spending if usage justifies it. No fixed monthly spending limit has been chosen.
-- No AWS account or credits exist yet. Eligibility, available services, credit balance, and expiry must be checked after account creation.
-- The planned public website is [opennest.co.in](https://opennest.co.in), confirmed on 22 October 2026. Domain ownership/control, DNS, TLS, and live hosting have not been verified. API, sandbox, and media hostnames remain undecided.
-- Begin with local development and isolated previews. Confirm the public deployment's budget and routing arrangement before provisioning it. This document does not authorize purchases or deployment.
-
-### Render backend preview
-
-- Build from the repository root with `backend/Dockerfile`. The image uses Java 25 and the native AVIF libraries. Build the image after CI passes for the release commit. The root `.dockerignore` limits the build context to the backend and required build and license files.
-- Supply the Supabase session pooler host, port, database, username, and password through `DB_*` settings. Upload the Supabase CA as a Render secret file and set `DB_SSL_ROOT_CERT=/etc/secrets/supabase-ca.crt`. The runtime user belongs to group `1000` to read Render secret files. [Render Docker secret files](https://render.com/docs/docker-secrets#accessing-secret-files-at-runtime)
-- Enable internal authentication on the Render Key Value instance. Use the host, port, username, and password from its authenticated internal connection string as the separate `REDIS_*` values. Set `noeviction` for session-bearing Redis. [Render Key Value](https://render.com/docs/key-value)
-- Verify the Supabase connection, Flyway migrations, search, and session handling on the hosted preview before enabling additional features. The existing migrations expect PostGIS in `public`.
-
-## Proposed stack and cost boundaries
-
-| Layer | Plan | Cost or readiness constraint |
+| Component | Target | Connection and ownership |
 | --- | --- | --- |
-| Source | Public GitHub monorepo, implemented `backend/` and `frontend/` applications, AGPL-3.0-only | Third-party components retain their own licenses. Publish a source link for the running revision. |
-| Frontend | Next.js 16.4.6 / React 19.3.1 / TweakCN in `frontend/`; Vercel hosting remains proposed | Hobby is a candidate for the confirmed personal, non-commercial start, within its limits. Reassess eligibility before commercialization; open source alone does not grant a special free production plan. [Vercel Hobby](https://vercel.com/docs/plans/hobby), [fair use](https://vercel.com/docs/limits/fair-use-guidelines). |
-| Backend | Java 25 / Spring Boot 4.1.1 / Modulith, planned CI builds and EC2 runtime behind Caddy | Mumbai `ap-south-1` is a candidate. Start by evaluating an x86-64 host; instance type and memory depend on price and load tests. ARM requires a different, tested PostGIS image strategy. |
-| Database | PostgreSQL/PostGIS on a private container network, persistent encrypted EBS storage | Local baseline is PostgreSQL 17 / PostGIS 3.5. Keep CI and production versions aligned; do not copy the draft's PostgreSQL 16 downgrade. Off-host backups incur separate storage/operation costs. |
-| Sessions and cache | Dedicated Redis per production/sandbox environment, backend-owned Spring sessions | Local baseline is Redis 7.4. Use `noeviction` for session-bearing Redis; PostgreSQL remains authoritative for quotas. License and supported production version need review below. |
-| Photos | Cloudflare R2 Standard, direct browser presigned PUTs, validated immutable final images | Monthly free allowance is 10 GB-month storage, 1 million Class A operations, and 10 million Class B operations. Egress is free under current pricing; storage/operations beyond allowances are billable. The allowance excludes Infrequent Access. [R2 pricing](https://developers.cloudflare.com/r2/pricing/). |
-| DNS and TLS | Planned website `opennest.co.in`; proposed Cloudflare DNS and Caddy on the API host | Domain control, DNS, and certificates remain unverified; registration/renewal is separate. DNS-only records do not provide HTTP caching or bot protection. Proxy/WAF behavior must be explicitly configured; do not promise that all scraping is blocked. [Cloudflare proxy status](https://developers.cloudflare.com/dns/proxy-status/). |
-| Identity | Telegram Bot API only; Spring Security and Redis sessions | Self-contact +91 match and original-browser OTP; no automatic bot-update login. Bot API has no per-message charge within current limits; Gateway is unselected. Local polling is explicit and forbidden in production; production requires separate bot/secrets and HTTPS webhooks. |
-| Maps and nearby places | MapLibre GL JS with maintainer-configured MapTiler; Overpass remains disabled | MapLibre renders supplied map data; it does not include production tile hosting or address search. MapTiler is selected for Phase 5 integration; account/key setup, usage allowance and live readiness remain unverified. [MapLibre documentation](https://maplibre.org/maplibre-gl-js/docs/). |
-| Build and registry | GitHub Actions, GHCR, immutable image digests | Standard hosted runners are free for public repositories; larger runners are charged. Public packages are free under current terms. Check artifact/cache quotas separately. [Actions billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions), [Packages billing](https://docs.github.com/en/billing/concepts/product-billing/github-packages). |
-| Review and operations | Existing CodeRabbit guidance; planned security scanning and basic monitoring | Cubic and Sentry are optional, unconfigured services. Their eligibility/quotas must be checked if selected; no spend or installation is assumed. |
+| Public website | Vercel, Next.js from `frontend/`, Node 24 | Server-rendered listing pages read the Render API. Browsers call the same API for login and owner actions. Vercel receives frontend configuration only. |
+| Application API | Render Docker Web Service, Java 25, Linux x86-64 | Build [the backend image](../backend/Dockerfile) with the repository root as its context. Spring enforces authorization, signup, publication and quotas. |
+| Durable data | Dedicated Supabase PostgreSQL database with PostGIS in `public` | Spring connects over hostname-verified TLS. Flyway runs at startup and Hibernate validates the result. Local integration tests use PostgreSQL 17/PostGIS 3.5. Verify the hosted versions on the selected project. |
+| Sessions and Telegram challenges | Dedicated Redis-compatible store | The setup guide uses Render Key Value on the API's private network, with internal authentication and `noeviction`. Exercise Spring Session, expiry and failure handling on the managed store. |
+| Photos | Two private Cloudflare R2 buckets | The API signs short-lived URLs. The browser uploads to staging, the backend validates and finalizes, and readers fetch signed final images. |
+| Identity and maps | Telegram Bot API and optional MapTiler | The hosted bot calls the Render webhook. The frontend gets an origin-restricted browser map key. Overpass enrichment stays disabled. |
 
-Vercel's CDN delivery is distinct from server rendering. Select a supported function runtime/region near the API where possible; do not describe all Next.js SSR as globally distributed Edge execution. [Vercel runtimes](https://vercel.com/docs/functions/runtimes), [function regions](https://vercel.com/docs/functions/configuring-functions/region).
+The Dockerfile includes the Linux native AVIF decoder runtime and runs as a non-root user. The [repository workflows](../.github/workflows) verify code and local infrastructure. Hosting configuration, production promotion and recovery procedures still require operator setup. Keep source for the deployed revision available under AGPL-3.0-only and distribute the [third-party notices](THIRD_PARTY_NOTICES.md).
 
-### AWS offers are temporary, account-specific inputs
+## Browser routing and isolation
 
-AWS currently advertises up to USD 200 for new customers: USD 100 initially and up to USD 100 earned through qualifying activities. The Free plan ends after six months or credit exhaustion, whichever occurs first; continuation requires the appropriate account plan. Confirm actual account terms before relying on these amounts. [AWS Free Tier](https://aws.amazon.com/free/).
+Use HTTPS origins on the same site for sessions. The guide uses `https://opennest.co.in` on Vercel and proposes `https://api.opennest.co.in` on Render. These are distinct origins. Credentialed browser fetches require exact-origin CORS, an API-host-only Secure/HttpOnly/SameSite=Lax cookie and the synchronizer CSRF token on mutations. An unrelated Vercel preview and Render service URL can exercise public search, but cannot verify this cookie flow. The development LAN rewrite is local only. [Authentication contract](AUTHENTICATION.md)
 
-The separate T4g trial currently offers 750 aggregate `t4g.small` instance hours per month through **31 December 2026**, including Mumbai. It is not 750 hours per instance or per region. Surplus CPU credits can still be charged, and the offer does not resolve the ARM image incompatibility below. Do not assume an extension. [EC2 T4g FAQ](https://aws.amazon.com/ec2/faqs/).
-
-Prepare a quote for compute, EBS capacity/IOPS, snapshots/backups, public IPv4, outbound transfer, logs, domain renewal, and any paid provider usage, including applicable tax/currency conversion. For scale, one AWS public IPv4 address at USD 0.005/hour is USD 3.60 over 720 hours before allowances/credits. EBS and other services have their own rates. [Public IPv4 pricing](https://aws.amazon.com/vpc/pricing/), [EC2 pricing](https://aws.amazon.com/ec2/pricing/on-demand/).
-
-Set billing alerts and provider limits before public access; alerts alone do not stop spend. Track credit expiry and decide whether to pay, reduce capacity, or stop the pilot before it expires. Stopping compute does not remove retained storage or other billable resources. No INR 0/month or lifetime-free guarantee is established.
-
-## Versions, architecture, and licenses
-
-- Official release pages confirm [Spring Boot 4.1.1](https://spring.io/blog/2026/08/20/spring-boot-4-1-1-available-now/), [Next.js 16.4](https://nextjs.org/blog/next-16-4), and [React 19.3](https://react.dev/blog/2026/09/09/react-19-3). Java 25 is the maintainer-selected backend target and is within Boot's documented supported range. [Phase 1.1](BACKEND_DEPENDENCIES.md) verified dependency graphs and a local skeleton build/test using Temurin 25.0.4.1. Feature integration, production runtime/image selection, and deployment validation remain pending. [Boot requirements](https://docs.spring.io/spring-boot/system-requirements.html).
-- The upstream `postgis/postgis` README currently lists **amd64 only**. Therefore the supplied Compose file is not a native `t4g.small` deployment. The simplest proposed path is x86-64 compute with a tested upstream image. ARM remains possible with a maintained native PostGIS build or a separately hosted compatible database, after migration, backup, extension, and performance tests. Do not use emulation as the production workaround. [PostGIS image architecture](https://github.com/postgis/docker-postgis).
-- Select a supported Java 25 runtime image before creating deployment artifacts; no vendor, operating-system variant, patch, or digest is selected here. Inspect each exact image manifest, pin digests, and run integration tests on the target architecture. A Java image alone does not establish whole-stack architecture support. [Official Temurin image metadata](https://github.com/docker-library/official-images/blob/master/library/eclipse-temurin).
-- Redis 7.4 uses RSALv2/SSPLv1; it is not the BSD-licensed Redis of older releases. Redis 8 adds an AGPLv3 option. Keep the current local version unchanged in this documentation task, and evaluate a supported Redis 8 release under its AGPL option before production if an entirely open-source datastore stack is required. That upgrade needs Spring Session/client, persistence, and memory testing. [Redis licensing](https://redis.io/legal/licenses/).
-- Do not use mutable `latest` tags for releases. Record application commit, image digest, architecture, database/extension versions, and corresponding-source location together. Do not change a database image's major version against an existing volume without an upgrade/restore plan.
-
-## Network and browser-session topology
-
-Proposed public topology for the selected website `https://opennest.co.in`; API/media hosts and routing still require confirmation:
-
-```mermaid
-flowchart LR
-    Browser -->|HTTPS| Frontend[Next.js on Vercel]
-    Browser -->|HTTPS API and OTP| Caddy[Caddy on EC2]
-    Caddy --> Backend[Spring Boot]
-    Backend --> DB[(PostgreSQL and PostGIS)]
-    Backend --> Sessions[(Redis sessions and cache)]
-    Browser -->|Presigned PUT| Staging[(Private R2 staging)]
-    Backend -->|Validate and finalize| Staging
-    Backend -->|Publish validated objects| Media[(R2 final media)]
-    Browser -->|GET published media| Media
-```
-
-A candidate arrangement is `https://opennest.co.in` on Vercel and `https://api.opennest.co.in` on EC2: different origins within the same HTTPS site. The API subdomain is proposed, not configured or confirmed. The API host owns its host-only session cookie. Browser API calls include credentials; CORS allows only the exact configured frontend origin with credentials, and mutations require the synchronizer CSRF token. Do not automatically allow every subdomain or add a parent-domain session cookie. CORS does not replace authentication or CSRF protection. Keep `Secure`, `HttpOnly`, and `SameSite=Lax` as specified in [authentication](AUTHENTICATION.md). [Browser cookie semantics](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Set-Cookie).
-
-The browser obtains CSRF then POSTs /api/v1/auth/telegram/challenges, opens botUrl, shares its own contact, and POSTs the OTP to /api/v1/auth/telegram/challenges/{id}/complete. No OAuth redirects/callbacks are configured. With API-host-only cookies, private Next.js data initially uses credentialed browser fetches. The explicit DEVELOPMENT/PRIMARY LAN opt-in now proxies existing /api/v1/... calls through the development frontend to a fixed loopback backend. Its browser checks cover cookie forwarding, original Origin, CSRF, logout and no-store. It is unavailable in production builds or sandbox mode; hosted same-origin routing remains unimplemented. See [LAN setup](PHASE5_HANDOFF.md#test-from-another-device-on-the-local-network).
-
-An unrelated `*.vercel.app` frontend and API domain are cross-site; they do not satisfy this cookie plan by merely adding a CORS entry. Until the chosen domain has verified HTTPS routing, or equivalent same-origin routing is tested, use local development and isolated demo previews. Do not weaken cookies or enable production credentials for arbitrary preview URLs. Preview builds and sandbox deployments get no production secrets or data access.
-
-Expose only Caddy's required HTTP/HTTPS ports publicly. Keep PostgreSQL, Redis, the backend port, Caddy administration, and management/telemetry endpoints off the public network. Restrict administrative access. Trust forwarded host/protocol/client-IP headers only from configured proxies, never from arbitrary requests.
-
-Caddy needs a valid hostname, certificate storage, and a working ACME challenge route. If Cloudflare proxies the API, configure Full (strict) origin TLS and test certificate issuance/renewal. DNS challenges require the appropriate Caddy DNS module and scoped credentials; do not assume the default image includes it. [Caddy HTTPS](https://caddyserver.com/docs/automatic-https), [Cloudflare Full (strict)](https://developers.cloudflare.com/ssl/origin-configuration/ssl-modes/full-strict/).
-
-Every listing response and fetch retains no-store through Phase 5, including anonymous production browsing. Auth/contact and all sandbox data also bypass shared caches. A future explicitly approved shared-cache policy must define eligibility, deployment/query partitioning, signed-image handling and tested invalidation before enablement.
-
-### Recruiter isolation
-
-Use a separate frontend deployment/configuration where needed and a separate backend deployment, PostgreSQL instance, Redis instance, credentials, session cookies/stores, bot credentials, signing keys where used, storage buckets or enforced prefixes, and cache namespaces. Provision separate container networks and prohibit sandbox access to production stores. Prefer separate hosts for the public demo when budget permits; shared-host containers still share a kernel, administrator, and failure domain.
-
-Untrusted headers never select production versus sandbox data. Production disables demo personas, resets, and demo telemetry. Sandbox fixtures are fabricated across Indian cities, with callable contacts disabled. A local Compose profile is not proof of application isolation. Test cross-environment credential, session, reset, and storage access rejection. Do not fit a second backend and datastore pair into the production memory estimate without measuring them separately.
-
-Phase 1.3 implements only the startup portion: [configuration contract](BACKEND_CONFIGURATION.md). It selects PostgreSQL/Redis clients once, requires explicit sandbox mode, checks declared target/credential separation, and rejects production plus sandbox mode, demo/development flags, or supplied sandbox secrets. Production also requires Redis authentication configuration. These checks do not attest server privileges, DNS aliases, session authorization, or actual cross-store access. The current DEVELOPMENT/SANDBOX combination is not evidence that public recruiter hosting is ready.
-
-## Capacity and recovery
-
-The supplied 350 MB JVM / 512 MB database / 96 MB Redis / 2 GB swap budget is unmeasured. A 2 GiB machine is a candidate for a small pilot, not a guaranteed capacity target. Benchmark the real application before selecting it; use a larger host if it cannot maintain headroom. The OS is not a Docker-limited container, and unused RAM is not a fixed promise.
-
-| Component | Measure before fixing limits |
-| --- | --- |
-| Spring Boot | Peak RSS during startup, migrations, Telegram sign-in, uploads/validation, and concurrent nationwide searches; include heap, metaspace, code cache, direct buffers, and native/thread memory. |
-| PostgreSQL/PostGIS | Connections and concurrent sort/hash/spatial queries, autovacuum, indexes, temporary files, and backup activity. `work_mem` can apply to multiple operations per query; it is not a server-wide cap. [PostgreSQL memory settings](https://www.postgresql.org/docs/17/runtime-config-resource.html). |
-| Redis | Dataset plus allocator/buffers and persistence rewrite peaks. Leave memory above `maxmemory`; cap sessions/cache growth with TTLs and bounded writes. |
-| Host and Caddy | OS, Docker, TLS connections, page cache, monitoring, image pulls, and log/disk growth. Reserve measured headroom. |
-
-Do not adopt `-Xss256k`, a tight metaspace cap, Serial GC, or `TieredStopAtLevel=1` merely to match a spreadsheet. Keep JVM defaults until representative measurements justify changes. Bound request concurrency, database pools, query duration, payload sizes, pagination, and rate limits; a small host cannot absorb unlimited traffic.
-
-Use `noeviction` for Redis that holds sessions. `allkeys-lru` can remove authentication state; memory pressure under `noeviction` instead rejects memory-growing writes, which the application must handle with a controlled failure. Keep cache populations bounded or later move evictable cache data to a separate instance. Redis logical databases/namespaces do not isolate memory or eviction. [Redis eviction](https://redis.io/docs/latest/develop/reference/eviction/).
-
-Before exposing authentication publicly, configure edge rate limits for unauthenticated `GET /api/v1/auth/csrf` and `POST /api/v1/auth/telegram/challenges` before requests reach session creation. Use per-client and aggregate budgets based on measured capacity, prevent direct public access around the edge, and verify excess requests receive 429 without creating Redis sessions. Application session creation is not a rate limiter. No production edge configuration exists yet.
-
-Provision Redis `maxmemory` below both its container memory limit and the host's available memory budget, allowing for allocator/buffer overhead and persistence rewrite peaks. Before launch, configure and exercise alerts for dataset usage against `maxmemory`, Redis RSS/container/host memory pressure, and rejected writes or OOM errors. The local Compose limit of 40 MB under an 80 MB container cap is a development setting, not production capacity or alerting evidence. Production limits, thresholds, and alert delivery remain unconfigured until the host and monitoring service are selected.
-
-Swap may provide emergency buffering but is slower than RAM and does not prevent OOM kills, container limit failures, or outages. If selected after testing, configure encrypted-disk swap idempotently and monitor it; do not rerun commands that recreate an active swap file or append duplicate `fstab` entries. Use supported Docker package installation for the selected OS. [Docker memory and swap constraints](https://docs.docker.com/engine/containers/resource_constraints/).
-
-Named volumes, `restart: unless-stopped`, and Redis AOF do not guarantee recovery in three seconds or zero data loss. Define recovery point/time objectives, automate encrypted off-host database backups, and test a restore onto a fresh host. Redis recovery must not reset PostgreSQL-backed quotas or extend/revive revoked sessions; choose session invalidation after restore unless revocation/expiry continuity is proven. Keep backup credentials and retention separate from public media access.
-
-## Requirements for later deployment files
-
-Create production artifacts only after application builds and the decisions below are ready. Keep the existing [local Compose](../docker-compose.yml) local; its development users/password handling are not production roles.
-
-1. **Production Compose:** pin tested image digests; configure explicit memory/CPU/log limits and inspect effective limits on the actual host. Keep persistent volumes and private networks. Map environment configuration consistently and fail on missing required secrets. Do not pass the entire shared environment file to every container.
-2. **Startup checks:** use `service_healthy` for PostgreSQL and Redis, with real healthchecks; `service_Started` from the draft is invalid. PostgreSQL readiness must include `pg_isready -h 127.0.0.1 -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"`. Redis healthchecks must honor its configured authentication. Startup ordering does not handle later outages; application timeouts/retries and readiness still matter. [Compose dependency conditions](https://docs.docker.com/compose/how-tos/startup-order/).
-3. **Database roles:** give the app a restricted runtime role; run Flyway with a separate migration role. Keep Hibernate in validation mode. Reserve connections for migrations/maintenance and size the application pool below database capacity. Do not reuse development superuser credentials.
-4. **Backend image:** build with the Maven wrapper in CI, using Java 25 and a verified target architecture; run tests before publishing. Copy one explicitly identified executable JAR into a minimal non-root runtime, with secrets excluded from layers/build context. Preserve license/source metadata. A Docker build that skips tests is acceptable only after that exact revision passed the test job.
-5. **Proxy configuration:** route the API and Telegram webhook paths, implement the chosen certificate setup and trusted forwarding, redact private request/query values, bound request sizes/timeouts, and protect management paths.
-6. **Secrets:** store production secrets in restricted deployment configuration. Reuse documented names from [.env.example](../.env.example), including `TELEGRAM_BOT_USERNAME`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_OTP_HMAC_KEY`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_KEY`, `R2_STAGING_BUCKET`, and `R2_FINAL_BUCKET`. Phase 1.3 maps `DB_*` and `REDIS_*` to primary runtime clients and separate `SANDBOX_*` inputs to sandbox clients; supply production values through the process environment, never the whole development file. Dedicated migration credentials still need explicit mappings when migrations are implemented. New settings must be documented alongside implementation, never inferred from a pasted example.
-7. **Authentication configuration:** no `JWT_SECRET`, `OTP_PROVIDER=CONSOLE_DEV`, hardcoded bot number, or implicit WhatsApp activation. Origins/URLs are literal configured URLs, not Markdown links; production origin allowlists exclude localhost and arbitrary previews. Missing required production configuration fails closed.
-
-### Media and map services
-
-The implemented 17 November 2026 image follow-up converts JPEG/PNG/WebP/AVIF sources up to 40,000,000 bytes on the user device into opaque AVIF. The browser caps the longest side at 2,048 pixels without upscaling, uses a soft 1 MB target and uploads converted output without a 4 MB product limit. Twenty photos are allowed per listing. The backend validates the normalized container and decodes one bounded AV1 frame without re-encoding or an RGBA copy; saved JPEG/PNG/WebP remain supported. One admission permit, heap budgeting and codec pixel/thread limits bound work, but native decoding still needs CPU and memory. A 512 MB host has not been load-tested. The build bundles pinned JavaCV/FFmpeg natives for Linux x86_64 or Windows x86_64; Maven validation rejects unsupported host OS/architecture and target classifiers; Oracle ARM, macOS and 32-bit build hosts are currently unsupported. No hosting or deployment was performed. See [media limits, rollout and setup](LISTINGS_HANDOFF.md).
-
-Minimal Ubuntu runtimes must install `libxcb1 libxcb-shm0 libasound2t64 libpulse0` for the FFmpeg bridge; equivalent packages are required on other distributions. A working Java runtime alone is insufficient. These are deployment prerequisites, not provisioned services; they do not require an audio/display server. Build images using the pinned Maven ZIP wrapper also need `unzip`. Native codec license/source materials must accompany a binary release as described in [third-party notices](THIRD_PARTY_NOTICES.md).
-
-Keep uploads direct to R2 and validate/finalize them according to the [API contract](ai-context/API_CONTRACTS.md). Use private staging with short-lived PUT URLs; keep staging objects, draft images, and backups private. A final object must not remain writable through a staging URL. Configure exact-origin bucket CORS and separate production/sandbox credentials and storage. When using different staging/final buckets, add explicit configuration rather than overloading the existing single `R2_BUCKET` placeholder.
-
-Presigned uploads use R2's S3 API hostname, not a custom media CDN domain. Use an approved custom-domain/public-read arrangement only for intentionally published media; `r2.dev` is development-only and rate-limited. Define removal/cache-purge handling for paused/deleted listings where required by the media privacy policy. [R2 presigned URLs](https://developers.cloudflare.com/r2/api/s3/presigned-urls/), [public buckets](https://developers.cloudflare.com/r2/buckets/public-buckets/).
-
-Select map tiles/styles/fonts, attribution, usage limits, and any geocoder separately. OSM data being open does not make its community tile servers an unlimited production CDN. [OSM tile policy](https://operations.osmfoundation.org/policies/tiles/).
-
-The public Overpass instance's operator discourages using it as the backend of a public application. For production, choose an operator-approved provider or separately budgeted self-hosted service; otherwise leave enrichment disabled. Do not add a full Overpass instance to the small API machine. Retain the planned 2500 ms timeout, circuit breaker, bounded/cached enrichment, and empty-result fallback; failures must never block saving a listing. Label proximity as approximate mapped-data distance, not guaranteed walking distance or exhaustive coverage. [Overpass resource policy](https://dev.overpass-api.de/overpass-doc/en/preface/commons.html).
-
-## Delivery and operational checks
-
-Current foundation CI validates local Compose, datastore startup, distinct network membership/cross-network database reachability, PostGIS/Redis behavior, persistence, and AI-context size. It does not prove application isolation, build an application, or deploy anything.
-
-Phase 6 in the [project plan](PROJECT_PLAN.md#phase-6-task-boundaries) owns deployment and launch readiness after Phase 5. Apply the relevant provider, routing, edge rate-limit, Redis capacity/alert, and hosted session checks before any earlier public preview. The sequence below remains planned; provisioning and deployment require separate authorization.
-
-Planned delivery sequence:
-
-1. Pull requests run backend tests against PostGIS/Redis, module-boundary and isolation tests, frontend type/build checks, and appropriate security scans when those sources exist. Review guidance comes from [AGENTS.md](../AGENTS.md) and CodeRabbit configuration; `CLAUDE.md` points to that guidance. Row-level `is_sandbox` checks are not the isolation design.
-2. Add CodeQL for supported Java/TypeScript code, dependency/container scanning, and separate secret scanning/push protection. CodeQL is not a secret-leak prevention guarantee. Verify enabled repository settings and handle supported-pattern limits. [GitHub push protection](https://docs.github.com/en/code-security/concepts/secret-security/push-protection).
-3. Build and publish tested release images to GHCR with commit tags and immutable digests; keep privileges minimal. Untrusted PR code receives no production secrets, deployment permissions, or access to the production host.
-4. Promote a selected frontend build and backend digest only after explicit maintainer approval in a protected deployment environment. Configure Vercel promotion accordingly; a merge to `main` alone must not silently authorize a production deploy. Serialize deployments and identify the exact approved revision.
-5. Check backup/restore readiness and migration compatibility, apply reviewed Flyway migrations, start the release, and verify readiness plus login/search/upload smoke tests. A single backend may have deployment downtime. No claim of zero downtime or zero data loss is made.
-6. Retain the previous image and a tested rollback procedure. Application rollback is safe only with a compatible schema; otherwise use a reviewed forward fix or restore plan. Never automatically run destructive reverse migrations or remove volumes.
-
-Monitor uptime, HTTP errors/latency, JVM RSS, database pool/query time, Redis write failures, disk/WAL/AOF growth, CPU credits, backup age, and provider spend. Optional Sentry must redact contacts, authorization headers, cookies, tokens, signed URLs, and callback parameters. Keep logs bounded and test degraded behavior before increasing traffic.
+Keep the real deployment in PRODUCTION/PRIMARY. Give any recruiter environment its own frontend configuration, backend, database, session store, credentials and media. Only the explicit development sandbox can switch personas or reset fabricated multi-city data. A public recruiter deployment still requires its own isolation and capacity checks. The main site serves listings across India regardless of hosting region. [Isolation and operator controls](PHASE4_HANDOFF.md)
 
 ## Decisions before public deployment
 
-- Confirm the AWS account plan, eligible credits/expiry, complete monthly quote, spending alerts, and an acceptable recurring budget.
-- Select an available x86-64 instance/image combination; approve ARM only after native database testing. Benchmark capacity and decide where the separate recruiter deployment will run.
-- Verify control and DNS/TLS for `opennest.co.in`; confirm API/sandbox/media hostnames and same-site routing, or implement and test an equivalent same-origin proxy. Configure exact production origins and authenticated Telegram HTTPS webhook routing.
-- Review the production Redis version/license and map tile/Overpass provider. Pin supported patches and test upgrades against the chosen images.
-- Complete the remaining Telegram hosted-webhook and repeated-login verification, moderation, privacy, backup/restore, and load-test requirements in the [project plan](PROJECT_PLAN.md). Telegram login never bypasses required images or listing quotas.
+- Select service regions, plans and a monthly budget. Compare API-to-database latency, always-on compute, Key Value persistence, database backup retention, transfer, R2 operations and Vercel usage. Include domain renewal and configure billing alerts.
+- Rehearse database migration and restore with the selected Supabase versions. Approve a restricted runtime role and a separately executed migration procedure. Today's backend has one datasource and rejects independent Flyway credentials.
+- Verify DNS/TLS, origin and cookie handling, bot webhooks and direct R2 uploads. Protect session-creating requests at the API edge and verify alternate routes cannot bypass the limits.
+- Measure JVM heap and native decoder RSS with real image sizes, search latency and database connections. Budget for up to five Hikari connections per running API instance, overlapping deploys and migration/admin connections. Test memory pressure, rejected Redis writes and alert delivery.
+- Set recovery point and recovery time objectives. Restore into separate resources and rehearse a schema-compatible rollback. Keep private data out of previews, logs and release evidence. Complete moderation and retention decisions before collecting real user data.
 
-Update this document and [ARCHITECTURE_STATE.md](ai-context/ARCHITECTURE_STATE.md) when a proposal becomes a tested deployment decision. Recheck provider terms and prices at provisioning time; the review date above is not a permanent guarantee.
-
-Phase 3 implements the opt-in R2 adapter and private staging/final lifecycle; [LISTINGS_HANDOFF.md](LISTINGS_HANDOFF.md) defines configuration, separation, limits, and local verification. No R2 resources, bucket CORS, public media host, or live provider readiness were provisioned. All media remains private with short-lived signed GET URLs. Hosting and production configuration above remain proposals.
-
-
-<!-- /coderabbit-ai-generated:v1 -->
-Phase 5 selects MapLibre with a maintainer-configured MapTiler browser key and approximate publicLocation at stable 0.02-degree cell centers. This implements a local map integration, not provider provisioning or hosted readiness. Verify key restrictions, attribution, usage terms and budget before exposure. Frontend setup/evidence: [PHASE5_HANDOFF.md](PHASE5_HANDOFF.md).
+The [Phase 6 acceptance criteria](PROJECT_PLAN.md#phase-6-task-boundaries) apply to launch. Each public release requires maintainer approval for the exact revision.

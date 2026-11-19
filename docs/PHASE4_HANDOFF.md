@@ -26,7 +26,7 @@ Unknown fields, duplicate JSON keys, invalid values, duplicate/unknown paginatio
 
 ## Start the dedicated sandbox
 
-Use a separate DEVELOPMENT/SANDBOX backend and the existing isolated sandbox PostgreSQL/Redis settings. Do not supply primary secrets. Set OPENNEST_TELEGRAM_AUTH_ENABLED=false and OPENNEST_PERSONA_SWITCHING=true. OPENNEST_DEMO_RESET and OPENNEST_DEMO_TELEMETRY each require explicit true to enable their operations. The public recruiter frontend remains Phase 5 work.
+Use a separate DEVELOPMENT/SANDBOX backend and the existing isolated sandbox PostgreSQL/Redis settings. Do not supply primary secrets. Set OPENNEST_TELEGRAM_AUTH_ENABLED=false and OPENNEST_PERSONA_SWITCHING=true. OPENNEST_DEMO_RESET and OPENNEST_DEMO_TELEMETRY each require explicit true to enable their operations. Phase 5 implements the frontend at `/recruiter-sandbox`. See [local process settings](PHASE5_HANDOFF.md#run-locally) and the [Docker Desktop guide](LOCAL_DOCKER_TESTING.md).
 
 First startup seeds only an empty dedicated database. An unrecognized populated database is rejected instead of erased. The migration itself creates no fixture rows in PRIMARY or SANDBOX.
 

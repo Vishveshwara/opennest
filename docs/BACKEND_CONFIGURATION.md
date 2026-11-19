@@ -44,7 +44,7 @@ The following settings are generated from the validated selection:
 
 - PostgreSQL URL/user/password via Boot's JDBC auto-configuration; Hikari maximum pool size 5 and minimum idle 1.
 - Redis host/port/user/password via Boot's Lettuce client auto-configuration; database 0 and Redis repositories disabled.
-- Basic SQL script initialization disabled; Flyway applies the shared V1/V2 migrations on startup, with validation enabled, no automatic baseline, and clean disabled. Hibernate then validates six mapped entities; schema creation/update is never enabled.
+- Basic SQL script initialization is disabled. Flyway applies the shared V1–V11 migrations on startup with validation enabled, automatic baseline disabled and clean disabled. Hibernate then validates six mapped entities; schema creation/update is never enabled.
 - Hibernate uses UTC JDBC timestamps and Jackson 3 JSON formatting; Open EntityManager in View and JPA repository auto-configuration are disabled. There are no repository interfaces yet.
 - Phase 1.7 pins safe error output, INFO 4xx/ERROR 5xx status/error-ID logs, and literal redacted root ERROR diagnostics. Raw framework/startup/SQL/request/exception data, Tomcat access logging, debug, and trace are disabled. Direct logging/error-policy overrides are rejected; see [HTTP errors/security](BACKEND_HTTP_ERRORS.md).
 - Virtual threads enabled by default through the documented `spring.threads.virtual.enabled=true` setting. No undocumented lazy-connection property is used.
@@ -65,7 +65,7 @@ Phase 1.5 passed 52 unit/context/module and 25 database tests; Phase 1.6 passed 
 
 Phase 1.8's [container-only isolation suite](BACKEND_ISOLATION.md) passed all 23 isolation tests on Linux amd64 Docker on 30 October 2026. It exercises actual PostgreSQL/Redis reads/writes, credential rejection, header handling, production guards, and migration/dependency failures. Redis still connects lazily, so unavailable Redis or a wrong password fails on use rather than necessarily preventing startup.
 
-Deployed network rejection and restricted server privileges remain deployment tasks. Phase 4 implements sandbox session/cookie separation and demo operations; hosted storage/network isolation still requires deployment verification. The local Compose stores are development-only. The [deployment plan](DEPLOYMENT_STACK.md) covers production credentials, mounted CA files, and public routing.
+Deployed network rejection and restricted server privileges remain deployment tasks. Phase 4 implements sandbox session/cookie separation and demo operations; hosted storage/network isolation still requires deployment verification. The local Compose stores are development-only. The [hosted setup guide](DEPLOYMENT_SETUP.md) maps Render service settings to the Supabase session pooler, mounted CA file and authenticated Key Value instance. Follow the [Docker Desktop guide](LOCAL_DOCKER_TESTING.md) for local store addresses and smoke checks.
 
 Framework references: [externalized configuration](https://docs.spring.io/spring-boot/reference/features/external-config.html), [config-data processing order](https://docs.spring.io/spring-boot/api/java/org/springframework/boot/context/config/ConfigDataEnvironmentPostProcessor.html), and [common application properties](https://docs.spring.io/spring-boot/appendix/application-properties/index.html). The checked backend uses Boot 4.1.1.
 

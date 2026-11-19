@@ -8,7 +8,7 @@
 
 # OpenNest Flyway migrations
 
-Current schema: V1/V2 foundation, V3 listing metadata/owner projection, V4 private contact provenance, V5 expiring Telegram login receipts and V6 contact sender index. Earlier migration contents remain unchanged. This Phase 1 execution record is historical; [SCHEMA_CONTRACT.md](SCHEMA_CONTRACT.md) gives current totals, and [API_VERIFICATION.md](API_VERIFICATION.md) records the current full gate.
+This checkout contains V1 through V11. The [schema contract](SCHEMA_CONTRACT.md) gives current totals. For hosted PostgreSQL, the [Supabase setup](DEPLOYMENT_SETUP.md#2-prepare-supabase-postgresql) covers the PostGIS schema, TLS, pooler and migration-role gate. The Phase 1 verification results below are historical.
 
 Phase 1.5 implements schema/indexes; Phase 1.6 adds [mappings/Hibernate validation](BACKEND_PERSISTENCE.md). Phase 1.7 adds [HTTP errors and restrictive security](BACKEND_HTTP_ERRORS.md), without changing V1/V2. Business services/endpoints and publication/quota transactions remain later work. The [schema contract](SCHEMA_CONTRACT.md) defines storage semantics; its service invariants are not database authorization.
 
@@ -24,6 +24,11 @@ The application includes one shared `classpath:db/migration` directory:
 | 4 | `V4__telegram_contact_receipts.sql` | Create private current contact provenance receipts |
 | 5 | `V5__telegram_login_receipts.sql` | Create expiring original-session Telegram login receipts and expiry index |
 | 6 | `V6__telegram_contact_sender_index.sql` | Index contact_verifications.telegram_user_id for sender lookup |
+| 7 | `V7__sandbox_reset_state.sql` | Store sandbox seed version, generation and reset timing |
+| 8 | `V8__lossless_listing_photos.sql` | Revise legacy photo bounds and validate the replaced constraints |
+| 9 | `V9__avif_listing_photos.sql` | Accept bounded AVIF media metadata |
+| 10 | `V10__avif_transport_capacity.sql` | Remove the AVIF product byte cap while retaining transport bounds |
+| 11 | `V11__permanent_listing_deletion.sql` | Retain listing identity and queue R2 object deletions |
 
 Primary and sandbox processes run these exact resources against their separately selected databases. A process migrates only its own selected datasource; it never connects to the other database to run a second migration. There are no environment-specific SQL branches, demo inserts, application fixtures, or row-level sandbox flags. PostGIS's reference data is extension infrastructure.
 
@@ -53,13 +58,13 @@ $env:SERVER_PORT = '8081'
 java -jar backend/target/opennest-backend-0.0.1-SNAPSHOT.jar
 ```
 
-Each startup migrates its selected database, then validates mappings and runs the HTTP server with all normal requests denied. It does not provide a migration-only exit command. For production, explicitly select PRODUCTION/PRIMARY, supply only approved production secrets, and follow the [deployment plan](DEPLOYMENT_STACK.md); these examples are not production deployment procedures. Raw startup diagnostics are suppressed by the Phase 1.7 logging policy.
+Each startup migrates its selected database, then validates mappings and runs the HTTP server. With authentication disabled, public listing search remains available and owner routes require authentication. It does not provide a migration-only exit command. For production, explicitly select PRODUCTION/PRIMARY, supply only approved production secrets, and follow the [deployment plan](DEPLOYMENT_STACK.md); these examples are not production deployment procedures. Raw startup diagnostics are suppressed by the Phase 1.7 logging policy.
 
 PostGIS must be installed on the PostgreSQL server and available in public. The identity executing V1 needs database DDL privileges and permission to create the extension, or an administrator must provision the extension in public first. Local Compose roles and temporary test roles are not approved production runtime roles. Separating restricted runtime privileges from migration/admin privileges remains a deployment task; no independent migration credentials are added in this phase.
 
 ## Repeatable integration checks
 
-Normal `clean verify` now runs 130 unit/context/HTTP tests. No-connection test contexts explicitly exclude Flyway and Hibernate auto-configuration. Runtime startup excludes neither. The database profile adds 51 migration/persistence checks, starting each application's HTTP server on a random port. This includes timestamp clamping for future-created listings in both deployment modes.
+At the Phase 1 review checkpoint, `clean verify` ran 130 unit/context/HTTP tests. No-connection test contexts explicitly exclude Flyway and Hibernate auto-configuration. Runtime startup excludes neither. The database profile adds 51 migration/persistence checks, starting each application's HTTP server on a random port. This includes timestamp clamping for future-created listings in both deployment modes.
 
 Run real database checks with Docker available:
 

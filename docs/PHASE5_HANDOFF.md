@@ -4,7 +4,7 @@ Phase 5 adds the Next.js frontend and the approved approximate public map projec
 
 ## Run locally
 
-Use Node 24 and Java 25. Start the existing PRIMARY backend and its isolated stores using the backend handoff. Telegram authentication still requires explicit backend enablement and private bot configuration. Never copy the root private environment file into the frontend.
+Use the [Docker Desktop guide](LOCAL_DOCKER_TESTING.md) to start the PRIMARY API and stores, then run the UI on Node 24. The [Vercel setup](DEPLOYMENT_SETUP.md#5-configure-vercel-and-connect-the-domains) lists the hosted build settings and environment variables. Telegram authentication still requires explicit backend enablement and private bot configuration. Never copy the root private environment file into the frontend.
 
 ```powershell
 cd frontend

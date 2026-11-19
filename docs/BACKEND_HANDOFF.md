@@ -47,6 +47,8 @@ Surefire/Failsafe reports and `backend-verification.json` are under `backend/tar
 
 ## Local startup
 
+For the current public API, frontend and both testing profiles, follow the [Docker Desktop runbook](LOCAL_DOCKER_TESTING.md). The following commands show the original host-Java setup.
+
 On a fresh checkout, copy `.env.example` to an untracked `.env` and set different local database passwords. Do not overwrite an existing `.env`. Start development stores:
 
 ```powershell
@@ -71,7 +73,7 @@ $env:SERVER_PORT = '8081'
 java -jar backend/target/opennest-backend-0.0.1-SNAPSHOT.jar
 ```
 
-Both processes apply the same migrations, then Hibernate validates. They stay running on separate HTTP ports. Redis is a lazy dependency; construction does not establish readiness. Normal unauthenticated requests return safe 401 responses, and mutations without a valid CSRF token return 403. There is no enabled login, default password, business handler, actuator, or diagnostic API. Logging emits fixed HTTP status/error-ID events only. These are development commands, not production configuration.
+Both processes apply the same migrations, then Hibernate validates. They stay running on separate HTTP ports. Redis is a lazy dependency; construction does not establish readiness. With authentication disabled, public listing search is available, owner reads require authentication and unsafe requests without CSRF receive 403. The service has no public health endpoint. Logging emits fixed HTTP status/error-ID events only. These are development commands, not production configuration.
 
 Stop each backend with Ctrl+C. `docker compose --profile sandbox down` stops development stores while retaining their named volumes. Production needs separately reviewed credentials, runtime roles, network/TLS configuration, and hosting. See [configuration](BACKEND_CONFIGURATION.md), [migration behavior](BACKEND_MIGRATIONS.md), and [deployment decisions](DEPLOYMENT_STACK.md).
 

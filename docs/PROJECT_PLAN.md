@@ -10,7 +10,7 @@
 
 # OpenNest implementation plan
 
-This plan defines OpenNest's proposed India-wide launch. Phase 0 provides documentation and local infrastructure. Phase 1 supplies the Java 25/Spring foundation, guarded stores, Flyway/Hibernate validation, safe errors, and real-store verification. Phase 2 supplies identity, Redis sessions, CSRF/logout, private profiles, and approved trust rules. The 10 November 2026 maintainer decision replaces the earlier provider with sole Telegram Bot API authentication in Phase 3A. Phase 3 implements listing services; Phases 4 and 5 cover interactions and the frontend. Phase 6 covers deployment and launch readiness after Phase 5. Phase 3 verification and remaining readiness gates are recorded in [LISTINGS_HANDOFF.md](LISTINGS_HANDOFF.md); Phase 4 implementation and checks are recorded in PHASE4_HANDOFF.md; Phase 5 frontend implementation and local checks are recorded in PHASE5_HANDOFF.md; hosted deployment remains outstanding. Work proceeds one phase per prompt and one reviewable PR per phase. The AI indexes summarize implemented behavior and proposals. [DEPLOYMENT_STACK.md](DEPLOYMENT_STACK.md) records hosting assumptions.
+This plan defines OpenNest's proposed India-wide launch. Phase 0 provides documentation and local infrastructure. Phase 1 supplies the Java 25/Spring foundation, guarded stores, Flyway/Hibernate validation, safe errors, and real-store verification. Phase 2 supplies identity, Redis sessions, CSRF/logout, private profiles, and approved trust rules. The 10 November 2026 maintainer decision replaces the earlier provider with sole Telegram Bot API authentication in Phase 3A. Phase 3 implements listing services; Phases 4 and 5 cover interactions and the frontend. Phase 6 covers deployment and launch readiness after Phase 5. Phase 3 verification and remaining readiness gates are recorded in [LISTINGS_HANDOFF.md](LISTINGS_HANDOFF.md); Phase 4 implementation and checks are recorded in PHASE4_HANDOFF.md; Phase 5 frontend implementation and local checks are recorded in PHASE5_HANDOFF.md; hosted deployment remains outstanding. Work proceeds one phase per prompt and one reviewable PR per phase. The AI indexes summarize implemented behavior and proposals. [DEPLOYMENT_STACK.md](DEPLOYMENT_STACK.md) records the selected hosting stack and launch dependencies.
 
 ## Confirmed product direction
 
@@ -18,7 +18,7 @@ This plan defines OpenNest's proposed India-wide launch. Phase 0 provides docume
 - Search without a city filter returns paginated nationwide results; city, locality, and nearby-location filters narrow the results when supplied.
 - Pagination, sorting, and combined filters are launch requirements. The complete request/response contract, room semantics, UI behavior, and acceptance cases are in [Listing search plan](LISTING_SEARCH.md).
 - Use the product name OpenNest consistently in UI, metadata, documentation, and generated examples; lowercase `opennest` is reserved for technical identifiers.
-- The planned public website is `https://opennest.co.in`, confirmed on 22 October 2026. DNS, TLS, hosting, and API/sandbox hostnames remain unverified or undecided.
+- The planned public website is `https://opennest.co.in`, confirmed on 22 October 2026. The 19 November 2026 deployment decision selects Render for Spring, Supabase for PostgreSQL/PostGIS and Vercel for Next.js. Domain control, DNS, TLS and hosted operation remain unverified.
 - Java 25 is the backend target, confirmed on 22 October 2026; it supersedes the earlier Java target. The supplied backend POM already requests Java 25.
 - Maximum five ACTIVE/FULL_OCCUPIED listings per owner; PAUSED listings do not count.
 - No chat or WebSockets. Authenticated users may reveal ten distinct listing contacts per India calendar day.
@@ -166,15 +166,15 @@ The projection uses decimal floor(coordinate/0.02)*0.02+0.01 and radiusMeters=20
 
 ### Phase 6 task boundaries
 
-Phase 6 is planned after Phase 5. It owns deployment and launch readiness under [DEPLOYMENT_STACK.md](DEPLOYMENT_STACK.md). No hosting, production Telegram webhook registration, edge configuration, or monitoring is implemented by this plan update.
+Phase 6 owns hosted setup and launch readiness. The provider decision is recorded in the [deployment stack](DEPLOYMENT_STACK.md). Follow the [hosted setup guide](DEPLOYMENT_SETUP.md) for a release rehearsal and the [Docker Desktop guide](LOCAL_DOCKER_TESTING.md) for local verification. Provisioning, production webhooks, edge limits and alerts still require operator work.
 
 | Task | Deliverable and completion gate |
 | --- | --- |
-| 6.1: deployment decisions | Confirm budget, providers, target architecture, domain control, production/sandbox hostnames, and remaining launch decisions before provisioning |
-| 6.2: hosting and delivery | Create tested images and release workflows, DNS/TLS and browser routing, isolated stores, restricted database roles, and deployment secrets; verify readiness and prevent public access to backend/store ports around the edge |
+| 6.1: deployment decisions | Confirm regions, service plans, budget, domain control and production/sandbox hostnames for the selected providers |
+| 6.2: hosting and delivery | Rehearse the existing Linux amd64 backend Dockerfile on Render and stage the matching frontend on Vercel. Verify Supabase migrations, restricted runtime privileges, DNS/TLS, browser sessions and origin protection |
 | 6.3: production Telegram setup | Configure distinct bots/secrets and exact HTTPS webhook/origins, allowed message updates, verify provider header, reject development polling and sandbox credentials |
 | 6.4: edge rate limits | Limit unauthenticated GET /api/v1/auth/csrf and POST /api/v1/auth/telegram/challenges with measured per-client/aggregate budgets; verify 429 before Redis session creation and prevent edge bypass |
-| 6.5: Redis capacity and alerts | Set measured maxmemory below container and host budgets with persistence/allocator headroom and noeviction; exercise memory-pressure, rejected-write/OOM alerts, and alert delivery |
+| 6.5: Redis capacity and alerts | Size the dedicated session store for measured memory and persistence overhead. Select noeviction and exercise rejected-write, memory and alert delivery checks |
 | 6.6: launch verification and recovery | Hosted Telegram login/repeated-login/failure/CSRF logout, browser/session isolation and smoke tests; load, restore and compatible rollback before release approval |
 
 Run the real local Telegram contact/OTP login and CSRF-protected logout with the configured bot. Keep manual evidence separate from controlled-provider tests; repeat through Phase 5 UI and each enabled hosted deployment in Phase 6.
@@ -195,14 +195,14 @@ Any earlier public preview must satisfy the applicable provider, routing, edge r
 - Phase 5 retains Phase 3's no-store policy for every listing response and request, including anonymous production browsing. Next.js must not override it with force-cache, revalidation, or shared listing caches. Listing/status/inventory/review writes are observed through fresh reads; no shared listing cache exists to invalidate. A future explicitly approved API/cache-policy change must define eligible anonymous production responses, deployment/query keys, signed-image URL handling, and tested invalidation for every affected listing/owner/search before enabling caching. Authenticated, sandbox, contact, and auth responses remain no-store. Enable cacheComponents/reactCompiler only after compatibility checks and without weakening this policy.
 - Frontend image compression is a usability feature, not an upload security boundary. Validate uploaded objects before attaching them to a published listing.
 - Six-hour demo resets must serialize with writes, be idempotent, and use sandbox-only credentials. Fabricated contact actions stay disabled; never seed callable real-looking phone numbers. Seed historical contact_reveals for designated demo personas/listings so review/report eligibility can be exercised through the normal rule without enabling live contact reveals or bypassing authorization.
-- Build application images in GitHub Actions and publish to GHCR after Dockerfiles exist. Deploy immutable digests with protected environment approval; never compile on the small EC2 host.
+- Verify the release SHA in GitHub Actions. Use the repository-root Docker build on Render and the `frontend/` Next.js build on Vercel. Record both deployment IDs and require explicit approval for production promotion.
 - Add a restricted runtime database role distinct from the migration/admin role before deployment. Local Compose users are development-only.
 - Add scheduled backup/restore verification, bounded logs, dependency/security checks, and provider spend limits before launch.
 - Include the OpenNest license and a corresponding-source link for the running revision in the deployed app; preserve third-party license notices.
 
 ## Open decisions and setup dependencies
 
-- Phase 6.1 owns hosting decisions: personal/non-commercial start with minimal cost; no AWS account or credits exist yet. The planned website is `https://opennest.co.in`; confirm domain control, DNS/TLS, budget, image architecture, same-site session routing, map providers, and Redis version/license before public deployment; see [deployment decisions](DEPLOYMENT_STACK.md#decisions-before-public-deployment).
+- Phase 6.1 retains a low-cost personal launch. Confirm the Render, Supabase and Vercel plans, database versions, session-store capacity, DNS/TLS and same-site routing before provisioning. [Deployment decisions](DEPLOYMENT_STACK.md#decisions-before-public-deployment)
 - Phase 6.3 owns production Telegram HTTPS webhook readiness and separate deployment bot/secrets. Recruiter contact actions stay disabled; credentials remain private deployment configuration.
 - Phase 3A implements approved Telegram self-contact plus original-session OTP contact evidence. An arbitrary Telegram-chat OTP never verifies a typed phone. Local bot setup and maintainer-reported OTP/profile verification passed. Privacy/erasure operations, live repeated-login/failure/logout and production HTTPS/webhook readiness remain deployment gates. WhatsApp and paid Gateway/SMS alternatives remain unselected; owners without Telegram need a separately approved option. See TELEGRAM_HANDOFF.md.
 - Trust precedence is approved and implemented in Phase 2. Phase 3 listing responses must reuse it; Phase 4 review/report writers maintain aggregates transactionally.

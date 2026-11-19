@@ -1,6 +1,6 @@
 # OpenNest frontend
 
-- Next.js App Router, React, strict TypeScript, Tailwind and shadcn-compatible Radix components. Exact releases and probes: docs/FRONTEND_DEPENDENCIES.md.
+- Next.js App Router, React, strict TypeScript, Tailwind and shadcn-compatible Radix components. Exact versions are in [frontend dependencies](../docs/FRONTEND_DEPENDENCIES.md). Vercel builds from `frontend/` on Node 24. [Hosted setup](../docs/DEPLOYMENT_SETUP.md) and [local testing](../docs/LOCAL_DOCKER_TESTING.md).
 - Server configuration fixes PRIMARY or SANDBOX and API/site origins. No browser header/query selects a backend. Dedicated sandbox paths start /recruiter-sandbox; PRIMARY denies them.
 - Public search and detail have their own routes and render listing content on the server. Native GET forms expose dependent filters without JavaScript. Client navigation retains map view and sort focus and combines pending sort and page-size changes. The detail route resolves missing listings before the response starts and shares its request-local read with page metadata.
 - Public search/detail server reads are anonymous and no-store. A photo refresh replaces direct storage URLs from the latest public listing and repeats the read if a route update supersedes its input. Browser private calls use credentialed backend sessions and in-memory CSRF. No Next.js authentication/session store exists.
